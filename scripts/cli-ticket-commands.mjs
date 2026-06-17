@@ -1528,6 +1528,7 @@ export async function runTicketHandoff(opts) {
   console.log(`Current: ${out.current.id} | phase=${out.current.phase} | status=${out.current.status}`);
   console.log(`Next: ${out.nextTicket ? `${out.nextTicket.id} (${out.nextTicket.status})` : "none"}`);
   console.log(`Action: ${out.nextAction}`);
+  printReinforcement(opts.cwd, { meta: currentParsed.meta, content: currentParsed.content });
   return out;
 }
 
@@ -1686,6 +1687,7 @@ export async function runTicketClose(opts) {
       status: opts.status
     });
     console.log(`ticket: ${opts.status} -> ${entry.topic} (${entry.path})`);
+    printReinforcement(opts.cwd, { meta: parsedForClose.meta, content: previousBody });
   } catch (err) {
     rollbackTicketLifecycleArtifacts(opts.cwd, previousIndex, previousBody, abs, opts);
     throw err;
@@ -1924,6 +1926,11 @@ export async function runTicketArchive(opts) {
       status: "archived"
     });
   }
+  if (!isCompactTicketOutput(opts) && result?.path) {
+    const archivedBody = readFileSync(join(opts.cwd, result.path), "utf8");
+    const archivedParsed = parseFrontMatter(archivedBody);
+    printReinforcement(opts.cwd, { meta: archivedParsed.meta, content: archivedParsed.content });
+  }
   return result;
 }
 
@@ -2098,9 +2105,11 @@ export async function runTicketNext(opts) {
   if (opts.pathOnly) {
     console.log(absPath);
   } else {
+    const foundParsed = parseFrontMatter(readFileSync(join(opts.cwd, found.path), "utf8"));
     console.log(`Next ticket: ${found.id}`);
     console.log(`Path: [${posixPath}](file://${absPath})`);
     if (opts.printContent) console.log("\n" + readFileSync(join(opts.cwd, found.path), "utf8"));
+    printReinforcement(opts.cwd, { meta: foundParsed.meta, content: foundParsed.content });
   }
 }
 

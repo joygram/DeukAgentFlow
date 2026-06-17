@@ -242,6 +242,52 @@ test("runTicketNext preserves unfiltered active-first behavior", async () => {
   assert.deepStrictEqual(lines, [join(ticketDir, "sub", "001-global-active-host.md")]);
 });
 
+test("runTicketNext prints reinforcement in normal mode", async () => {
+  const ticketPath = ".deuk-agent/tickets/sub/001-next-reinforce.md";
+  const { cwd, ticketDir } = makeTicketWorkspace([
+    makeEntry({
+      id: "001-next-reinforce",
+      topic: "001-next-reinforce",
+      fileName: "001-next-reinforce.md",
+      path: ticketPath,
+      status: "active",
+      createdAt: "2026-05-01 08:00:00"
+    })
+  ]);
+
+  mkdirSync(join(ticketDir, "sub"), { recursive: true });
+  writeFileSync(join(cwd, ticketPath), [
+    "---",
+    "id: 001-next-reinforce",
+    "title: next reinforce",
+    "phase: 2",
+    "status: active",
+    "lifecycleSource: ticket-create",
+    "summary: next reinforcement ticket",
+    "---",
+    "",
+    "# next reinforce",
+    "",
+    "## Problem Analysis",
+    "This ticket should emit a compact reinforcement line after next selection.",
+    ""
+  ].join("\n"), "utf8");
+
+  const originalLog = console.log;
+  const lines = [];
+  console.log = value => lines.push(String(value));
+  try {
+    await runTicketNext({ cwd });
+  } finally {
+    console.log = originalLog;
+    rmSync(cwd, { recursive: true, force: true });
+  }
+
+  assert.strictEqual(lines[0], "Next ticket: 001-next-reinforce");
+  assert.match(lines[1], /^Path: \[\.deuk-agent\/tickets\/sub\/001-next-reinforce\.md\]\(file:\/\//);
+  assert.match(lines[2], /^problem report: next reinforcement ticket \| This ticket should emit a compact reinforcement line after next selection\./);
+});
+
 test("runTicketNext skips open tickets without CLI lifecycle provenance", async () => {
   const { cwd, ticketDir } = makeTicketWorkspace([
     makeEntry({

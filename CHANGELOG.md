@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - **init/ticket:** restore the intended month-only archive policy by normalizing legacy `archive/sub/YYYY-MM/DD/...` tickets into `archive/sub/YYYY-MM/...`, rebuilding archive shard indexes without `archiveDay`, and preventing new day-depth imports during `init`.
+- **cli:** extend reinforcement output to ticket next, close, archive, and handoff lifecycle surfaces.
 
 ## [3.3.3] - 2026-05-06
 
