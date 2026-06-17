@@ -16,7 +16,7 @@ This project uses TypeScript. Compiled output (`scripts/out/`) is not committed 
 npm install
 
 # 2. Build: compile TypeScript + build VSIX
-npm run build
+npm run build:vscode
 
 # 3. Pack (validates the package)
 npm pack --dry-run
@@ -25,7 +25,7 @@ npm pack --dry-run
 npm publish --access public
 ```
 
-> `npm run build` compiles TypeScript (`scripts/out/`) and builds the VS Code extension (`bundled/deuk-agent-flow.vsix`).
+> `npm run build:vscode` compiles TypeScript (`scripts/out/`) and builds the VS Code extension (`bundled/deuk-agent-flow.vsix`).
 > Both must exist before `npm pack` or `npm publish`.
 
 ---
