@@ -4,9 +4,8 @@
   <br />
   <h1>Deuk Agent Flow v4.0.0</h1>
   <p>
-    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-agent-flow" alt="deuk-agent-flow npm version" /></a>
-    <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg?label=legacy%20deuk-agent-rule" alt="deuk-agent-rule npm version" /></a>
-    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmain%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="combined npm downloads for deuk-agent-flow and deuk-agent-rule" /></a>
+    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
+    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmaster%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="deuk-flow combined npm downloads" /></a>
   </p>
   <p><b>Stop losing AI coding work between chats.</b></p>
   <p><i>Say "next" or "ship it"; Deuk Agent Flow keeps the ticket, scope, verification, and memory attached to your repo.</i></p>
@@ -16,11 +15,11 @@
 
 ---
 
-**Deuk Agent Flow** is the missing workbench layer for AI coding agents: short chat instructions go in, scoped repo work comes out, and the reasoning does not disappear when the chat ends.
+**Deuk Agent Flow** is the repo-owned workflow layer for AI coding agents: Codex, Copilot, Cursor, Claude Code, Gemini, Windsurf, or the next agent you adopt can enter the same ticketed flow.
 
-Most agent setups stop at instructions. Deuk Agent Flow turns those instructions into an operating loop: ticket, scope, execute, verify, archive. It keeps `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, and related agent surfaces aligned without asking you to type long commands.
+Most agent setups stop at instructions. Deuk Agent Flow turns short chat into an operating loop: ticket, scope, execute, verify, archive. It keeps `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, and related agent surfaces aligned without asking you to type long commands.
 
-The hook is simple: you can say "next", "inspect", or "clean this up", and the agent has a repo-owned place to remember what that means. Active work lives in `.deuk-agent/tickets/`; decisions, plans, and closeout evidence stay with the codebase instead of vanishing into a chat transcript.
+The hook is simple: you can say "next", "inspect", or "clean this up", and the current agent has a repo-owned place to know what that means. Active work lives in `.deuk-agent/tickets/`; decisions, plans, and closeout evidence stay with the codebase instead of vanishing into a chat transcript. **Deuk Agent Flow** is the workflow layer. Plug that flow into the separate companion product **Deuk AgentContext**, and the whole repo gains an expanded project brain: searchable memory, reusable decisions, and team patterns the next agent can actually use.
 
 ### Why Now
 
@@ -137,14 +136,7 @@ npm install -g deuk-agent-flow
 deuk-agent-flow init
 ```
 
-Legacy compatibility install:
-
-```bash
-npm install -g deuk-agent-rule
-deuk-agent-rule init
-```
-
-If you manage many repos under one workspace, run `deuk-agent-flow init` in each project root that owns its own rules and tickets. The workspace root can act as a shared pointer, but the project root owns the live `PROJECT_RULE.md` and `.deuk-agent/`, and those rule files outrank this guide when there is any conflict.
+If you manage many repos under one workspace, run `deuk-agent-flow init` in each project root that owns its own rules and tickets. The workspace root can act as a shared pointer, but day-to-day work usually belongs to each project's `PROJECT_RULE.md` and `.deuk-agent/`.
 
 This is where the effect compounds: use the workspace root as the shared entry point, each project root as an independent ticket/rule/verification boundary, and nested apps or servers as separate projects only when they have their own lifecycle.
 
@@ -160,11 +152,18 @@ deuk-agent-flow init  # Routes to local scripts/cli.mjs automatically
 If you primarily work in Codex or Copilot, this is the recommended day-to-day setup. Those clients currently have the smoothest behavior with the hub-spoke and ticket-driven workflow.
 
 ### 3. Maintainer Publish
-Maintainers can publish both npm packages with one root command:
+Maintainers can publish from the root command:
 
 ```bash
 npm run publish
 ```
+
+This flow must register both npm packages in one run under the `deuk-flow` release surface:
+
+- `deuk-flow` canonical package: `deuk-agent-flow`
+- `deuk-flow` legacy compatibility alias package: `deuk-agent-rule`
+
+The publish script syncs the alias package version/dependency first, then publishes the canonical package before the alias package.
 
 Use dry-run mode before writing to the npm registry:
 
@@ -178,17 +177,13 @@ Before publishing, run the Docker consumer smoke test. It installs the packed pa
 npm run smoke:npm:docker
 ```
 
-The publish helper runs `npm test`, syncs the `deuk-agent-rule` compatibility package version to the root package version, publishes `deuk-agent-flow` first, and then publishes `deuk-agent-rule`.
-
-For the full deployment and project-root setup flow, see the practical usage guide below.
-
-Legacy note: `deuk-agent-rule` remains available for compatibility during the transition, and the combined downloads badge counts both packages.
-
-If the current `deuk-agent-flow` version is already published and you only need to publish the legacy compatibility wrapper, use the bootstrap command:
+After publish, refresh the combined downloads badge when needed:
 
 ```bash
-npm run publish:bootstrap
+npm run badge:downloads
 ```
+
+The badge should display `deuk-flow` while still summing downloads from both `deuk-agent-flow` and `deuk-agent-rule`.
 
 ---
 

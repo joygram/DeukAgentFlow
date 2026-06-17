@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
 import { join } from "path";
-import { loadInitConfig, AGENT_ROOT_DIR, SPOKE_REGISTRY } from "./cli-utils.mjs";
+import { loadInitConfig, AGENT_ROOT_DIR, SPOKE_REGISTRY, toSlug } from "./cli-utils.mjs";
 
 const TELEMETRY_FILE = `${AGENT_ROOT_DIR}/telemetry.jsonl`;
 const RAG_RESULTS = new Set(["hit", "weak-hit", "miss", "stale"]);
@@ -10,6 +10,119 @@ const SESSION_MODES = new Set(["guided", "unguided", "mixed"]);
 const OUTCOMES = new Set(["success", "failure", "partial", "blocked"]);
 const INTERNAL_SOURCE = "internal";
 const WORKFLOW_EVENT_KIND = "workflow_event";
+const CLIENT_LABELS = new Map([
+  ["antigravity", "Antigravity"],
+  ["claudecode", "ClaudeCode"],
+  ["copilot", "Copilot"],
+  ["cursor", "Cursor"],
+  ["codex", "Codex"],
+  ["deukagentflow", "DeukAgentFlow"],
+  ["jetbrains", "JetBrains"],
+  ["windsurf", "Windsurf"]
+]);
+
+function normalizeDimensionValue(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function normalizeModelLabel(value) {
+  const normalized = normalizeDimensionValue(value);
+  if (!normalized) return "";
+  return normalized.toLowerCase();
+}
+
+function normalizeClientLabel(value) {
+  const normalized = normalizeDimensionValue(value);
+  if (!normalized) return "";
+  const collapsed = toSlug(normalized).replace(/-/g, "");
+  return CLIENT_LABELS.get(collapsed) || normalized;
+}
+
+function accumulateTotals(logs, keySelector) {
+  return logs.reduce((acc, entry) => {
+    const key = keySelector(entry);
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + Number(entry.tokens || 0);
+    return acc;
+  }, {});
+}
+
+function loadTelemetryEntries(cwd) {
+  const absPath = join(cwd, TELEMETRY_FILE);
+  if (!existsSync(absPath)) return null;
+  const lines = readFileSync(absPath, "utf8").split("\n").filter(l => l.trim());
+  return lines.map(l => JSON.parse(l));
+}
+
+export function buildTelemetrySummary(cwd) {
+  const logs = loadTelemetryEntries(cwd);
+  if (!logs || logs.length === 0) return null;
+
+  const workflowEvents = logs.filter(isInternalWorkflowEvent);
+  const workLogs = logs.filter(l => !isInternalWorkflowEvent(l));
+  const missingEventCount = logs.filter(l => !String(l.event || "").trim()).length;
+  const eventCoverageRate = rate(logs.length - missingEventCount, logs.length);
+  const totalTokens = workLogs.reduce((sum, l) => sum + l.tokens, 0);
+  const totalTdwTokens = workLogs.reduce((sum, l) => sum + Number(l.tdw || 0), 0);
+  const totalSavedTokens = workLogs.reduce((sum, l) => sum + Number(l.savedTokens || 0), 0);
+  const byModel = accumulateTotals(workLogs, l => normalizeModelLabel(l.model));
+  const byClient = accumulateTotals(workLogs, l => normalizeClientLabel(l.client));
+  const byAgent = accumulateTotals(workLogs, l => normalizeDimensionValue(l.agentId) || normalizeClientLabel(l.client));
+  const tdwEntryCount = workLogs.filter(l => Number(l.tdw || 0) > 0).length;
+  const tdwAverageTokensPerEntry = tdwEntryCount > 0 ? totalTdwTokens / tdwEntryCount : 0;
+  const byRagResult = countBy(workLogs, "ragResult");
+  const byTokenQuality = countBy(workLogs, "tokenQuality");
+  const byKnowledgeAction = countBy(workLogs, "knowledgeAction");
+  const byKnowledgeSourceKind = countBy(workflowEvents, "knowledgeSourceKind");
+  const byKnowledgeIngestionCategory = countBy(workflowEvents, "knowledgeIngestionCategory");
+  const byKnowledgeCorpus = countBy(workflowEvents, "knowledgeCorpus");
+  const byKnowledgeOriginTool = countBy(workflowEvents, "knowledgeOriginTool");
+  const localFallbackCount = workLogs.filter(l => l.localFallback).length;
+  const ragCalls = Object.values(byRagResult).reduce((sum, n) => sum + n, 0);
+  const ragHits = (byRagResult.hit || 0) + (byRagResult["weak-hit"] || 0);
+  const ragMisses = byRagResult.miss || 0;
+  const staleKnowledge = byRagResult.stale || 0;
+  const workflowSummary = summarizeWorkflowEvents(workflowEvents);
+  const sessionModeComparison = summarizeSessionModes(workLogs);
+
+  return {
+    cwd,
+    totalTokens,
+    totalTdwTokens,
+    totalSavedTokens,
+    logEntries: workLogs.length,
+    totalLogEntries: logs.length,
+    missingEventCount,
+    eventCoverageRate,
+    byModel,
+    byClient,
+    byAgent,
+    tdwEntryCount,
+    tdwCoverageRate: rate(tdwEntryCount, workLogs.length),
+    tdwTokenShare: rate(totalTdwTokens, totalTokens),
+    tdwAverageTokensPerEntry,
+    ragCalls,
+    ragHitRate: rate(ragHits, ragCalls),
+    ragMissRate: rate(ragMisses, ragCalls),
+    staleKnowledgeRate: rate(staleKnowledge, ragCalls),
+    localFallbackRate: rate(localFallbackCount, workLogs.length),
+    byRagResult,
+    byTokenQuality,
+    byKnowledgeAction,
+    byKnowledgeSourceKind,
+    byKnowledgeIngestionCategory,
+    byKnowledgeCorpus,
+    byKnowledgeOriginTool,
+    sessionModeComparison,
+    workflowEvents: workflowSummary
+  };
+}
+
+export function getTelemetryCompactSummary(cwd) {
+  const summary = buildTelemetrySummary(cwd);
+  if (!summary) return "";
+  return `telemetry logs ${summary.logEntries}, coverage ${formatRate(summary.totalLogEntries - summary.missingEventCount, summary.totalLogEntries)}, tdw ${formatRate(summary.tdwEntryCount, summary.logEntries)}`;
+}
 
 export async function runTelemetry(opts) {
   const argv = process.argv.slice(3); // skip 'telemetry' and 'log/sync/summary'
@@ -140,131 +253,58 @@ async function syncAction(opts) {
 }
 
 async function summaryAction(opts) {
-  const absPath = join(opts.cwd, TELEMETRY_FILE);
-  if (!existsSync(absPath)) {
+  const summary = buildTelemetrySummary(opts.cwd);
+  if (!summary) {
     console.log("[TELEMETRY] No logs found.");
     return;
   }
 
-  const lines = readFileSync(absPath, "utf8").split("\n").filter(l => l.trim());
-  const logs = lines.map(l => JSON.parse(l));
-  const workflowEvents = logs.filter(isInternalWorkflowEvent);
-  const workLogs = logs.filter(l => !isInternalWorkflowEvent(l));
-  const missingEventCount = logs.filter(l => !String(l.event || "").trim()).length;
-  const eventCoverageRate = rate(logs.length - missingEventCount, logs.length);
-
-  const totalTokens = workLogs.reduce((sum, l) => sum + l.tokens, 0);
-  const totalTdwTokens = workLogs.reduce((sum, l) => sum + Number(l.tdw || 0), 0);
-  const totalSavedTokens = workLogs.reduce((sum, l) => sum + Number(l.savedTokens || 0), 0);
-  const byModel = workLogs.reduce((acc, l) => {
-    acc[l.model] = (acc[l.model] || 0) + l.tokens;
-    return acc;
-  }, {});
-  const byClient = workLogs.reduce((acc, l) => {
-    const key = String(l.client || "").trim();
-    if (!key) return acc;
-    acc[key] = (acc[key] || 0) + l.tokens;
-    return acc;
-  }, {});
-  const byAgent = workLogs.reduce((acc, l) => {
-    const key = String(l.agentId || l.client || "").trim();
-    if (!key) return acc;
-    acc[key] = (acc[key] || 0) + l.tokens;
-    return acc;
-  }, {});
-  const tdwEntryCount = workLogs.filter(l => Number(l.tdw || 0) > 0).length;
-  const tdwAverageTokensPerEntry = tdwEntryCount > 0 ? totalTdwTokens / tdwEntryCount : 0;
-  const byRagResult = countBy(workLogs, "ragResult");
-  const byTokenQuality = countBy(workLogs, "tokenQuality");
-  const byKnowledgeAction = countBy(workLogs, "knowledgeAction");
-  const byKnowledgeSourceKind = countBy(workflowEvents, "knowledgeSourceKind");
-  const byKnowledgeIngestionCategory = countBy(workflowEvents, "knowledgeIngestionCategory");
-  const byKnowledgeCorpus = countBy(workflowEvents, "knowledgeCorpus");
-  const byKnowledgeOriginTool = countBy(workflowEvents, "knowledgeOriginTool");
-  const localFallbackCount = workLogs.filter(l => l.localFallback).length;
-  const ragCalls = Object.values(byRagResult).reduce((sum, n) => sum + n, 0);
-  const ragHits = (byRagResult.hit || 0) + (byRagResult["weak-hit"] || 0);
-  const ragMisses = byRagResult.miss || 0;
-  const staleKnowledge = byRagResult.stale || 0;
-  const workflowSummary = summarizeWorkflowEvents(workflowEvents);
-  const sessionModeComparison = summarizeSessionModes(workLogs);
-
   if (opts.json) {
-    console.log(JSON.stringify({
-      cwd: opts.cwd,
-      totalTokens,
-      totalTdwTokens,
-      totalSavedTokens,
-      logEntries: workLogs.length,
-      totalLogEntries: logs.length,
-      missingEventCount,
-      eventCoverageRate,
-      byModel,
-      byClient,
-      byAgent,
-      tdwEntryCount,
-      tdwCoverageRate: rate(tdwEntryCount, workLogs.length),
-      tdwTokenShare: rate(totalTdwTokens, totalTokens),
-      tdwAverageTokensPerEntry,
-      ragCalls,
-      ragHitRate: rate(ragHits, ragCalls),
-      ragMissRate: rate(ragMisses, ragCalls),
-      staleKnowledgeRate: rate(staleKnowledge, ragCalls),
-      localFallbackRate: rate(localFallbackCount, workLogs.length),
-      byRagResult,
-      byTokenQuality,
-      byKnowledgeAction,
-      byKnowledgeSourceKind,
-      byKnowledgeIngestionCategory,
-      byKnowledgeCorpus,
-      byKnowledgeOriginTool,
-      sessionModeComparison,
-      workflowEvents: workflowSummary
-    }, null, 2));
+    console.log(JSON.stringify(summary, null, 2));
     return;
   }
 
   console.log(`\n--- Local Telemetry Summary (${opts.cwd}) ---`);
-  console.log(`Total Tokens: ${totalTokens}`);
-  console.log(`TDW Tokens: ${totalTdwTokens}`);
-  console.log(`Saved Tokens: ${totalSavedTokens}`);
-  console.log(`Log Entries:  ${workLogs.length}`);
-  console.log(`Total Entries: ${logs.length}`);
+  console.log(`Total Tokens: ${summary.totalTokens}`);
+  console.log(`TDW Tokens: ${summary.totalTdwTokens}`);
+  console.log(`Saved Tokens: ${summary.totalSavedTokens}`);
+  console.log(`Log Entries:  ${summary.logEntries}`);
+  console.log(`Total Entries: ${summary.totalLogEntries}`);
   console.log(`Event Coverage:`);
-  console.log(`  - Missing Event Count: ${missingEventCount}`);
-  console.log(`  - Coverage Rate: ${formatRate(logs.length - missingEventCount, logs.length)}`);
+  console.log(`  - Missing Event Count: ${summary.missingEventCount}`);
+  console.log(`  - Coverage Rate: ${formatRate(summary.totalLogEntries - summary.missingEventCount, summary.totalLogEntries)}`);
   console.log(`By Model:`);
-  Object.entries(byModel).forEach(([m, t]) => {
+  Object.entries(summary.byModel).forEach(([m, t]) => {
     console.log(`  - ${m}: ${t}`);
   });
-  printCounts("By Client", byClient);
-  printCounts("By Agent", byAgent);
+  printCounts("By Client", summary.byClient);
+  printCounts("By Agent", summary.byAgent);
   console.log(`TDW:`);
-  console.log(`  - Entries: ${tdwEntryCount}`);
-  console.log(`  - Coverage Rate: ${formatRate(tdwEntryCount, workLogs.length)}`);
-  console.log(`  - Token Share: ${formatRate(totalTdwTokens, totalTokens)}`);
-  console.log(`  - Average Tokens/Entry: ${tdwAverageTokensPerEntry.toFixed(1)}`);
+  console.log(`  - Entries: ${summary.tdwEntryCount}`);
+  console.log(`  - Coverage Rate: ${formatRate(summary.tdwEntryCount, summary.logEntries)}`);
+  console.log(`  - Token Share: ${formatRate(summary.totalTdwTokens, summary.totalTokens)}`);
+  console.log(`  - Average Tokens/Entry: ${summary.tdwAverageTokensPerEntry.toFixed(1)}`);
   console.log(`RAG Quality:`);
-  console.log(`  - Calls: ${ragCalls}`);
-  console.log(`  - Hit Rate: ${formatRate(ragHits, ragCalls)}`);
-  console.log(`  - Miss Rate: ${formatRate(ragMisses, ragCalls)}`);
-  console.log(`  - Stale Rate: ${formatRate(staleKnowledge, ragCalls)}`);
-  console.log(`  - Local Fallback Rate: ${formatRate(localFallbackCount, workLogs.length)}`);
-  printCounts("By RAG Result", byRagResult);
-  printCounts("By Token Quality", byTokenQuality);
-  printCounts("By Knowledge Action", byKnowledgeAction);
-  printCounts("By Knowledge Source Kind", byKnowledgeSourceKind);
-  printCounts("By Knowledge Ingestion Category", byKnowledgeIngestionCategory);
-  printCounts("By Knowledge Corpus", byKnowledgeCorpus);
-  printCounts("By Knowledge Origin Tool", byKnowledgeOriginTool);
-  printSessionModeComparison(sessionModeComparison);
+  console.log(`  - Calls: ${summary.ragCalls}`);
+  console.log(`  - Hit Rate: ${formatRate((summary.byRagResult.hit || 0) + (summary.byRagResult["weak-hit"] || 0), summary.ragCalls)}`);
+  console.log(`  - Miss Rate: ${formatRate(summary.byRagResult.miss || 0, summary.ragCalls)}`);
+  console.log(`  - Stale Rate: ${formatRate(summary.byRagResult.stale || 0, summary.ragCalls)}`);
+  console.log(`  - Local Fallback Rate: ${formatRate(summary.localFallbackRate * summary.logEntries, summary.logEntries)}`);
+  printCounts("By RAG Result", summary.byRagResult);
+  printCounts("By Token Quality", summary.byTokenQuality);
+  printCounts("By Knowledge Action", summary.byKnowledgeAction);
+  printCounts("By Knowledge Source Kind", summary.byKnowledgeSourceKind);
+  printCounts("By Knowledge Ingestion Category", summary.byKnowledgeIngestionCategory);
+  printCounts("By Knowledge Corpus", summary.byKnowledgeCorpus);
+  printCounts("By Knowledge Origin Tool", summary.byKnowledgeOriginTool);
+  printSessionModeComparison(summary.sessionModeComparison);
   console.log(`Internal Workflow Events:`);
-  console.log(`  - Events: ${workflowSummary.eventCount}`);
-  console.log(`  - Tickets: ${workflowSummary.ticketCount}`);
-  console.log(`  - Average Time To Phase Move: ${formatDuration(workflowSummary.averageTimeToPhaseMoveMs)}`);
-  console.log(`  - Average Time To Close: ${formatDuration(workflowSummary.averageTimeToCloseMs)}`);
-  console.log(`  - Average Time To Archive: ${formatDuration(workflowSummary.averageTimeToArchiveMs)}`);
-  printCounts("By Workflow Event", workflowSummary.byEvent);
+  console.log(`  - Events: ${summary.workflowEvents.eventCount}`);
+  console.log(`  - Tickets: ${summary.workflowEvents.ticketCount}`);
+  console.log(`  - Average Time To Phase Move: ${formatDuration(summary.workflowEvents.averageTimeToPhaseMoveMs)}`);
+  console.log(`  - Average Time To Close: ${formatDuration(summary.workflowEvents.averageTimeToCloseMs)}`);
+  console.log(`  - Average Time To Archive: ${formatDuration(summary.workflowEvents.averageTimeToArchiveMs)}`);
+  printCounts("By Workflow Event", summary.workflowEvents.byEvent);
   console.log("-------------------------------------------\n");
 }
 

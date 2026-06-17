@@ -73,3 +73,47 @@ test("skill add can install package-provided skills from a consumer repo", () =>
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("skill list treats installed skill files as installed when registry is missing", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-skill-files-"));
+  try {
+    const skillDir = join(cwd, ".deuk-agent", "skills", "generated-file-guard");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# Generated File Guard\n", "utf8");
+
+    const rows = listSkills(cwd);
+    assert.strictEqual(rows.find(row => row.id === "generated-file-guard")?.installed, true);
+    assert.strictEqual(rows.find(row => row.id === "safe-refactor")?.installed, false);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("skill list detects actual exposure pointers even when registry state is missing", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-skill-exposed-"));
+  try {
+    const skillDir = join(cwd, ".deuk-agent", "skills", "project-pilot");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "# ProjectPilot\n", "utf8");
+
+    const claudeDir = join(cwd, ".claude", "skills", "project-pilot");
+    mkdirSync(claudeDir, { recursive: true });
+    writeFileSync(join(claudeDir, "SKILL.md"), "# ProjectPilot\n", "utf8");
+
+    const cursorDir = join(cwd, ".cursor", "rules");
+    mkdirSync(cursorDir, { recursive: true });
+    writeFileSync(join(cursorDir, "deuk-agent-skills.mdc"), [
+      "---",
+      "description: skills",
+      "---",
+      "- project-pilot: .deuk-agent/skills/project-pilot/SKILL.md",
+      ""
+    ].join("\n"), "utf8");
+
+    const rows = listSkills(cwd);
+    const row = rows.find(candidate => candidate.id === "project-pilot");
+    assert.deepStrictEqual(row?.exposed.sort(), ["claude", "cursor"]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

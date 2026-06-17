@@ -4,7 +4,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parseArgs, parseTicketArgs, parseSkillArgs, parseTelemetryArgs, parseUsageArgs } from "./cli-args.mjs";
 import { runInit, runMerge } from "./cli-init-commands.mjs";
-import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports, runTicketMeta, runTicketConnect, runTicketRebuild, runTicketReportAttach, runTicketMove, runTicketNext, runTicketStatus, runTicketHandoff, runTicketEvidenceCheck, runTicketEvidenceReport } from "./cli-ticket-commands.mjs";
+import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketDiscard, runTicketReports, runTicketMeta, runTicketConnect, runTicketRebuild, runTicketReportAttach, runTicketMove, runTicketNext, runTicketHotfix, runTicketStatus, runTicketGuard, runTicketHandoff, runTicketEvidenceCheck, runTicketEvidenceReport } from "./cli-ticket-commands.mjs";
 import { runTelemetry } from "./cli-telemetry-commands.mjs";
 import { runUsage } from "./cli-usage-commands.mjs";
 import { performUpgradeMigration } from "./cli-ticket-migration.mjs";
@@ -35,12 +35,15 @@ async function main() {
     else if (action === "evidence") await runTicketEvidenceCheck(opts);
     else if (action === "close") await runTicketClose(opts);
     else if (action === "archive") await runTicketArchive(opts);
+    else if (action === "discard" || action === "delete") await runTicketDiscard(opts);
     else if (action === "reports") await runTicketReports(opts);
     else if (action === "meta") await runTicketMeta(opts);
     else if (action === "connect") await runTicketConnect(opts);
     else if (action === "rebuild") await runTicketRebuild(opts);
     else if (action === "move" || action === "step") await runTicketMove(opts);
+    else if (action === "hotfix") await runTicketHotfix(opts);
     else if (action === "status") await runTicketStatus(opts);
+    else if (action === "guard" || action === "context") await runTicketGuard(opts);
     else if (action === "handoff" || action === "continue") await runTicketHandoff(opts);
     else if (action === "report") {
       const subAction = rest[1];
@@ -170,7 +173,7 @@ Usage:
   npx deuk-agent-flow lint:md [--cwd <path>] [files...]
   npx deuk-agent-flow rules audit [--compact|--json]
   npx deuk-agent-flow skill <list|add|expose|lint> [options]
-  npx deuk-agent-flow ticket <create|evidence|list|status|handoff|continue|use|close|archive|reports|migrate|upgrade|meta|connect|move> [options]
+  npx deuk-agent-flow ticket <create|evidence|list|status|guard|context|handoff|continue|use|close|archive|discard|delete|reports|migrate|upgrade|meta|connect|move> [options]
   npx deuk-agent-flow telemetry <log|sync|summary|migrate> [options]
   npx deuk-agent-flow usage <set|status|advise> [options]
 
@@ -203,14 +206,18 @@ Ticket Options:
   --claim <text>        Validate or report only from ticket evidence matching this claim
   --skip-phase0         Bypass Phase 0 RAG validation
   --plan-body <text>    Create ticket with filled Phase 1 markdown body
+  --plan-body-file <p>  Read filled Phase 1 markdown from a file, or '-' for stdin
+  --content-file <path> Read extra ticket context from a file, or '-' for stdin
   --require-filled      Enforce non-placeholder APC and compact plan content before create succeeds
   --allow-placeholder   Opt out of strict create guard (legacy behavior)
+  --ticket-started      Confirm the clickable ticket-start line was shared before guard/context
+  --ticket-reviewed     Confirm the durable ticket body was reopened and reviewed before guard/context
   --compact             Prefer one-line ticket outputs in automation flows
   --status-detail       Include detailed reasons in ticket status output
   --handoff             Emit compact handoff output for session continuation
   --phase <number>      Explicitly set the phase number (e.g., --phase 2)
   --next                Move to the next phase
-  --latest, -l          Use most recent ticket explicitly
+  --latest, -l          Use most recent ticket (default if no topic)
   --path-only           Print only the file path
   --json                Output result in JSON format
 

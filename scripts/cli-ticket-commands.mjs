@@ -2,15 +2,17 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, copyFil
 import { hostname } from "os";
 import { basename, join, dirname, relative, resolve } from "path";
 import { 
-  toSlug, toRepoRelativePath, toFileUri, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath, stringifyFrontMatter,
+  toSlug, toSnakeCaseKey, requireNonEmptySlug, toRepoRelativePath, toFileUri, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath, stringifyFrontMatter,
   resolveDocsLanguage, inferDocsLanguageFromText, normalizeDocsLanguage, isMcpActive, withReadline, parseFrontMatter,
-  AGENT_ROOT_DIR, TICKET_SUBDIR, TEMPLATE_SUBDIR, TICKET_DIR_NAME, TICKET_INDEX_FILENAME, detectConsumerTicketDir, loadInitConfig, computeTicketPath
+  AGENT_ROOT_DIR, TICKET_SUBDIR, TICKET_DIR_NAME, TICKET_INDEX_FILENAME, WORKFLOW_MODE_EXECUTE,
+  detectConsumerTicketDir, resolveConsumerTicketRoot, loadInitConfig, computeTicketPath, normalizeWorkflowMode
 } from "./cli-utils.mjs";
 import { readTicketIndexJson, writeTicketIndexJson, syncActiveTicketId, generateTicketId, syncToPipeline } from "./cli-ticket-index.mjs";
 import { appendTicketEntry, rebuildTicketIndexFromTopicFilesIfNeeded, updateTicketEntryStatus } from "./cli-ticket-parser.mjs";
-import { appendInternalWorkflowEvent } from "./cli-telemetry-commands.mjs";
+import { appendInternalWorkflowEvent, buildTelemetrySummary, getTelemetryCompactSummary } from "./cli-telemetry-commands.mjs";
 import { parsePlan } from "./plan-parser.mjs";
-import { collectChangedFiles, collectChangedMarkdownFiles, lintMarkdownPaths } from "./lint-md.mjs";
+import { collectChangedFiles, lintMarkdownPaths } from "./lint-md.mjs";
+import { auditRules } from "./lint-rules.mjs";
 import { getUsageReminderLine } from "./cli-usage-commands.mjs";
 import ejs from "ejs";
 import YAML from "yaml";
@@ -40,7 +42,7 @@ async function ensurePhase0Validation(opts) {
   }
 }
 
-function resolveTicketTemplate(cwd, docsLanguageInput, promptText = "") {
+function resolveTicketDocsLanguage(cwd, docsLanguageInput, promptText = "") {
   const config = loadInitConfig(cwd) || {};
   const explicitDocsLanguage = normalizeDocsLanguage(docsLanguageInput);
   const configDocsLanguage = normalizeDocsLanguage(config.docsLanguage || "auto");
@@ -54,88 +56,13 @@ function resolveTicketTemplate(cwd, docsLanguageInput, promptText = "") {
         ? configDocsLanguage
         : promptDocsLanguage || "en"
   );
-
-  const templateDir = join(cwd, AGENT_ROOT_DIR, TEMPLATE_SUBDIR);
-  const bundleTplDir = join(new URL(".", import.meta.url).pathname, "..", "templates");
-
-  const ticketTemplateCandidates = [
-    join(templateDir, `TICKET_TEMPLATE.${docsLanguage}.md`),
-    join(bundleTplDir, `TICKET_TEMPLATE.${docsLanguage}.md`),
-    join(templateDir, "TICKET_TEMPLATE.md"),
-    join(bundleTplDir, "TICKET_TEMPLATE.md"),
-  ];
-  const ticketTemplatePath = ticketTemplateCandidates.find(p => existsSync(p));
-  if (!ticketTemplatePath) {
-    throw new Error("ticket create: Template not found. Please run 'npx deuk-agent-flow init' to deploy templates.");
-  }
-  return { tplText: readFileSync(ticketTemplatePath, "utf8"), docsLanguage };
+  return docsLanguage;
 }
 
 function hasPlaceholderTokens(text) {
   const src = String(text || "").toLowerCase();
   return src.includes("[add ") || src.includes("[fill") || src.includes("placeholder") || src.includes("todo") || src.includes("tbd");
 }
-
-const PLAN_SCAFFOLD_PHRASES = [
-  "Describe what is actually broken, missing, ambiguous, or risky.",
-  "Record concrete code/docs observations with file references.",
-  "List plausible causes or design gaps before choosing an approach.",
-  "Explain the selected approach and why alternatives were not chosen.",
-  "Describe the implementation strategy without using progress checkboxes.",
-  "List commands to run, expected outcomes, and residual risks.",
-  "Record the concrete symptom, risk, or requested change this ticket owns.",
-  "State what is broken, what is missing, and who or what is affected.",
-  "Capture the current best explanation and cite affected files, symbols, commands, or rules.",
-  "Record MCP tool/query quality when used:",
-  "Capture the selected design path and implementation direction.",
-  "List the smallest relevant commands/checks, expected result, and the pass/fail signal"
-];
-
-function hasSubstantivePlanContent(text) {
-  const normalized = String(text || "").replace(/\s+/g, " ").trim().toLowerCase();
-  if (!normalized) return false;
-  if (normalized.includes("[add ") || normalized.includes("[fill") || normalized.includes("todo") || normalized.includes("tbd")) return false;
-  return !PLAN_SCAFFOLD_PHRASES.some(phrase => normalized.includes(phrase.toLowerCase()));
-}
-
-function looksLikeInvestigationTicket(summary, title, topic) {
-  const haystack = [summary, title, topic].filter(Boolean).join(" ").toLowerCase();
-  if (!haystack) return false;
-  return [
-    "audit",
-    "review",
-    "investigate",
-    "investigation",
-    "root cause",
-    "root-cause",
-    "why ",
-    " why",
-    "issue",
-    "regression",
-    "bug",
-    "failure",
-    "broken",
-    "unexpected",
-    "does not",
-    "doesn't",
-    "not working"
-  ].some(token => haystack.includes(token));
-}
-
-const DURABLE_EVIDENCE_SECTION_NAMES = [
-  "Source Observations",
-  "Audit Evidence",
-  "Audit Findings",
-  "Findings",
-  "Verification Outcome"
-];
-
-const EVIDENCE_SCAFFOLD_PHRASES = [
-  "Record confirmed local, RAG, code, command, or document evidence.",
-  "Record the concrete symptom, risk, or requested change this ticket owns.",
-  "Root causes are documented and explained.",
-  "Report is delivered to the user."
-];
 
 const ANALYSIS_DESIGN_SECTION_REQUIREMENTS = [
   {
@@ -155,21 +82,37 @@ const ANALYSIS_DESIGN_SECTION_REQUIREMENTS = [
   }
 ];
 
-const INVESTIGATION_ANALYSIS_SECTION_REQUIREMENTS = [
-  {
-    section: "Source Observations",
-    reason: "source_observations_missing",
-    scaffolds: [
-      "Record confirmed local, RAG, code, command, or document evidence."
-    ]
-  },
-  {
-    section: "Cause Hypotheses",
-    reason: "cause_hypotheses_missing",
-    scaffolds: [
-      "Record the current best explanation and competing plausible causes."
-    ]
-  }
+const REQUIRED_PHASE1_SECTIONS = [
+  "Agent Permission Contract (APC)",
+  "Compact Plan",
+  "Problem Analysis",
+  "Source Observations",
+  "Cause Hypotheses",
+  "Improvement Direction",
+  "Audit Evidence"
+];
+
+const REQUIRED_APC_MARKERS = [
+  { name: "boundary", marker: "[BOUNDARY]" },
+  { name: "contract", marker: "[CONTRACT]" },
+  { name: "patch_plan", marker: "[PATCH PLAN]" }
+];
+const REQUIRED_PHASE1_DATA_SECTIONS = [
+  "Compact Plan",
+  "Problem Analysis",
+  "Source Observations",
+  "Cause Hypotheses",
+  "Improvement Direction",
+  "Audit Evidence"
+];
+
+const FOLLOW_UP_DECISION_NO_FOLLOW_UP_PATTERNS = [
+  /\bno[- ]follow[- ]up\b/i,
+  /\bfollow[- ]up\s*:\s*none\b/i,
+  /\bno further action\b/i,
+  /\bnone required\b/i,
+  /후속(?:\s+작업)?\s*(?:없음|불필요)/,
+  /추가(?:\s+작업)?\s*(?:없음|불필요)/
 ];
 
 const CLAIM_STOP_WORDS = new Set([
@@ -231,6 +174,34 @@ function collectClaimTargetSections(content) {
   return targetSections.map(name => extractMarkdownSection(content, name)).join(" ");
 }
 
+function parseMarkdownH2Sections(content) {
+  const lines = String(content || "").split("\n");
+  const sections = new Map();
+  let currentHeading = "";
+  let buffer = [];
+
+  const flush = () => {
+    if (!currentHeading) return;
+    sections.set(currentHeading, buffer.join("\n").trim());
+  };
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^##\s+(.+?)\s*$/);
+    if (headingMatch) {
+      flush();
+      currentHeading = headingMatch[1].trim();
+      buffer = [];
+      continue;
+    }
+    if (currentHeading) {
+      buffer.push(line);
+    }
+  }
+
+  flush();
+  return sections;
+}
+
 function buildClaimCoverageSummary(claimTerms, sectionText) {
   const haystack = String(sectionText || "").toLowerCase();
   const normalized = haystack.replace(/\s+/g, " ");
@@ -244,9 +215,16 @@ function buildClaimCoverageSummary(claimTerms, sectionText) {
 }
 
 function extractMarkdownSection(content, heading) {
-  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = String(content || "").match(new RegExp(`^##\\s+${escaped}\\s*$([\\s\\S]*?)(?=^##\\s+|(?![\\s\\S]))`, "im"));
-  return match?.[1] || "";
+  return parseMarkdownH2Sections(content).get(String(heading || "").trim()) || "";
+}
+
+function extractMarkdownSectionByAliases(content, aliases) {
+  const sections = parseMarkdownH2Sections(content);
+  for (const alias of aliases) {
+    const value = sections.get(String(alias || "").trim());
+    if (value !== undefined) return value;
+  }
+  return "";
 }
 
 function hasSubstantiveSectionContent(text, scaffolds = []) {
@@ -254,6 +232,71 @@ function hasSubstantiveSectionContent(text, scaffolds = []) {
   if (!src || hasPlaceholderTokens(src)) return false;
   const normalized = src.replace(/\s+/g, " ");
   return !scaffolds.some(phrase => normalized.includes(phrase));
+}
+
+function getMarkerBody(text, marker, nextMarkers) {
+  const lines = String(text || "").split("\n");
+  const start = lines.findIndex(line => line.includes(marker));
+  if (start < 0) return null;
+
+  const body = [];
+  for (const line of lines.slice(start + 1)) {
+    if (nextMarkers.some(nextMarker => line.includes(nextMarker))) break;
+    body.push(line);
+  }
+  return body.join("\n").trim();
+}
+
+function getMissingApcFields(text) {
+  return REQUIRED_APC_MARKERS
+    .filter(({ marker }, index) => {
+      const nextMarkers = REQUIRED_APC_MARKERS.slice(index + 1).map(item => item.marker);
+      return !hasSubstantiveSectionContent(getMarkerBody(text, marker, nextMarkers), []);
+    })
+    .map(field => field.name);
+}
+
+function getPhase1PlanBodyReasons(body) {
+  const content = String(body || "");
+  const sections = parseMarkdownH2Sections(content);
+  const apcSection = extractMarkdownSectionByAliases(content, [
+    "Agent Permission Contract (APC)",
+    "Agent Permission Contract",
+    "APC"
+  ]);
+  const reasons = [];
+
+  if (!apcSection) {
+    reasons.push("missing_apc_block");
+  } else {
+    for (const field of getMissingApcFields(apcSection)) {
+      reasons.push(`apc_${field}_missing`);
+    }
+  }
+
+  for (const sectionName of REQUIRED_PHASE1_DATA_SECTIONS) {
+    const sectionKey = toSnakeCaseKey(sectionName);
+    if (!sections.has(sectionName)) {
+      reasons.push(`${sectionKey}_missing`);
+      continue;
+    }
+    if (!hasSubstantiveSectionContent(sections.get(sectionName), [])) {
+      reasons.push(`${sectionKey}_incomplete`);
+    }
+  }
+
+  return reasons;
+}
+
+function buildPlanBodyRequiredMessage(reasons = []) {
+  const uniqueReasons = [...new Set(reasons)];
+  return [
+    "[VALIDATION FAILED] ticket create requires a filled Phase 1 plan body with actual data.",
+    `Missing or incomplete: ${uniqueReasons.join(", ")}`,
+    "Use the one-shot flow: collect real observations first, pass a filled body with `--plan-body-file -`, then run `ticket create` once.",
+    "If a scratch plan-body file is unavoidable, keep it outside the workspace, delete it after create, and never present it as a ticket artifact.",
+    "Do not rely on template defaults or auto-generated filler text for Phase 1 ticket content."
+  ].join("\n");
 }
 
 function getAnalysisDesignIncompleteReasons(meta, content) {
@@ -264,44 +307,32 @@ function getAnalysisDesignIncompleteReasons(meta, content) {
     }
   }
 
-  if (shouldRequireMainTicketEvidence(meta, content)) {
-    for (const requirement of INVESTIGATION_ANALYSIS_SECTION_REQUIREMENTS) {
-      if (!hasSubstantiveSectionContent(extractMarkdownSection(content, requirement.section), requirement.scaffolds)) {
-        reasons.push(requirement.reason);
-      }
-    }
-  }
-
   return reasons;
 }
 
-function hasConcreteEvidenceSignals(text) {
-  const src = String(text || "").trim();
-  if (!src || hasPlaceholderTokens(src)) return false;
-  const normalized = src.replace(/\s+/g, " ");
-  if (EVIDENCE_SCAFFOLD_PHRASES.some(phrase => normalized.includes(phrase))) return false;
-  return [
-    /`[^`]+\.(?:[cm]?[jt]s|tsx?|jsx?|mjs|cjs|json|ya?ml|ejs|md|rs|py|java|cs|cpp|hpp|h|ex|exs|go|kt|swift|rb|php|sh)`/i,
-    /\b[\w./-]+\.(?:[cm]?[jt]s|tsx?|jsx?|mjs|cjs|json|ya?ml|ejs|md|rs|py|java|cs|cpp|hpp|h|ex|exs|go|kt|swift|rb|php|sh)(?::\d+)?\b/i,
-    /\b(?:rg|node|npm|npx|jest|pytest|cargo|dotnet|mvn|gradle|git)\b/i,
-    /\b(?:function|class|method|symbol|line|라인|파일|명령|검증|테스트|결과)\b/i,
-    /`[^`]+`/
-  ].some(pattern => pattern.test(src));
+function hasSubstantiveFollowUpDecision(content) {
+  return hasSubstantiveSectionContent(extractMarkdownSection(content, "Follow-up Decision"), []);
 }
 
-function hasMainTicketDurableEvidence(content) {
-  return DURABLE_EVIDENCE_SECTION_NAMES.some(sectionName => hasConcreteEvidenceSignals(extractMarkdownSection(content, sectionName)));
+function followUpDecisionMeansNoFollowUp(content) {
+  const text = extractMarkdownSection(content, "Follow-up Decision");
+  if (!hasSubstantiveSectionContent(text, [])) return false;
+  return FOLLOW_UP_DECISION_NO_FOLLOW_UP_PATTERNS.some(pattern => pattern.test(text));
 }
 
-function shouldRequireMainTicketEvidence(meta, content) {
-  return looksLikeInvestigationTicket(meta.summary, meta.title, meta.id || meta.topic);
-}
-
-function getMainTicketEvidenceReasons(meta, content) {
-  if (shouldRequireMainTicketEvidence(meta, content) && !hasMainTicketDurableEvidence(content)) {
-    return ["audit_evidence_missing"];
+function getCloseLifecycleReasons(meta, content) {
+  const reasons = [];
+  const problemAnalysis = extractMarkdownSection(content, "Problem Analysis");
+  if (!hasSubstantiveSectionContent(problemAnalysis, ANALYSIS_DESIGN_SECTION_REQUIREMENTS[0].scaffolds)) {
+    reasons.push("problem_analysis_missing");
   }
-  return [];
+
+  if (!hasSubstantiveSectionContent(extractMarkdownSection(content, "Improvement Direction"), ANALYSIS_DESIGN_SECTION_REQUIREMENTS[1].scaffolds)
+    && !hasSubstantiveFollowUpDecision(content)) {
+    reasons.push("follow_up_decision_missing");
+  }
+
+  return reasons;
 }
 
 function validateClaimAgainstTicketContent(meta, content, claim) {
@@ -415,92 +446,85 @@ function isCompactTicketOutput(opts = {}) {
   return Boolean(opts.compact || opts.nonInteractive);
 }
 
-function printUsageReminder(cwd) {
+function printUsageReminder(cwd, opts = {}) {
+  if (isCompactTicketOutput(opts) || opts.pathOnly) return;
   const reminder = getUsageReminderLine(cwd);
   if (reminder) {
     console.log(reminder);
   }
 }
 
-function formatTicketReason(reason) {
-  switch (String(reason || "")) {
-    case "ticket_file_missing":
-      return "project ticket file missing";
-    case "phase1_incomplete":
-      return "phase 1 incomplete";
-    default:
-      return String(reason || "").replace(/_/g, " ");
+function printCreateApprovalGate(ticketId, opts = {}) {
+  if (isCompactTicketOutput(opts)) {
+    console.log("Approval pending: explicit user approval is required before work.");
+    console.log(`Guard topic: ${ticketId}`);
+    return;
   }
+  console.log("Approval pending: share the ticket-start line in chat, review the durable ticket body, and stop here until the user explicitly approves.");
+  console.log(`After approval: deuk-agent-flow ticket guard --topic ${ticketId} --ticket-started --ticket-reviewed --approval approved`);
 }
 
-function formatTicketReasonList(reasons = []) {
-  return reasons.map(formatTicketReason).join(", ");
+function formatTicketStartLine(ticketId, absPath) {
+  return `Ticket start: [${ticketId}](${absPath})`;
 }
 
-function summarizeForLine(text, limit = 120) {
-  const clean = String(text || "").replace(/\s+/g, " ").trim();
-  return clean.length > limit ? `${clean.slice(0, limit - 3)}...` : clean;
+function printTicketStartLine(ticketId, absPath) {
+  console.log(formatTicketStartLine(ticketId, absPath));
 }
 
-function buildProblemReportLine(meta = {}, content = "") {
-  const sections = extractMarkdownSections(content, ["Problem Analysis", "Source Observations", "Cause Hypotheses"]);
-  const problem = sections["Problem Analysis"] || sections["Source Observations"] || sections["Cause Hypotheses"] || "";
-  const headline = summarizeForSentence(meta.summary || meta.title || meta.id || meta.topic || "");
-  const body = summarizeForLine(problem || headline);
-  if (!body) return "";
-  return `problem report: ${headline && problem ? summarizeForLine(`${headline} | ${problem}`) : body}`;
-}
-
-function printReinforcement(cwd, ticket = {}) {
-  printUsageReminder(cwd);
-  const report = buildProblemReportLine(ticket.meta || {}, ticket.content || "");
-  if (report) console.log(report);
+function printTicketSelectionLine(ticketId, absPath, opts = {}) {
+  if (opts.pathOnly) {
+    console.log(absPath);
+    return;
+  }
+  if (isCompactTicketOutput(opts)) {
+    printTicketStartLine(ticketId, absPath);
+    return;
+  }
+  printTicketStartLine(ticketId, absPath);
 }
 
 function getHandoffSummary(out) {
   const next = out.nextTicket ? `${out.nextTicket.id}:${out.nextTicket.status}` : "none";
-  const blockers = out.reasons?.length ? formatTicketReasonList(out.reasons) : "none";
-  return `${out.current.id} | phase=${out.current.phase} | status=${out.current.status} | next=${next} | blockers=${blockers}`;
+  const blockers = out.reasons?.length ? out.reasons.join(",") : "none";
+  const telemetry = out.telemetrySummary || "telemetry none";
+  return `${out.current.id} | phase=${out.current.phase} | status=${out.current.status} | next=${next} | blockers=${blockers} | ${telemetry}`;
 }
 
-function summarizeForSentence(summary) {
-  const clean = String(summary || "").replace(/\s+/g, " ").trim();
-  return clean.length > 180 ? `${clean.slice(0, 177)}...` : clean;
+function buildTicketContentSection(ticketContent, docsLanguage) {
+  const trimmed = String(ticketContent || "").trim();
+  if (!trimmed) return "";
+  const heading = docsLanguage === "ko" ? "## 맥락" : "## Context";
+  return `${heading}\n\n${trimmed}\n`;
 }
 
-function buildApcDraft(summary) {
-  const s = summarizeForSentence(summary);
-  return {
-    boundaryEditable: `- Editable modules: ticket target modules directly related to \"${s}\"`,
-    boundaryForbidden: "- Forbidden modules: generated artifacts, unrelated shared infrastructure, external module roots",
-    boundaryRule: "- Rule citation: PROJECT_RULE.md + core-rules/AGENTS.md",
-    contractInput: `- Input: existing code/context required to implement \"${s}\"`,
-    contractOutput: `- Output: minimal implementation and tests that satisfy \"${s}\"`,
-    contractSideEffects: "- Side effects: ticket updates, scoped code changes only",
-    patchPlan: [
-      "- Compact planning lives in this ticket.",
-      "- Use CLI-linked subissues for related work instead of expanding this ticket.",
-      "- Ticket content owns scope/APC/evidence; core rules own screen-output policy."
-    ].join("\n")
-  };
+function readCliTextInput(cwd, inputPath, label) {
+  const value = String(inputPath || "").trim();
+  if (!value) return "";
+  if (value === "-") return readFileSync(0, "utf8");
+  const absPath = resolve(cwd, value);
+  if (!existsSync(absPath)) throw new Error(`${label}: file not found ${value}`);
+  return readFileSync(absPath, "utf8");
 }
 
-function evaluateApcCompleteness(content) {
-  const reasons = [];
-  const apcMatch = String(content || "").match(/## Agent Permission Contract[\s\S]*?(?=\n## |$)/i);
-  if (!apcMatch) {
-    reasons.push("missing_apc_block");
-    return reasons;
+function hydrateCreateTextInputs(opts) {
+  const next = { ...opts };
+  if (next.planBodyFile) {
+    next.planBody = readCliTextInput(next.cwd, next.planBodyFile, "ticket create --plan-body-file");
   }
-  const apcText = apcMatch[0];
-  const boundaryMatch = apcText.match(/### \[BOUNDARY\]([\s\S]*?)(?=\n### |$)/i);
-  const contractMatch = apcText.match(/### \[CONTRACT\]([\s\S]*?)(?=\n### |$)/i);
-  const planMatch = apcText.match(/### \[PATCH PLAN\]([\s\S]*?)(?=\n### |$)/i);
+  if (next.contentFile) {
+    next.content = readCliTextInput(next.cwd, next.contentFile, "ticket create --content-file");
+  }
+  return next;
+}
 
-  if (!boundaryMatch?.[1] || hasPlaceholderTokens(boundaryMatch[1])) reasons.push("apc_boundary_incomplete");
-  if (!contractMatch?.[1] || hasPlaceholderTokens(contractMatch[1])) reasons.push("apc_contract_incomplete");
-  if (!planMatch?.[1] || hasPlaceholderTokens(planMatch[1])) reasons.push("apc_patch_plan_incomplete");
-  return reasons;
+function injectTicketContent(baseContent, ticketContent, docsLanguage) {
+  const section = buildTicketContentSection(ticketContent, docsLanguage);
+  if (!section) return baseContent;
+  if (/^## Tasks\b/m.test(baseContent)) {
+    return baseContent.replace(/^## Tasks\b/m, `${section}\n## Tasks`);
+  }
+  return `${String(baseContent || "").trimEnd()}\n\n${section}`;
 }
 
 function lintTicketLifecycleMarkdown(cwd, targets, context) {
@@ -513,6 +537,21 @@ function lintTicketLifecycleMarkdown(cwd, targets, context) {
     throw new Error(`[VALIDATION FAILED] ${context}: markdown lint failed\n${details}`);
   }
   return result;
+}
+
+function runTicketLifecycleQualityGate(cwd, { ticketAbsPath, extraTargets = [], context }) {
+  const lintTargets = collectTicketLifecycleMarkdownTargets(cwd, ticketAbsPath, extraTargets);
+  lintTicketLifecycleMarkdown(cwd, lintTargets, context);
+
+  const changedFiles = collectChangedFiles(cwd);
+  if (!existsSync(join(cwd, "core-rules", "AGENTS.md"))) return;
+  if (!shouldRunLifecycleRulesAudit(changedFiles)) return;
+
+  const result = auditRules(cwd);
+  if (result.ok) return;
+
+  const details = result.violations.map(violation => `- ${violation.code}: ${violation.message}`).join("\n");
+  throw new Error(`[VALIDATION FAILED] ${context}: rules audit failed\n${details}`);
 }
 
 function looksLikeTicketMarkdownPath(value) {
@@ -587,10 +626,10 @@ function collectNearbyTicketRoots(cwd) {
   return [...roots];
 }
 
-function matchingTicketEntriesForTopic(indexJson, topic) {
+function matchingTicketEntriesForTopic(indexJson, topic, opts = {}) {
   const key = String(topic || "").toLowerCase();
   if (!key) return [];
-  const rows = indexJson.entries || [];
+  const rows = filterTicketEntries(indexJson.entries, opts);
   const exact = rows.filter(entry =>
     String(entry.topic || "").toLowerCase() === key ||
     String(entry.id || "").toLowerCase() === key
@@ -611,6 +650,9 @@ function applyTicketTopicContext(opts = {}) {
     if (pickTicketEntry(opts, currentIndex)) return opts;
   }
 
+  const hasProjectScope = Boolean(opts.project || opts.submodule);
+  if (hasProjectScope) return opts;
+
   const matches = [];
   for (const root of collectNearbyTicketRoots(opts.cwd)) {
     if (resolve(root) === resolve(opts.cwd)) continue;
@@ -620,7 +662,7 @@ function applyTicketTopicContext(opts = {}) {
     } catch {
       continue;
     }
-    for (const entry of matchingTicketEntriesForTopic(indexJson, opts.topic)) {
+    for (const entry of matchingTicketEntriesForTopic(indexJson, opts.topic, opts)) {
       matches.push({ root, entry });
     }
   }
@@ -645,20 +687,43 @@ function applyTicketContext(opts = {}) {
   return opts;
 }
 
+function applyTicketRootContext(opts = {}, options = {}) {
+  const root = resolveConsumerTicketRoot(opts.cwd, options);
+  if (root) opts.cwd = root;
+  return opts;
+}
+
+function normalizeMarkdownLintTargets(cwd, targets = []) {
+  return Array.from(new Set(
+    (targets || [])
+      .filter(Boolean)
+      .map(target => resolve(cwd, target))
+  ));
+}
+
 function collectTicketLifecycleMarkdownTargets(cwd, ticketAbsPath, extraTargets = []) {
-  const targets = [];
-  if (ticketAbsPath) targets.push(ticketAbsPath);
+  return normalizeMarkdownLintTargets(cwd, [
+    ticketAbsPath,
+    ...(extraTargets || [])
+  ]);
+}
 
-  for (const relPath of collectChangedMarkdownFiles(cwd)) {
-    targets.push(join(cwd, relPath));
-  }
-
-  for (const target of extraTargets || []) {
-    if (!target) continue;
-    targets.push(target);
-  }
-
-  return Array.from(new Set(targets));
+function shouldRunLifecycleRulesAudit(changedFiles = []) {
+  return (changedFiles || []).some(relPath => {
+    const normalized = String(relPath || "").replace(/\\/g, "/");
+    if (!normalized) return false;
+    return normalized === "core-rules/AGENTS.md"
+      || normalized === "PROJECT_RULE.md"
+      || normalized === "AGENTS.md"
+      || normalized === ".codex/AGENTS.md"
+      || normalized.startsWith(".claude/rules/")
+      || normalized.startsWith(".aiassistant/rules/")
+      || normalized.startsWith(".windsurf/rules/")
+      || normalized.startsWith(".cursor/rules/")
+      || normalized.startsWith("templates/rules.d/")
+      || normalized === "templates/PROJECT_RULE.md"
+      || normalized === "scripts/lint-rules.mjs";
+  });
 }
 
 function restoreTicketIndexSnapshot(cwd, snapshot, opts = {}) {
@@ -677,20 +742,8 @@ function rollbackTicketLifecycleArtifacts(cwd, previousIndex, previousBody, absP
 }
 
 function getPhase1IncompleteReasonsFromBody(body) {
-  const { meta, content } = parseFrontMatter(body);
-  const phase = Number(meta.phase || 1);
-  if (phase !== 1) return [];
-
-  const reasons = [];
-  if (!meta.summary || hasPlaceholderTokens(meta.summary)) reasons.push("summary_missing_or_placeholder");
-  if (!/## Compact Plan/i.test(content) || !hasSubstantivePlanContent(content.split(/## Compact Plan/i)[1] || "")) {
-    reasons.push("compact_plan_placeholder_or_incomplete");
-  }
-
-  reasons.push(...evaluateApcCompleteness(content));
-  reasons.push(...getAnalysisDesignIncompleteReasons(meta, content));
-  reasons.push(...getMainTicketEvidenceReasons(meta, content));
-  return [...new Set(reasons)];
+  parseFrontMatter(body);
+  return [];
 }
 
 function getPhase1IncompleteReasons(cwd, absPath) {
@@ -698,40 +751,18 @@ function getPhase1IncompleteReasons(cwd, absPath) {
   return getPhase1IncompleteReasonsFromBody(readFileSync(absPath, "utf8"));
 }
 
-function buildStrictCreateFailureMessage(reasons) {
-  const uniqueReasons = [...new Set(reasons || [])];
-  const lines = [
-    "[VALIDATION FAILED] ticket create strict mode rejected incomplete Phase 1.",
-    `Missing: ${uniqueReasons.join(", ")}`,
-    "Fix: provide `--summary` and a filled `--plan-body` with APC, Compact Plan, Problem Analysis, Source Observations, Cause Hypotheses, Improvement Direction, and Audit Evidence.",
-    "Command: npx deuk-agent-flow ticket create --topic <topic> --summary \"<concrete summary>\" --plan-body \"<filled phase 1 markdown>\" --non-interactive",
-    "Manual fallback is forbidden: do not write .deuk-agent/tickets/**/*.md directly after this failure."
-  ];
-
-  if (uniqueReasons.includes("summary_missing_or_placeholder")) {
-    lines.push("Summary fix: replace placeholder/TBD wording with a concrete `--summary` value.");
-  }
-  if (uniqueReasons.includes("missing_apc_block") || uniqueReasons.some(reason => reason.startsWith("apc_"))) {
-    lines.push("APC fix: include `## Agent Permission Contract (APC)` with `[BOUNDARY]`, `[CONTRACT]`, and `[PATCH PLAN]`.");
-  }
-  if (uniqueReasons.includes("compact_plan_placeholder_or_incomplete")) {
-    lines.push("Compact Plan fix: replace scaffold text with concrete finding, direction, and verification lines.");
-  }
-  if (uniqueReasons.some(reason => [
-    "problem_analysis_missing",
-    "source_observations_missing",
-    "cause_hypotheses_missing",
-    "improvement_direction_missing",
-    "audit_evidence_missing"
-  ].includes(reason))) {
-    lines.push("Investigation fix: record concrete evidence with file/command references before creating the ticket.");
-  }
-
-  return lines.join("\n");
-}
-
 function isExecutionTicketStatus(status) {
   return OPEN_TICKET_STATUSES.has(String(status || "open").toLowerCase());
+}
+
+function hasExplicitExecutionApproval(opts = {}) {
+  if (!Object.prototype.hasOwnProperty.call(opts, "workflowMode")
+    && !Object.prototype.hasOwnProperty.call(opts, "workflow")
+    && !Object.prototype.hasOwnProperty.call(opts, "approval")
+    && !Object.prototype.hasOwnProperty.call(opts, "approvalState")) {
+    return false;
+  }
+  return normalizeWorkflowMode(opts.workflowMode ?? opts.workflow ?? opts.approval ?? opts.approvalState) === WORKFLOW_MODE_EXECUTE;
 }
 
 function getTicketLifecycleProvenanceReasons(entry, meta = {}) {
@@ -753,7 +784,7 @@ function assertTicketLifecycleProvenance(entry, meta = {}) {
     `[VALIDATION FAILED] Ticket ${entry?.id || entry?.topic || "unknown"} cannot be used as an execution ticket: ${reasons.join(", ")}.`,
     "This ticket file does not carry CLI creation provenance.",
     "Do not create or repair tickets by writing .deuk-agent/tickets/**/*.md directly.",
-    "Use: npx deuk-agent-flow ticket create --topic <topic> --summary <summary> --plan-body \"<filled phase 1 markdown>\" --non-interactive"
+    "Use: npx deuk-agent-flow ticket create --topic <topic> --summary <summary> --plan-body-file - --non-interactive"
   ].join("\n"));
 }
 
@@ -850,8 +881,8 @@ function formatTicketChoice(entry) {
   return `${entry.id} | ${status} | ${createdAt} | ${title}`;
 }
 
-function buildUseFallbackCandidates(indexJson) {
-  const entries = indexJson.entries || [];
+function buildUseFallbackCandidates(indexJson, opts = {}) {
+  const entries = filterTicketEntries(indexJson.entries, opts);
   const lastClosed = latestTicketByStatus(entries, ["closed"]);
   const openRows = entries
     .filter(e => OPEN_TICKET_STATUSES.has(String(e.status || "open")))
@@ -1013,7 +1044,6 @@ function archiveTicketEntry({ cwd, ticketDir, indexJson, found, opts = {}, repor
     bodyLines.push(`- [View Report](${relativeLink})`);
   }
 
-  const lintTargets = collectTicketLifecycleMarkdownTargets(cwd, newAbsPath, reportDest ? [reportDest] : []);
   if (opts.dryRun) {
     if (!isCompactTicketOutput(opts)) {
       console.log("ticket archive: would move " + toRepoRelativePath(cwd, absPath) + " to " + toRepoRelativePath(cwd, newAbsPath));
@@ -1024,7 +1054,11 @@ function archiveTicketEntry({ cwd, ticketDir, indexJson, found, opts = {}, repor
   writeFileSync(newAbsPath, bodyLines.join("\n") + "\n", "utf8");
   rmSync(absPath);
   try {
-    lintTicketLifecycleMarkdown(cwd, lintTargets, `ticket archive ${found.id}`);
+    runTicketLifecycleQualityGate(cwd, {
+      ticketAbsPath: newAbsPath,
+      extraTargets: reportDest ? [reportDest] : [],
+      context: `ticket archive ${found.id}`
+    });
   } catch (err) {
     rmSync(newAbsPath, { force: true });
     writeFileSync(absPath, originalBody, "utf8");
@@ -1134,10 +1168,12 @@ function buildCreateRollbackIndex(currentIndexJson, ticketId, previousIndexJson)
 }
 
 export async function runTicketCreate(opts) {
+  applyTicketRootContext(opts, { createIfMissing: true });
+  opts = hydrateCreateTextInputs(opts);
   if (!opts.topic && !opts.ref) throw new Error("ticket create requires --topic or --ref");
   const inferred = opts.ref ? inferRefTitleAndTopic(opts) : null;
-  const topic = toSlug(opts.topic || inferred?.topic || "ticket");
   const title = opts.topic || inferred?.title || "ticket";
+  const topic = requireNonEmptySlug(opts.topic || inferred?.topic || title, "ticket topic");
   const group = toSlug(opts.group || "sub");
 
   await ensurePhase0Validation(opts);
@@ -1158,7 +1194,7 @@ export async function runTicketCreate(opts) {
       parsedPlan = parsePlan("inline-plan-body.md", opts.planBody);
 
       finalTitle = opts.topic || parsedPlan.title || title;
-      finalTopic = toSlug(finalTitle);
+      finalTopic = requireNonEmptySlug(finalTitle, "ticket topic");
     }
 
     const indexJson = readTicketIndexJson(opts.cwd);
@@ -1244,21 +1280,10 @@ export async function runTicketCreate(opts) {
       prevTicketEntry = pickTicketEntry({ latest: true }, indexJson);
     }
 
-    const summary = (opts.summary || parsedPlan?.summary || "").trim();
-    if (!summary) {
-      throw new Error("[VALIDATION FAILED] 'summary' is mandatory and cannot be empty. Please provide a meaningful summary via --summary or within your plan.");
-    }
-
-    const strictCreate = !opts.allowPlaceholder && (
-      opts.requireFilled ||
-      typeof opts.planBody === "string" ||
-      looksLikeInvestigationTicket(summary, finalTitle, finalTopic)
-    );
+    const summary = (opts.summary || parsedPlan?.summary || finalTitle || finalTopic || "ticket").trim();
 
     const promptText = [summary, finalTitle, parsedPlan?.body].filter(Boolean).join("\n");
-    const { tplText, docsLanguage } = resolveTicketTemplate(opts.cwd, opts.docsLanguage, promptText);
-
-    const apcDraft = buildApcDraft(summary);
+    const docsLanguage = resolveTicketDocsLanguage(opts.cwd, opts.docsLanguage, promptText);
 
     const rawMeta = {
       id: ticketId,
@@ -1287,29 +1312,27 @@ export async function runTicketCreate(opts) {
 
     let finalContent = "";
     if (parsedPlan) {
+      const planReasons = getPhase1PlanBodyReasons(parsedPlan.body);
+      if (planReasons.length > 0) {
+        throw new Error(buildPlanBodyRequiredMessage(planReasons));
+      }
       finalContent = `---\n${frontmatter}\n---\n${parsedPlan.body}`;
     } else {
-      finalContent = ejs.render(tplText, { meta, frontmatter, apcDraft });
+      throw new Error(buildPlanBodyRequiredMessage(["plan_body_file_required"]));
     }
+    finalContent = injectTicketContent(finalContent, opts.content, docsLanguage);
 
-    const lifecycleTargets = [abs];
     let rollbackIndexJson = indexJson;
 
     if (!opts.dryRun) writeFileSync(abs, finalContent, "utf8");
     source = "ticket-create";
 
     try {
-      if (strictCreate) {
-        const reasons = opts.dryRun
-          ? getPhase1IncompleteReasonsFromBody(finalContent)
-          : getPhase1IncompleteReasons(opts.cwd, abs);
-        if (reasons.length > 0) {
-          throw new Error(buildStrictCreateFailureMessage(reasons));
-        }
-      }
-
       if (!opts.dryRun) {
-        lintTicketLifecycleMarkdown(opts.cwd, lifecycleTargets, `ticket create ${ticketId}`);
+        runTicketLifecycleQualityGate(opts.cwd, {
+          ticketAbsPath: abs,
+          context: `ticket create ${ticketId}`
+        });
       }
 
       if (opts.dryRun) {
@@ -1366,7 +1389,11 @@ export async function runTicketCreate(opts) {
     }
 
     console.log(`${opts.dryRun ? "Ticket would be created" : "Ticket created"}: ${toFileUri(abs)}`);
-    printReinforcement(opts.cwd, { meta: meta, content: finalContent });
+    printTicketStartLine(ticketId, abs);
+    if (!opts.dryRun) {
+      printCreateApprovalGate(ticketId, opts);
+    }
+    printUsageReminder(opts.cwd, opts);
     if (!opts.dryRun) {
       appendTelemetryEvent(opts.cwd, {
         event: "ticket_created",
@@ -1389,6 +1416,7 @@ export async function runTicketCreate(opts) {
 }
 
 export async function runTicketList(opts) {
+  applyTicketRootContext(opts);
   const ticketDir = detectConsumerTicketDir(opts.cwd);
   if (!ticketDir) {
     throw new Error("No ticket system found. Please run 'npx deuk-agent-flow init' first.");
@@ -1430,6 +1458,7 @@ export async function runTicketList(opts) {
 }
 
 export async function runTicketStatus(opts) {
+  applyTicketRootContext(opts);
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   const found = pickTicketEntry(opts, index);
   if (!found) throw new Error("ticket status: no matching ticket found");
@@ -1461,9 +1490,9 @@ export async function runTicketStatus(opts) {
   }
 
   if (isCompactTicketOutput(opts)) {
-    const reasonText = out.reasons.length === 0 ? "ok" : formatTicketReasonList(out.reasons);
+    const reasonText = out.reasons.length === 0 ? "ok" : out.reasons.join(", ");
     console.log(`${out.id} | phase=${out.phase} | status=${out.status} | ${reasonText}`);
-    printReinforcement(opts.cwd, { meta: parsed.meta, content: parsed.content });
+    printUsageReminder(opts.cwd, opts);
     return;
   }
 
@@ -1471,29 +1500,70 @@ export async function runTicketStatus(opts) {
   console.log(`Status: ${out.status}`);
   console.log(`Phase: ${out.phase}`);
   console.log(`Path: ${out.path}`);
+  printTicketStartLine(out.id, absPath);
   if (opts.statusDetail || out.reasons.length > 0) {
     if (out.reasons.length === 0) console.log("Reasons: none");
-    else console.log(`Reasons: ${formatTicketReasonList(out.reasons)}`);
+    else console.log(`Reasons: ${out.reasons.join(", ")}`);
   }
-  printReinforcement(opts.cwd, { meta: parsed.meta, content: parsed.content });
+  printUsageReminder(opts.cwd, opts);
+}
+
+export async function runTicketGuard(opts) {
+  applyTicketRootContext(opts);
+  applyTicketContext(opts);
+  if (!opts.topic && !opts.latest) {
+    throw new Error("ticket guard: --topic or --latest is required before set_workflow_context.");
+  }
+
+  const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+  const found = pickTicketEntry(opts, index);
+  if (!found) {
+    throw new Error("ticket guard: no matching durable ticket found; do not call set_workflow_context.");
+  }
+
+  const absPath = join(opts.cwd, found.path);
+  if (!existsSync(absPath)) {
+    throw new Error(`ticket guard: durable ticket file missing for ${found.id || found.topic}; do not call set_workflow_context.`);
+  }
+
+  const body = readFileSync(absPath, "utf8");
+  const parsed = parseFrontMatter(body);
+  assertTicketLifecycleProvenance(found, parsed.meta);
+
+  const phase = Number(parsed.meta.phase || 1);
+  const reasons = getPhase1IncompleteReasons(opts.cwd, absPath);
+  if (phase === 1 && reasons.length > 0) {
+    throw new Error(`[VALIDATION FAILED] ticket guard rejected incomplete Phase 1 for ${found.id || found.topic}: ${reasons.join(", ")}. Do not call set_workflow_context until the durable ticket is complete.`);
+  }
+  if (!opts.ticketStarted) {
+    throw new Error(`[ACK REQUIRED] ticket guard blocked ${found.id || found.topic}: relay this clickable ticket-start line to chat before set_workflow_context: ${formatTicketStartLine(found.id || found.topic, absPath)}. Re-run with --ticket-started only after the ticket link has been shared with the user.`);
+  }
+  if (!opts.ticketReviewed) {
+    throw new Error(`[REVIEW REQUIRED] ticket guard blocked ${found.id || found.topic}: reopen and review the durable ticket body before set_workflow_context. Re-run with --ticket-reviewed only after checking the ticket scope, APC, plan, and verification criteria.`);
+  }
+  if (!hasExplicitExecutionApproval(opts)) {
+    throw new Error(`[APPROVAL REQUIRED] ticket guard blocked ${found.id || found.topic}: explicit user approval is required before set_workflow_context. Re-run with --approval approved only after the user approves the ticket scope and Phase 1 plan.`);
+  }
+
+  const out = {
+    id: found.id,
+    topic: found.topic,
+    phase,
+    status: parsed.meta.status || found.status || "open",
+    path: found.path
+  };
+
+  if (opts.json) {
+    console.log(JSON.stringify(out, null, 2));
+  } else {
+    console.log(`ticket-context-ok ${out.id} | phase=${out.phase} | status=${out.status} | ${out.path}`);
+  }
+  return out;
 }
 
 export async function runTicketHandoff(opts) {
-  if (!opts.topic && !opts.latest) {
-    if (opts.nonInteractive || !process.stdout.isTTY) {
-      throw new Error("ticket handoff requires --topic or --latest. Select a ticket explicitly before continuing.");
-    }
-    await withReadline(async (rl) => {
-      const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
-      const choices = index.entries
-        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
-      if (choices.length > 0) {
-        opts.topic = await selectOne(rl, "Choose a ticket to hand off:", choices);
-      } else {
-        throw new Error("No tickets found to hand off.");
-      }
-    });
-  }
+  applyTicketRootContext(opts);
+  if (!opts.topic && !opts.latest) opts.latest = true;
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   const current = pickTicketEntry(opts, index);
   if (!current) throw new Error("ticket handoff: no matching ticket found");
@@ -1526,7 +1596,18 @@ export async function runTicketHandoff(opts) {
       status: nextTicket.status,
       path: nextTicket.path
     } : null,
-    nextAction: nextTicket ? "continue-ticket" : "inspect-git-history"
+    nextAction: nextTicket ? "continue-ticket" : "inspect-git-history",
+    telemetry: (() => {
+      const summary = buildTelemetrySummary(opts.cwd);
+      if (!summary) return null;
+      return {
+        logEntries: summary.logEntries,
+        coverageRate: summary.eventCoverageRate,
+        tdwCoverageRate: summary.tdwCoverageRate,
+        totalTokens: summary.totalTokens
+      };
+    })(),
+    telemetrySummary: getTelemetryCompactSummary(opts.cwd)
   };
 
   if (opts.json) {
@@ -1542,11 +1623,11 @@ export async function runTicketHandoff(opts) {
   console.log(`Current: ${out.current.id} | phase=${out.current.phase} | status=${out.current.status}`);
   console.log(`Next: ${out.nextTicket ? `${out.nextTicket.id} (${out.nextTicket.status})` : "none"}`);
   console.log(`Action: ${out.nextAction}`);
-  printReinforcement(opts.cwd, { meta: currentParsed.meta, content: currentParsed.content });
   return out;
 }
 
 export async function runTicketMeta(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   const found = pickTicketEntry(opts, index);
@@ -1561,6 +1642,7 @@ export async function runTicketMeta(opts) {
 }
 
 export async function runTicketConnect(opts) {
+  applyTicketRootContext(opts);
   const config = loadInitConfig(opts.cwd);
   const url = opts.remote || config?.pipelineUrl;
   if (!url) throw new Error("ticket connect: no pipeline URL configured or provided via --remote");
@@ -1575,6 +1657,7 @@ export async function runTicketConnect(opts) {
 }
 
 export async function runTicketEvidenceCheck(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   if (!opts.claim || !String(opts.claim).trim()) {
     throw new Error("ticket evidence requires --claim <text> to compare with ticket content.");
@@ -1605,6 +1688,7 @@ export async function runTicketEvidenceCheck(opts) {
 }
 
 export async function runTicketEvidenceReport(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   if (!opts.claim || !String(opts.claim).trim()) {
     throw new Error("ticket report requires --claim <text> when generating a claim-bound report.");
@@ -1644,22 +1728,24 @@ export async function runTicketEvidenceReport(opts) {
 
 
 export async function runTicketClose(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   if (!opts.topic && !opts.latest) {
     if (opts.nonInteractive || !process.stdout.isTTY) {
-      throw new Error("ticket close requires --topic or --latest. Select a ticket explicitly before closing.");
+      opts.latest = true;
+    } else {
+      await withReadline(async (rl) => {
+        const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+        const choices = index.entries
+          .filter(e => e.status !== "closed" && e.status !== "cancelled")
+          .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
+        if (choices.length > 0) {
+          opts.topic = await selectOne(rl, "Choose a ticket to close:", choices);
+        } else {
+          throw new Error("No open tickets found to close.");
+        }
+      });
     }
-    await withReadline(async (rl) => {
-      const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
-      const choices = index.entries
-        .filter(e => e.status !== "closed" && e.status !== "cancelled")
-        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
-      if (choices.length > 0) {
-        opts.topic = await selectOne(rl, "Choose a ticket to close:", choices);
-      } else {
-        throw new Error("No open tickets found to close.");
-      }
-    });
   }
   // Respect --status flag (e.g. 'cancelled', 'wontfix'); default to 'closed'
   if (!opts.status) opts.status = "closed";
@@ -1673,10 +1759,7 @@ export async function runTicketClose(opts) {
   if (!existsSync(abs)) throw new Error("Ticket file not found: " + targetEntry.path);
   const previousBody = readFileSync(abs, "utf8");
   const parsedForClose = parseFrontMatter(previousBody);
-  const closePlanningReasons = [
-    ...getAnalysisDesignIncompleteReasons(parsedForClose.meta, parsedForClose.content),
-    ...getMainTicketEvidenceReasons(parsedForClose.meta, parsedForClose.content)
-  ];
+  const closePlanningReasons = getCloseLifecycleReasons(parsedForClose.meta, parsedForClose.content);
   const implementationGuard = getImplementationClaimGuardResult(opts.cwd, { content: parsedForClose.content, changedFiles: opts.changedFiles });
   if (!implementationGuard.ok) {
     closePlanningReasons.push(...implementationGuard.reasons);
@@ -1688,8 +1771,10 @@ export async function runTicketClose(opts) {
   try {
     const entry = updateTicketEntryStatus(opts.cwd, opts);
     const { meta } = parseFrontMatter(previousBody);
-    const lintTargets = collectTicketLifecycleMarkdownTargets(opts.cwd, abs);
-    lintTicketLifecycleMarkdown(opts.cwd, lintTargets, `ticket close ${entry.topic}`);
+    runTicketLifecycleQualityGate(opts.cwd, {
+      ticketAbsPath: abs,
+      context: `ticket close ${entry.topic}`
+    });
     syncActiveTicketId(opts.cwd);
     appendTelemetryEvent(opts.cwd, {
       event: "ticket_closed",
@@ -1700,7 +1785,6 @@ export async function runTicketClose(opts) {
       status: opts.status
     });
     console.log(`ticket: ${opts.status} -> ${entry.topic} (${entry.path})`);
-    printReinforcement(opts.cwd, { meta: parsedForClose.meta, content: previousBody });
   } catch (err) {
     rollbackTicketLifecycleArtifacts(opts.cwd, previousIndex, previousBody, abs, opts);
     throw err;
@@ -1708,8 +1792,10 @@ export async function runTicketClose(opts) {
 }
 
 export async function runTicketUse(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+  const scopedEntries = filterTicketEntries(index.entries, opts);
   
   let targetTopic = opts.topic;
   if (!targetTopic && !opts.latest) {
@@ -1717,7 +1803,7 @@ export async function runTicketUse(opts) {
       throw new Error("ticket use: --topic or --latest is required in non-interactive mode.");
     }
     await withReadline(async (rl) => {
-      const choices = index.entries
+      const choices = scopedEntries
         .map(e => ({ label: `${e.status === 'closed' ? '✓ ' : ''}[${e.group}] ${e.title}`, value: e.topic }));
       if (choices.length > 0) {
         targetTopic = await selectOne(rl, "Choose a ticket to use:", choices);
@@ -1725,12 +1811,12 @@ export async function runTicketUse(opts) {
     });
   }
 
-  const found = opts.latest ? index.entries[0] : index.entries.find(e =>
+  const found = opts.latest ? scopedEntries[0] : scopedEntries.find(e =>
     String(e.topic || "").includes(targetTopic) ||
     String(e.id || "").includes(targetTopic)
   );
   if (!found) {
-    const candidates = buildUseFallbackCandidates(index);
+    const candidates = buildUseFallbackCandidates(index, opts);
     if (!opts.nonInteractive && candidates.length > 0) {
       await withReadline(async (rl) => {
         targetTopic = await selectOne(
@@ -1758,14 +1844,16 @@ export async function runTicketUse(opts) {
     writeTicketIndexJson(opts.cwd, { ...index, activeTicketId: found.id });
   }
 
-  const posixPath = toPosixPath(found.path);
   const absPath = toPosixPath(join(opts.cwd, found.path));
-  if (opts.pathOnly) console.log(absPath);
-  else {
+  if (isCompactTicketOutput(opts) || opts.pathOnly) {
+    printTicketSelectionLine(found.id, absPath, opts);
+  } else {
+    const posixPath = toPosixPath(found.path);
     console.log(`Active ticket: ${found.id}`);
     console.log(`Path: [${posixPath}](file://${absPath})`);
+    printTicketStartLine(found.id, absPath);
     if (opts.printContent) console.log("\n" + readFileSync(join(opts.cwd, found.path), "utf8"));
-    printReinforcement(opts.cwd, { meta: foundParsed.meta, content: foundParsed.content });
+    printUsageReminder(opts.cwd, opts);
   }
 }
 
@@ -1888,13 +1976,14 @@ function filterTicketEntries(entries, opts = {}) {
 }
 
 export async function runTicketArchive(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   const indexJson = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   const ticketDir = detectConsumerTicketDir(opts.cwd);
 
   if (!opts.latest && !opts.topic) {
     if (opts.nonInteractive) {
-      throw new Error("ticket archive requires --topic or --latest. Select a ticket explicitly before archiving.");
+      throw new Error("ticket archive: --topic or --latest is required in non-interactive mode.");
     }
     await withReadline(async (rl) => {
       const choices = indexJson.entries
@@ -1939,15 +2028,71 @@ export async function runTicketArchive(opts) {
       status: "archived"
     });
   }
-  if (!isCompactTicketOutput(opts) && result?.path) {
-    const archivedBody = readFileSync(join(opts.cwd, result.path), "utf8");
-    const archivedParsed = parseFrontMatter(archivedBody);
-    printReinforcement(opts.cwd, { meta: archivedParsed.meta, content: archivedParsed.content });
-  }
   return result;
 }
 
+export async function runTicketDiscard(opts) {
+  applyTicketRootContext(opts);
+  applyTicketContext(opts);
+  const indexJson = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+
+  if (!opts.latest && !opts.topic) {
+    if (opts.nonInteractive) {
+      throw new Error("ticket discard: --topic or --latest is required in non-interactive mode.");
+    }
+    await withReadline(async (rl) => {
+      const choices = indexJson.entries
+        .filter(e => e.status === "open")
+        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
+      if (choices.length > 0) {
+        opts.topic = await selectOne(rl, "Choose an unapproved ticket to discard:", choices);
+      } else {
+        throw new Error("No open tickets found to discard.");
+      }
+    });
+  }
+
+  const found = pickTicketEntry(opts, indexJson);
+  if (!found) throw new Error("ticket discard: no matching entry");
+
+  const absPath = join(opts.cwd, found.path);
+  if (!existsSync(absPath)) throw new Error("Ticket file not found: " + found.path);
+
+  const body = readFileSync(absPath, "utf8");
+  const { meta } = parseFrontMatter(body);
+  const phase = Number(meta.phase || 1);
+  const status = String(meta.status || found.status || "open").toLowerCase();
+  if (phase >= 2 || status !== "open") {
+    throw new Error(`ticket discard: ${found.id || found.topic} is not an unapproved Phase 1 open ticket. Use ticket close/archive for approved or executed work.`);
+  }
+
+  if (opts.dryRun) {
+    console.log(`ticket discard: would delete ${found.id || found.topic} (${found.path})`);
+    return { id: found.id, path: found.path, discarded: false };
+  }
+
+  rmSync(absPath, { force: true });
+  const nextEntries = (indexJson.entries || []).filter(entry => entry.id !== found.id);
+  writeTicketIndexJson(opts.cwd, {
+    ...indexJson,
+    activeTicketId: indexJson.activeTicketId === found.id ? null : indexJson.activeTicketId,
+    entries: nextEntries
+  }, opts);
+  syncActiveTicketId(opts.cwd);
+  appendTelemetryEvent(opts.cwd, {
+    event: "ticket_discarded",
+    action: "ticket-discard",
+    ticket: found.id || found.topic,
+    file: found.path,
+    phase,
+    status: "discarded"
+  });
+  console.log(`ticket: discarded -> ${found.id || found.topic}`);
+  return { id: found.id, path: found.path, discarded: true };
+}
+
 export async function runTicketReports(opts) {
+  applyTicketRootContext(opts);
   const ticketDir = detectConsumerTicketDir(opts.cwd);
   if (!ticketDir) throw new Error("No ticket system found.");
   const reportDir = join(opts.cwd, AGENT_ROOT_DIR, "docs", "plan");
@@ -1977,6 +2122,7 @@ export async function runTicketReports(opts) {
 }
 
 export async function runTicketReportAttach(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   if (!opts.report) throw new Error("ticket report attach requires --report <file_path>");
   
@@ -2014,27 +2160,19 @@ export async function runTicketReportAttach(opts) {
 }
 
 export async function runTicketRebuild(opts) {
+  applyTicketRootContext(opts, { createIfMissing: true });
   console.log("Rebuilding INDEX.json from markdown files...");
   rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: true, rebuild: true });
 }
 
 export async function runTicketMove(opts) {
+  applyTicketRootContext(opts);
   applyTicketContext(opts);
   if (!opts.topic && !opts.latest) {
-    if (opts.nonInteractive || !process.stdout.isTTY) {
-      throw new Error("ticket move requires --topic or --latest. Select a ticket explicitly before moving.");
+    if (opts.nonInteractive) {
+      throw new Error("ticket move: --topic or --latest is required in non-interactive mode.");
     }
-    await withReadline(async (rl) => {
-      const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
-      const choices = index.entries
-        .filter(e => e.status !== "archived")
-        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
-      if (choices.length > 0) {
-        opts.topic = await selectOne(rl, "Choose a ticket to move:", choices);
-      } else {
-        throw new Error("No tickets found to move.");
-      }
-    });
+    opts.latest = true; // Default to latest
   }
   
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
@@ -2061,6 +2199,9 @@ export async function runTicketMove(opts) {
     if (reasons.length) {
       throw new Error(`[VALIDATION FAILED] Ticket ${entry.topic} has incomplete Phase 1 planning evidence: ${reasons.join(", ")}. Fill substantive APC and compact plan content before moving to Phase 2.`);
     }
+    if (!hasExplicitExecutionApproval(opts)) {
+      throw new Error(`[APPROVAL REQUIRED] Ticket ${entry.topic} cannot move from Phase 1 to Phase 2 without explicit review approval. Re-run with --workflow execute or --approval approved after the plan is reviewed.`);
+    }
   }
 
   meta.phase = nextPhase;
@@ -2084,8 +2225,10 @@ export async function runTicketMove(opts) {
       rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: true });
     }
 
-    const lintTargets = collectTicketLifecycleMarkdownTargets(opts.cwd, abs);
-    lintTicketLifecycleMarkdown(opts.cwd, lintTargets, `ticket move ${entry.topic}`);
+    runTicketLifecycleQualityGate(opts.cwd, {
+      ticketAbsPath: abs,
+      context: `ticket move ${entry.topic}`
+    });
 
     syncActiveTicketId(opts.cwd);
     appendTelemetryEvent(opts.cwd, {
@@ -2097,7 +2240,7 @@ export async function runTicketMove(opts) {
       status: meta.status
     });
     console.log(`ticket: moved -> ${entry.topic} is now in Phase ${nextPhase} (${meta.status})`);
-    printReinforcement(opts.cwd, { meta, content: newBody });
+    printUsageReminder(opts.cwd, opts);
   } catch (err) {
     rollbackTicketLifecycleArtifacts(opts.cwd, previousIndex, body, abs, opts);
     throw err;
@@ -2105,6 +2248,7 @@ export async function runTicketMove(opts) {
 }
 
 export async function runTicketNext(opts) {
+  applyTicketRootContext(opts);
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   // Find the first active ticket, or if none, the first open ticket (earliest created)
   const rows = filterTicketEntries(index.entries, opts)
@@ -2116,6 +2260,28 @@ export async function runTicketNext(opts) {
   }
   
   if (!found) {
+    const latestClosed = filterTicketEntries(index.entries, opts)
+      .filter(entry => String(entry.status || "").toLowerCase() === "closed")
+      .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")))[0];
+    if (latestClosed) {
+      const latestClosedPath = join(opts.cwd, latestClosed.path || computeTicketPath(latestClosed));
+      if (existsSync(latestClosedPath)) {
+        const { content } = parseFrontMatter(readFileSync(latestClosedPath, "utf8"));
+        if (followUpDecisionMeansNoFollowUp(content)) {
+          const absPath = toPosixPath(latestClosedPath);
+          if (opts.pathOnly) {
+            console.log(`no-follow-up:${latestClosed.id}`);
+          } else if (isCompactTicketOutput(opts)) {
+            console.log(`no-follow-up:${latestClosed.id}`);
+          } else {
+            const posixPath = toPosixPath(latestClosed.path || computeTicketPath(latestClosed));
+            console.log(`No follow-up required after ${latestClosed.id}`);
+            console.log(`Path: [${posixPath}](file://${absPath})`);
+          }
+          return { status: "no-follow-up", ticket: latestClosed.id, path: latestClosed.path || computeTicketPath(latestClosed) };
+        }
+      }
+    }
     throw new Error("No active or open tickets found to proceed with. Inspect recent git history before creating a follow-up ticket.");
   }
   
@@ -2123,16 +2289,14 @@ export async function runTicketNext(opts) {
     writeTicketIndexJson(opts.cwd, { ...index, activeTicketId: found.id });
   }
 
-  const posixPath = toPosixPath(found.path);
   const absPath = toPosixPath(join(opts.cwd, found.path));
-  if (opts.pathOnly) {
-    console.log(absPath);
+  if (isCompactTicketOutput(opts) || opts.pathOnly) {
+    printTicketSelectionLine(found.id, absPath, opts);
   } else {
-    const foundParsed = parseFrontMatter(readFileSync(join(opts.cwd, found.path), "utf8"));
+    const posixPath = toPosixPath(found.path);
     console.log(`Next ticket: ${found.id}`);
     console.log(`Path: [${posixPath}](file://${absPath})`);
     if (opts.printContent) console.log("\n" + readFileSync(join(opts.cwd, found.path), "utf8"));
-    printReinforcement(opts.cwd, { meta: foundParsed.meta, content: foundParsed.content });
   }
 }
 
@@ -2144,4 +2308,86 @@ function isTicketNextRunnableCandidate(cwd, entry) {
   const { meta } = parseFrontMatter(readFileSync(absPath, "utf8"));
   const lifecycleSource = String(meta.lifecycleSource || meta.ticketLifecycleSource || "").trim();
   return lifecycleSource === "ticket-create";
+}
+
+export async function runTicketHotfix(opts) {
+  applyTicketRootContext(opts);
+  if (!opts.topic && !opts.latest) {
+    if (opts.nonInteractive) {
+      throw new Error("ticket hotfix: --topic or --latest is required in non-interactive mode.");
+    }
+    opts.latest = true;
+  }
+  
+  if (!opts.reason) {
+    throw new Error("[HOTFIX DENIED] A mandatory --reason must be provided to justify bypassing standard rules (e.g., 'codegen is broken').");
+  }
+
+  // User explicit approval
+  if (!opts.nonInteractive) {
+    let proceed = false;
+    await withReadline(async (rl) => {
+      proceed = await new Promise(resolve => {
+        rl.question(`\n⚠️  [EMERGENCY HOTFIX] This will bypass standard APC rules.\nReason: ${opts.reason}\nProceed? (y/N): `, a => {
+          resolve(a.trim().toLowerCase() === 'y');
+        });
+      });
+    });
+    if (!proceed) {
+      console.log('Hotfix cancelled by user.');
+      return;
+    }
+  }
+
+  const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+  const entry = pickTicketEntry(opts, index);
+  
+  if (!entry) throw new Error("No matching ticket found for hotfix.");
+
+  const abs = join(opts.cwd, entry.path);
+  if (!existsSync(abs)) throw new Error("Ticket file not found: " + entry.path);
+
+  const body = readFileSync(abs, "utf8");
+  const { meta, content } = parseFrontMatter(body);
+
+  // Force phase 2 and active status, bypassing APC checks
+  meta.phase = 2;
+  meta.status = "active";
+  meta.hotfix = true;
+  meta.hotfixReason = opts.reason;
+  
+  // Append hotfix record to content
+  const timestamp = new Date().toISOString();
+  const hotfixRecord = `\n\n> [!WARNING]\n> **EMERGENCY HOTFIX ACTIVATED** (${timestamp})\n> **Reason:** ${opts.reason}\n> Standard APC and Phase 1 guards were bypassed.\n`;
+  
+  const newBody = stringifyFrontMatter(meta, content + hotfixRecord);
+  writeFileSync(abs, newBody, "utf8");
+
+  // Re-sync index
+  opts.topic = entry.topic;
+  opts.status = "active";
+  updateTicketEntryStatus(opts.cwd, opts);
+  
+  syncActiveTicketId(opts.cwd);
+  console.log(`[EMERGENCY HOTFIX] Ticket ${entry.topic} is now ACTIVE. Rule guardrails bypassed for this session.`);
+
+  // Auto-create derivation ticket
+  const deriveTopic = `codegen-fix-${entry.topic}`;
+  const deriveSummary = `[DERIVED] Fix CodeGen source for hotfix: ${opts.reason}`;
+  console.log(`[HOTFIX] Auto-creating derivation ticket: ${deriveTopic}`);
+  
+  try {
+    await runTicketCreate({
+      cwd: opts.cwd,
+      topic: deriveTopic,
+      summary: deriveSummary,
+      chain: true,
+      tags: 'hotfix-derived,codegen',
+      priority: 'P1',
+      skipPhase0: true,
+      nonInteractive: true
+    });
+  } catch (err) {
+    console.warn(`[WARNING] Failed to auto-create derivation ticket: ${err.message}`);
+  }
 }

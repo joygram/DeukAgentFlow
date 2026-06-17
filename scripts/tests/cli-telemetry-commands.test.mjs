@@ -3,7 +3,7 @@ import assert from "node:assert";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runTelemetry } from "../cli-telemetry-commands.mjs";
+import { buildTelemetrySummary, getTelemetryCompactSummary, runTelemetry } from "../cli-telemetry-commands.mjs";
 
 test("telemetry summary surfaces TDW totals and ratios", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "deuk-telemetry-tdw-"));
@@ -103,6 +103,60 @@ test("telemetry summary json groups usage by client and agent", async () => {
     assert.strictEqual(payload.byAgent["codex-main"], 60);
     assert.strictEqual(payload.byAgent["codex-review"], 30);
     assert.strictEqual(payload.byAgent["claude-docs"], 10);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("telemetry summary json normalizes model and client label variants", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-telemetry-normalized-"));
+  try {
+    const telemetryDir = join(cwd, ".deuk-agent");
+    mkdirSync(telemetryDir, { recursive: true });
+    writeFileSync(join(telemetryDir, "telemetry.jsonl"), [
+      JSON.stringify({ ts: 1, tokens: 60, tdw: 10, model: "GPT-5", client: "Codex", ticket: "a", action: "work", file: "", synced: false }),
+      JSON.stringify({ ts: 2, tokens: 40, tdw: 5, model: "gpt-5", client: "codex", ticket: "b", action: "review", file: "", synced: false }),
+      JSON.stringify({ ts: 3, tokens: 30, tdw: 0, model: " Claude Sonnet 4.6 ", client: "Claude Code", ticket: "c", action: "docs", file: "", synced: false }),
+      JSON.stringify({ ts: 4, tokens: 20, tdw: 0, model: "claude sonnet 4.6", client: "claudecode", ticket: "d", action: "docs", file: "", synced: false })
+    ].join("\n") + "\n", "utf8");
+
+    const originalArgv = process.argv;
+    const originalLog = console.log;
+    const lines = [];
+    process.argv = ["node", "test", "telemetry", "summary"];
+    console.log = value => lines.push(String(value));
+
+    try {
+      await runTelemetry({ cwd, json: true });
+    } finally {
+      process.argv = originalArgv;
+      console.log = originalLog;
+    }
+
+    const payload = JSON.parse(lines.at(-1));
+    assert.strictEqual(payload.byModel["gpt-5"], 100);
+    assert.strictEqual(payload.byModel["claude sonnet 4.6"], 50);
+    assert.strictEqual(payload.byClient.Codex, 100);
+    assert.strictEqual(payload.byClient.ClaudeCode, 50);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("telemetry compact summary exposes visible handoff metrics", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-telemetry-compact-"));
+  try {
+    const telemetryDir = join(cwd, ".deuk-agent");
+    mkdirSync(telemetryDir, { recursive: true });
+    writeFileSync(join(telemetryDir, "telemetry.jsonl"), [
+      JSON.stringify({ ts: 1, tokens: 20, tdw: 5, model: "gpt-5", client: "Codex", ticket: "a", action: "work", event: "work", file: "", synced: false }),
+      JSON.stringify({ ts: 2, tokens: 10, tdw: 0, model: "gpt-5", client: "Codex", ticket: "a", action: "review", event: "", file: "", synced: false })
+    ].join("\n") + "\n", "utf8");
+
+    const summary = buildTelemetrySummary(cwd);
+    assert.strictEqual(summary?.logEntries, 2);
+    assert.strictEqual(summary?.eventCoverageRate, 0.5);
+    assert.match(getTelemetryCompactSummary(cwd), /telemetry logs 2, coverage 50\.0%, tdw 50\.0%/);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

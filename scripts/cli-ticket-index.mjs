@@ -3,7 +3,7 @@ import { basename, dirname, join, resolve } from "path";
 import { hostname as osHostname } from "os";
 import { 
   AGENT_ROOT_DIR, TICKET_SUBDIR, TICKET_INDEX_FILENAME,
-  toSlug, findFileRecursively, toRepoRelativePath, detectConsumerTicketDir, computeTicketPath, normalizeTicketGroup
+  requireNonEmptySlug, findFileRecursively, toRepoRelativePath, detectConsumerTicketDir, computeTicketPath, normalizeTicketGroup
 } from "./cli-utils.mjs";
 
 const TICKET_ARCHIVE_INDEX_FILENAME = "INDEX.archive.json";
@@ -243,7 +243,7 @@ export function computeNextTicketNumber(existingEntries) {
 
 export function generateTicketId(topicSlug, existingEntries) {
   const hostname = getHostnameSlug();
-  const slug = toSlug(topicSlug || 'ticket');
+  const slug = requireNonEmptySlug(topicSlug, "ticket topic");
   const match = slug.match(/^(\d{3,4})-(.*)/);
   if (match) {
     const numStr = match[1];
@@ -258,8 +258,10 @@ export function generateTicketId(topicSlug, existingEntries) {
 
 export function syncActiveTicketId(cwd, opts = {}) {
   const index = readTicketIndexJson(cwd);
-  const activeEntry = index.entries.find(e => e.status === "active") || 
-                       index.entries.find(e => e.status === "open");
+  const activeEntries = index.entries.filter(e => e.status === "active");
+  const openEntries = index.entries.filter(e => e.status === "open");
+  const newestFirst = (a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+  const activeEntry = activeEntries.sort(newestFirst)[0] || openEntries.sort(newestFirst)[0] || null;
   
   const ticketDir = detectConsumerTicketDir(cwd);
   if (!ticketDir) return;

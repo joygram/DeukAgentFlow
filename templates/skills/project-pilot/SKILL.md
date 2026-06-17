@@ -19,13 +19,14 @@ Use this skill when the task involves any of the following:
 ## Micro-Protocol
 
 1. Read local project rules and architecture constraints first.
-2. Define the refactor contract before proposing or making edits.
-3. Build the implementation matrix across the relevant surfaces.
-4. Classify drift as `C`, `P`, `S`, `B`, `U`, or `D`.
-5. Identify source owners before touching source, generated, runtime, report, or template files.
-6. Fill the drift checklist and reject shortcuts that hide drift.
-7. Define the conformance gate in the ticket.
-8. Only then split remediation tickets or implement scoped changes.
+2. Create or select the active ticket and record ProjectPilot scope before editing.
+3. Define the refactor contract before proposing or making edits.
+4. Build the implementation matrix across the relevant surfaces.
+5. Classify drift as `C`, `P`, `S`, `B`, `U`, or `D`.
+6. Identify source owners before touching source, generated, runtime, report, or template files.
+7. Fill the drift checklist and reject shortcuts that hide drift.
+8. Define the conformance gate in the ticket without creating tests unless the user requested tests.
+9. Only then split remediation tickets or implement scoped changes.
 
 ## Required Outputs
 

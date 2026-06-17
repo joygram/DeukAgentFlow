@@ -280,7 +280,23 @@ export function toSlug(input) {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "ticket";
+    .replace(/^-+|-+$/g, "");
+}
+
+export function requireNonEmptySlug(input, fieldName = "value") {
+  const slug = toSlug(input);
+  if (slug) return slug;
+
+  const received = String(input || "").trim() || "(empty)";
+  throw new Error(
+    `[VALIDATION FAILED] ${fieldName} must produce a non-empty ASCII slug. ` +
+    `Received: ${JSON.stringify(received)}. ` +
+    `Use an ASCII topic such as "basic-protocol-pack-unpack-test-redefinition".`
+  );
+}
+
+export function toSnakeCaseKey(input) {
+  return toSlug(input).replace(/-/g, "_");
 }
 
 export function formatTimestampForFile(d = new Date()) {
@@ -294,7 +310,7 @@ export function formatTimestampForFile(d = new Date()) {
 }
 
 export function makeEntryId() {
-  return `000-fallback-${Date.now().toString(36)}`;
+  return `000-generated-${Date.now().toString(36)}`;
 }
 
 export function findFileRecursively(dir, fileName) {
@@ -338,7 +354,7 @@ export function deriveTopicFromBaseName(baseName) {
       return parts.slice(0, -2).join("-");
     }
   }
-  return toSlug(raw);
+  return toSlug(raw) || raw.toLowerCase();
 }
 
 export function resolveReferencedTicketPath(opts) {
@@ -477,21 +493,22 @@ export function resolveTicketSystemPaths(cwd) {
  */
 export function detectConsumerTicketDir(startDir, opts = {}) {
   let curr = resolve(startDir);
-  let projectRoot = null;
   while (curr && curr !== dirname(curr)) {
     const paths = resolveTicketSystemPaths(curr);
     if (existsSync(paths.primary)) return paths.primary;
     if (paths.legacy.length > 0) return paths.legacy[0];
-    if (existsSync(join(curr, ".git"))) {
-      projectRoot = curr;
-      break;
+    if (existsSync(join(curr, "AGENTS.md")) || existsSync(join(curr, "PROJECT_RULE.md"))) {
+      return opts.createIfMissing ? resolveTicketSystemPaths(curr).primary : null;
     }
     curr = dirname(curr);
   }
-  if (projectRoot) {
-    return opts.createIfMissing ? resolveTicketSystemPaths(projectRoot).primary : null;
-  }
   return opts.createIfMissing ? resolveTicketSystemPaths(startDir).primary : null;
+}
+
+export function resolveConsumerTicketRoot(startDir, opts = {}) {
+  const ticketDir = detectConsumerTicketDir(startDir, opts);
+  if (!ticketDir) return null;
+  return dirname(dirname(ticketDir));
 }
 
 /**

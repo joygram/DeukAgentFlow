@@ -4,9 +4,8 @@
   <br />
   <h1>Deuk Agent Flow v4.0.0</h1>
   <p>
-    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-agent-flow" alt="deuk-agent-flow npm version" /></a>
-    <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg?label=legacy%20deuk-agent-rule" alt="deuk-agent-rule npm version" /></a>
-    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmain%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="deuk-agent-flow와 deuk-agent-rule 합산 npm downloads" /></a>
+    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
+    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmaster%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="deuk-flow combined npm downloads" /></a>
   </p>
   <p><b>AI 코딩 작업이 대화창 밖으로 흘러내리지 않게.</b></p>
   <p><i>"다음", "진행", "정리"처럼 짧게 말해도 티켓, 범위, 검증, 기억이 레포에 붙어 있게 만듭니다.</i></p>
@@ -16,11 +15,11 @@
 
 ---
 
-**Deuk Agent Flow**는 AI 코딩 에이전트를 위한 빠진 작업대 계층입니다. 사용자는 짧게 말하고, 에이전트는 그 말을 티켓, 범위, 실행, 검증, 아카이브로 레포 안에 남깁니다.
+**Deuk Agent Flow**는 AI 코딩 에이전트를 위한 레포 소유 워크플로우 계층입니다. Codex, Copilot, Cursor, Claude Code, Gemini, Windsurf, 그리고 다음에 쓰게 될 에이전트까지 같은 티켓 흐름으로 들어오게 만듭니다.
 
-대부분의 에이전트 설정은 "지침"에서 멈춥니다. Deuk Agent Flow는 그 지침을 작업 루프로 바꿉니다: 티켓, 범위, 실행, 검증, 보관. 긴 명령을 외우지 않아도 `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills 같은 표면을 같은 흐름으로 묶습니다.
+대부분의 에이전트 설정은 "지침"에서 멈춥니다. Deuk Agent Flow는 짧은 대화를 작업 루프로 바꿉니다: 티켓, 범위, 실행, 검증, 보관. 긴 명령을 외우지 않아도 `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills 같은 표면을 같은 흐름으로 묶습니다.
 
-후킹 포인트는 단순합니다. 사용자가 "다음", "원인", "정리"라고만 해도 에이전트가 그 의미를 붙잡을 레포 소유의 장소가 생깁니다. 진행 중인 작업은 `.deuk-agent/tickets/`에, 결정과 계획과 완료 근거는 코드베이스 옆에 남습니다.
+후킹 포인트는 단순합니다. 사용자가 "다음", "원인", "정리"라고만 해도 현재 에이전트가 그 의미를 붙잡을 레포 소유의 장소가 생깁니다. 진행 중인 작업은 `.deuk-agent/tickets/`에, 결정과 계획과 완료 근거는 코드베이스 옆에 남습니다. **Deuk Agent Flow**는 워크플로우 계층입니다. 이 흐름 전체에 별도 companion 제품인 **Deuk AgentContext**를 꽂으면 레포 전체가 확장된 프로젝트 브레인을 얻습니다. 검색 가능한 기억, 재사용되는 결정, 다음 에이전트가 실제로 쓰는 팀 패턴까지 붙습니다.
 
 ### 왜 지금인가
 
@@ -141,7 +140,7 @@ deuk-agent-flow init
 
 이후 일상 작업은 명령을 직접 치기보다 에이전트에게 짧게 말합니다. 예: "진행", "다음", "원인 다시 파악".
 
-여러 프로젝트를 한 `~/workspace` 아래에서 관리한다면 각 프로젝트 루트에서 `deuk-agent-flow init`을 실행합니다. workspace 루트는 공통 포인터 역할을 할 수 있지만, 실제 작업 티켓과 로컬 규칙은 각 프로젝트 루트의 `.deuk-agent/`와 `PROJECT_RULE.md`가 소유하며, 충돌이 있으면 이 가이드보다 해당 규칙 파일이 우선합니다.
+여러 프로젝트를 한 `~/workspace` 아래에서 관리한다면 각 프로젝트 루트에서 `deuk-agent-flow init`을 실행합니다. workspace 루트는 공통 포인터 역할을 할 수 있지만, 실제 작업 티켓과 로컬 규칙은 보통 각 프로젝트의 `.deuk-agent/`와 `PROJECT_RULE.md`가 소유합니다.
 
 이렇게 사용하면 효과가 극대화됩니다. workspace 루트는 공통 진입점, 각 프로젝트 루트는 독립 티켓/규칙/검증 단위로 나누고, 중첩 서버나 앱은 필요할 때 별도 프로젝트로 초기화하세요.
 
@@ -157,13 +156,6 @@ npm install -g deuk-agent-flow
 deuk-agent-flow init
 ```
 
-호환 패키지도 사용할 수 있습니다.
-
-```bash
-npm install -g deuk-agent-rule
-deuk-agent-rule init
-```
-
 ### 2. 로컬 소스 개발 (메인테이너/파워 유저)
 v3.0은 **Global CLI Proxy**를 도입했습니다. `DeukAgentFlow` 워크스페이스 내부에서 개발 중이라면, 글로벌 명령이 자동으로 로컬 소스로 실행을 위임합니다.
 
@@ -176,11 +168,18 @@ deuk-agent-flow init  # 자동으로 로컬 scripts/cli.mjs로 라우팅됨
 Codex나 Copilot을 주로 사용한다면 이 구성이 일상 운영에 가장 적합합니다. 현재는 이 두 환경에서 Hub-Spoke와 티켓 기반 워크플로우가 가장 부드럽게 동작합니다.
 
 ### 3. 메인테이너 배포
-메인테이너는 루트에서 한 번의 명령으로 두 npm 패키지를 함께 배포할 수 있습니다.
+메인테이너는 루트에서 한 번의 명령으로 배포할 수 있습니다.
 
 ```bash
 npm run publish
 ```
+
+이 흐름은 한 번의 실행으로 `deuk-flow` 릴리스 표면 아래 npm 패키지 두 개를 모두 등록해야 합니다.
+
+- `deuk-flow` canonical 패키지: `deuk-agent-flow`
+- `deuk-flow` 레거시 호환 alias 패키지: `deuk-agent-rule`
+
+배포 스크립트는 먼저 alias 패키지의 version/dependency를 동기화하고, 그 다음 canonical 패키지를 publish한 뒤 alias 패키지를 publish합니다.
 
 npm registry에 쓰기 전에 dry-run으로 먼저 확인하세요.
 
@@ -194,17 +193,13 @@ npm run publish:dry
 npm run smoke:npm:docker
 ```
 
-publish helper는 `npm test`를 실행하고, `deuk-agent-rule` compatibility 패키지 버전을 루트 패키지 버전에 맞춘 뒤, `deuk-agent-flow`를 먼저 배포하고 `deuk-agent-rule`을 이어서 배포합니다.
-
-전체 배포와 프로젝트 루트 설정 흐름은 아래의 실전 사용 가이드를 본다.
-
-호환 안내: `deuk-agent-rule`은 전환 기간 동안 사용할 수 있고, 합산 다운로드 배지는 두 패키지 다운로드를 함께 계산한다.
-
-현재 `deuk-agent-flow` 버전이 이미 배포되어 있고 legacy compatibility wrapper만 추가로 올리면 되는 상황에서는 bootstrap 명령을 사용합니다.
+배포 후 필요하면 통합 다운로드 배지를 갱신합니다.
 
 ```bash
-npm run publish:bootstrap
+npm run badge:downloads
 ```
+
+이 배지는 표기상 `deuk-flow`를 사용하되, `deuk-agent-flow`와 `deuk-agent-rule` 다운로드 수를 같은 total에 합산합니다.
 
 ---
 

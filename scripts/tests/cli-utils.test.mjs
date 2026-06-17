@@ -6,7 +6,7 @@ import { join } from "node:path";
 import http from "node:http";
 import { 
   normalizeWorkflowMode, resolveWorkflowMode, WORKFLOW_MODE_EXECUTE, WORKFLOW_MODE_PLAN,
-  parseFrontMatter, stringifyFrontMatter, deriveTopicFromBaseName, toSlug, computeTicketPath,
+  parseFrontMatter, stringifyFrontMatter, deriveTopicFromBaseName, toSlug, requireNonEmptySlug, computeTicketPath,
   normalizeTicketGroup,
   normalizeDocsLanguage, inferDocsLanguageFromText, resolveDocsLanguage, AGENT_ROOT_DIR, TICKET_SUBDIR, isMcpActive,
   detectConsumerTicketDir
@@ -26,6 +26,13 @@ test("cli-utils.mjs - normalizeWorkflowMode", (t) => {
   assert.strictEqual(normalizeWorkflowMode("pending"), WORKFLOW_MODE_PLAN, "pending maps to plan");
   assert.strictEqual(normalizeWorkflowMode("review"), WORKFLOW_MODE_PLAN, "review maps to plan");
   assert.strictEqual(normalizeWorkflowMode("unknown-val"), WORKFLOW_MODE_PLAN, "unknown fallback to plan");
+});
+
+test("parseTicketArgs preserves explicit workflow approval for ticket lifecycle commands", () => {
+  const opts = parseTicketArgs(["--topic", "abc", "--workflow", "execute", "--approval", "approved"]);
+
+  assert.strictEqual(opts.workflowMode, "execute");
+  assert.strictEqual(opts.approval, "approved");
 });
 
 test("cli-utils.mjs - resolveWorkflowMode fallback logic", (t) => {
@@ -82,8 +89,16 @@ test("cli-utils.mjs - toSlug", (t) => {
   assert.strictEqual(toSlug("Hello World! 123"), "hello-world-123");
   assert.strictEqual(toSlug("  spaced  "), "spaced");
   assert.strictEqual(toSlug("Crème Brûlée"), "creme-brulee");
-  assert.strictEqual(toSlug("한글 티켓 생성"), "ticket");
-  assert.strictEqual(toSlug("!@#$"), "ticket"); // fallback
+  assert.strictEqual(toSlug("한글 티켓 생성"), "");
+  assert.strictEqual(toSlug("!@#$"), "");
+});
+
+test("cli-utils.mjs - requireNonEmptySlug", () => {
+  assert.strictEqual(requireNonEmptySlug("Hello World", "ticket topic"), "hello-world");
+  assert.throws(
+    () => requireNonEmptySlug("한글 티켓 생성", "ticket topic"),
+    /ticket topic must produce a non-empty ASCII slug/
+  );
 });
 
 test("cli-ticket-index.mjs - computeNextTicketNumber", (t) => {
@@ -102,6 +117,11 @@ test("cli-ticket-index.mjs - generateTicketId", (t) => {
 
   const id3 = generateTicketId("new topic", [{id: "008-something-host"}]);
   assert.ok(id3.startsWith("009-new-topic-"));
+
+  assert.throws(
+    () => generateTicketId("한글 티켓 생성", []),
+    /ticket topic must produce a non-empty ASCII slug/
+  );
 });
 
 test("cli-utils.mjs - computeTicketPath", (t) => {
@@ -148,14 +168,16 @@ test("cli-utils.mjs - computeTicketPath", (t) => {
   assert.strictEqual(computeTicketPath(legacyDotGroupEntry), ".deuk-agent/tickets/archive/sub/001-legacy-dot-group-host.md");
 });
 
-test("cli-utils.mjs - detectConsumerTicketDir stops at repo boundary before parent workspace", (t) => {
+test("cli-utils.mjs - detectConsumerTicketDir stops at agent rule boundary before parent workspace", (t) => {
   const parent = mkdtempSync(join(tmpdir(), "deuk-ticket-root-"));
   const repo = join(parent, "DeukFlow");
   const nested = join(repo, "packages", "app");
 
   try {
     mkdirSync(join(parent, ".deuk-agent", "tickets", "sub"), { recursive: true });
-    mkdirSync(join(repo, ".git"), { recursive: true });
+    mkdirSync(repo, { recursive: true });
+    writeFileSync(join(repo, "AGENTS.md"), "# boundary\n", "utf8");
+    writeFileSync(join(repo, "PROJECT_RULE.md"), "# boundary\n", "utf8");
     mkdirSync(nested, { recursive: true });
 
     assert.strictEqual(detectConsumerTicketDir(repo), null);
@@ -302,11 +324,15 @@ test("cli-args.mjs - parseTicketArgs supports strict/guard flags", () => {
     "--topic", "demo",
     "--summary", "summary",
     "--require-filled",
+    "--ticket-started",
+    "--ticket-reviewed",
     "--status-detail"
   ]);
   assert.strictEqual(opts.topic, "demo");
   assert.strictEqual(opts.summary, "summary");
   assert.strictEqual(opts.requireFilled, true);
+  assert.strictEqual(opts.ticketStarted, true);
+  assert.strictEqual(opts.ticketReviewed, true);
   assert.strictEqual(opts.statusDetail, true);
   assert.strictEqual(opts.compact, undefined);
 });
@@ -315,6 +341,23 @@ test("cli-args.mjs - parseTicketArgs supports inline plan body", () => {
   const opts = parseTicketArgs(["--topic", "demo", "--plan-body", "# Demo\n\nbody"]);
   assert.strictEqual(opts.topic, "demo");
   assert.strictEqual(opts.planBody, "# Demo\n\nbody");
+});
+
+test("cli-args.mjs - parseTicketArgs supports file-backed ticket text inputs", () => {
+  const opts = parseTicketArgs([
+    "--topic", "demo",
+    "--plan-body-file", "phase1.md",
+    "--content-file", "context.md"
+  ]);
+  assert.strictEqual(opts.topic, "demo");
+  assert.strictEqual(opts.planBodyFile, "phase1.md");
+  assert.strictEqual(opts.contentFile, "context.md");
+});
+
+test("cli-args.mjs - parseTicketArgs supports inline ticket content", () => {
+  const opts = parseTicketArgs(["--topic", "demo", "--content", "ticket body details"]);
+  assert.strictEqual(opts.topic, "demo");
+  assert.strictEqual(opts.content, "ticket body details");
 });
 
 test("cli-args.mjs - parseTicketArgs supports compact ticket output", () => {

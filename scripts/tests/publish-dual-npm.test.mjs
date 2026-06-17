@@ -22,5 +22,7 @@ test("buildAliasPackageJson syncs alias version and canonical dependency", () =>
   assert.equal(aliasPkg.version, "4.5.6");
   assert.deepEqual(aliasPkg.dependencies, { "deuk-agent-flow": "4.5.6" });
   assert.equal(aliasPkg.bin["deuk-agent-rule"], "./bin/deuk-agent-rule.js");
+  assert.equal(aliasPkg.bin.deukagentrule, "./bin/deuk-agent-rule.js");
+  assert.deepEqual(aliasPkg.files, ["bin/**/*", "README.md"]);
   assert.equal(aliasPkg.repository.url, rootPkg.repository.url);
 });

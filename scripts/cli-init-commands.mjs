@@ -1,6 +1,6 @@
 import { join, dirname, basename, relative } from "path";
 import { homedir } from "os";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, unlinkSync, rmSync, renameSync, statSync, cpSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, unlinkSync, rmSync, renameSync, statSync, cpSync, symlinkSync, chmodSync } from "fs";
 
 import { ensureTicketDirAndGitignore } from "./cli-init-logic.mjs";
 import { normalizeTicketPaths } from "./cli-ticket-migration.mjs";
@@ -38,9 +38,99 @@ function isSelectedTool(selectedTools = [], spokeId) {
 
 const MANAGED_BLOCK_BEGIN = "<!-- deuk-agent-managed:begin -->";
 const MANAGED_BLOCK_END = "<!-- deuk-agent-managed:end -->";
+const SOURCE_MODE_COMMANDS = [
+  ["deuk-agent-flow", "deuk-agent-flow.js"],
+  ["deukagentflow", "deuk-agent-flow.js"],
+  ["deuk-agent-rule", "deuk-agent-rule.js"],
+  ["deukagentrule", "deuk-agent-rule.js"]
+];
+
+function pathEntries(pathEnv = process.env.PATH || "", platform = process.platform) {
+  return String(pathEnv || "").split(platform === "win32" ? ";" : ":").filter(Boolean);
+}
+
+function commandAlreadyOnPath(commandName, pathEnv = process.env.PATH || "", platform = process.platform) {
+  const suffixes = platform === "win32" ? ["", ".cmd", ".bat", ".exe"] : [""];
+  return pathEntries(pathEnv, platform).some(dir => suffixes.some(suffix => existsSync(join(dir, `${commandName}${suffix}`))));
+}
+
+function sourceModeBinDir(homeDir = homedir(), platform = process.platform) {
+  return platform === "win32"
+    ? join(homeDir, "AppData", "Roaming", "npm")
+    : join(homeDir, ".local", "bin");
+}
+
+function writeWindowsCommandShim(shimPath, targetScript) {
+  const normalizedTarget = String(targetScript).replace(/"/g, '\\"');
+  writeFileSync(shimPath, `@ECHO OFF\r\nnode "${normalizedTarget}" %*\r\n`, "utf8");
+}
+
+function writePosixCommandShim(shimPath, targetScript) {
+  const normalizedTarget = String(targetScript).replace(/'/g, "'\\''");
+  writeFileSync(shimPath, `#!/bin/sh\nexec node '${normalizedTarget}' "$@"\n`, "utf8");
+  chmodSync(shimPath, 0o755);
+}
+
+export function ensureSourceModeCommandShims(bundleRoot, opts = {}) {
+  const platform = opts.platform || process.platform;
+  const homeDir = opts.homeDir || homedir();
+  const pathEnv = opts.pathEnv ?? process.env.PATH ?? "";
+  const dryRun = Boolean(opts.dryRun);
+  const binRoot = join(bundleRoot, "bin");
+
+  if (!existsSync(join(binRoot, "deuk-agent-flow.js"))) return { created: [], skipped: [], binDir: null, onPath: false };
+
+  const binDir = opts.binDir || sourceModeBinDir(homeDir, platform);
+  const onPath = pathEntries(pathEnv, platform).some(dir => dir === binDir);
+  const created = [];
+  const skipped = [];
+
+  for (const [commandName, scriptName] of SOURCE_MODE_COMMANDS) {
+    if (commandAlreadyOnPath(commandName, pathEnv, platform)) {
+      skipped.push(commandName);
+      continue;
+    }
+
+    const targetScript = join(binRoot, scriptName);
+    const shimPath = join(binDir, platform === "win32" ? `${commandName}.cmd` : commandName);
+    if (!dryRun) {
+      mkdirSync(binDir, { recursive: true });
+      if (platform === "win32") {
+        writeWindowsCommandShim(shimPath, targetScript);
+      } else {
+        try {
+          symlinkSync(targetScript, shimPath);
+        } catch (err) {
+          if (err?.code !== "EEXIST") throw err;
+          unlinkSync(shimPath);
+          symlinkSync(targetScript, shimPath);
+        }
+        chmodSync(targetScript, 0o755);
+      }
+    }
+    created.push(commandName);
+  }
+
+  return { created, skipped, binDir, onPath };
+}
 
 function wrapManagedBlock(content) {
   return `${MANAGED_BLOCK_BEGIN}\n${String(content || "").trimEnd()}\n${MANAGED_BLOCK_END}`;
+}
+
+function splitManagedBlock(content) {
+  const current = String(content || "");
+  if (!current.includes(MANAGED_BLOCK_BEGIN) || !current.includes(MANAGED_BLOCK_END)) return null;
+
+  const beginIdx = current.indexOf(MANAGED_BLOCK_BEGIN);
+  const endIdx = current.indexOf(MANAGED_BLOCK_END, beginIdx);
+  if (beginIdx === -1 || endIdx === -1) return null;
+
+  return {
+    before: current.slice(0, beginIdx).trimEnd(),
+    managed: current.slice(beginIdx + MANAGED_BLOCK_BEGIN.length, endIdx).trim(),
+    after: current.slice(endIdx + MANAGED_BLOCK_END.length).trimStart(),
+  };
 }
 
 function mergeManagedBlock(existing, managedContent) {
@@ -48,14 +138,9 @@ function mergeManagedBlock(existing, managedContent) {
   const nextBlock = wrapManagedBlock(managedContent);
 
   if (!current.trim()) return `${nextBlock}\n`;
-  if (current.includes(MANAGED_BLOCK_BEGIN) && current.includes(MANAGED_BLOCK_END)) {
-    const beginIdx = current.indexOf(MANAGED_BLOCK_BEGIN);
-    const endIdx = current.indexOf(MANAGED_BLOCK_END, beginIdx);
-    if (beginIdx !== -1 && endIdx !== -1) {
-      const before = current.slice(0, beginIdx).trimEnd();
-      const after = current.slice(endIdx + MANAGED_BLOCK_END.length).trimStart();
-      return [before, nextBlock, after].filter(Boolean).join("\n\n").trimEnd() + "\n";
-    }
+  const currentBlock = splitManagedBlock(current);
+  if (currentBlock) {
+    return [currentBlock.before, nextBlock, currentBlock.after].filter(Boolean).join("\n\n").trimEnd() + "\n";
   }
 
   const cleaned = current.trimEnd();
@@ -113,6 +198,57 @@ function moveOrMergeFile(srcAbs, dstAbs, cwd, dryRun, action) {
   }
   console.log(`[MIGRATE] ${dryRun ? "Would move" : "Moved"} ${action}: ${relSrc} -> ${relDst}`);
   return true;
+}
+
+function archiveLegacyVariantBaseName(fileName) {
+  return String(fileName || "").replace(/-legacy-docs(?:-\d{2})?\.md$/i, ".md");
+}
+
+function mergeArchiveVariantIntoCanonical(sourceAbs, targetAbs, cwd, dryRun, action) {
+  if (!existsSync(targetAbs)) {
+    const moved = moveOrMergeFile(sourceAbs, targetAbs, cwd, dryRun, `${action} normalize legacy variant`);
+    return { moved, finalTarget: targetAbs };
+  }
+
+  const sourceRaw = safeReadText(sourceAbs);
+  const targetRaw = safeReadText(targetAbs);
+  if (sourceRaw === targetRaw) {
+    if (!dryRun) unlinkSync(sourceAbs);
+    console.log(`[MIGRATE] ${action} duplicate removed: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, targetAbs)}`);
+    return { moved: true, finalTarget: targetAbs };
+  }
+
+  const sourceBody = stripFrontMatterBlock(sourceRaw);
+  const targetBody = stripFrontMatterBlock(targetRaw);
+  if (sourceBody && targetBody.includes(sourceBody)) {
+    if (!dryRun) unlinkSync(sourceAbs);
+    console.log(`[MIGRATE] ${action} merged duplicate variant removed: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, targetAbs)}`);
+    return { moved: true, finalTarget: targetAbs };
+  }
+
+  if (targetBody && sourceBody.includes(targetBody)) {
+    if (!dryRun) {
+      writeFileSync(targetAbs, sourceRaw, "utf8");
+      unlinkSync(sourceAbs);
+    }
+    console.log(`[MIGRATE] ${action} promoted richer legacy variant: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, targetAbs)}`);
+    return { moved: true, finalTarget: targetAbs };
+  }
+
+  const mergedSection = [
+    "",
+    "## Merged Legacy Archive Variant",
+    "",
+    sourceBody,
+    ""
+  ].join("\n");
+  const nextRaw = `${targetRaw.trimEnd()}${mergedSection}`;
+  if (!dryRun) {
+    writeFileSync(targetAbs, nextRaw, "utf8");
+    unlinkSync(sourceAbs);
+  }
+  console.log(`[MIGRATE] ${action} merged legacy variant content: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, targetAbs)}`);
+  return { moved: true, finalTarget: targetAbs };
 }
 
 function parseYearMonth(value) {
@@ -342,14 +478,10 @@ export function migrateLegacyStructure(cwd, dryRun) {
   const newTickets = join(cwd, AGENT_ROOT_DIR, TICKET_SUBDIR);
 
   if (existsSync(legacyTickets)) {
-    console.log(`[MIGRATE] Merging legacy singular ticket directory into ${AGENT_ROOT_DIR}/${TICKET_SUBDIR}`);
-    recursiveMerge(legacyTickets, newTickets, cwd, dryRun);
-    if (!dryRun && existsSync(legacyTickets)) rmSync(legacyTickets, { recursive: true, force: true });
+    migrateLegacyTicketDirToArchive(cwd, legacyTickets, "legacy singular ticket directory", dryRun);
   }
   if (existsSync(legacyTicketsPlural)) {
-    console.log(`[MIGRATE] Merging legacy plural tickets directory into ${AGENT_ROOT_DIR}/${TICKET_SUBDIR}`);
-    recursiveMerge(legacyTicketsPlural, newTickets, cwd, dryRun);
-    if (!dryRun && existsSync(legacyTicketsPlural)) rmSync(legacyTicketsPlural, { recursive: true, force: true });
+    migrateLegacyTicketDirToArchive(cwd, legacyTicketsPlural, "legacy plural ticket directory", dryRun);
   }
   migrateLegacyAgentWorkflows(cwd, dryRun);
   migrateLegacyRootTicketDir(cwd, dryRun);
@@ -385,6 +517,30 @@ export function migrateLegacyStructure(cwd, dryRun) {
       }
     }
   }
+}
+
+function migrateLegacyTicketDirToArchive(cwd, legacyTicketDir, label, dryRun) {
+  const now = new Date();
+  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const importRoot = join(cwd, AGENT_ROOT_DIR, TICKET_SUBDIR, "archive", "sub", yearMonth);
+  const baseName = basename(legacyTicketDir).replace(/^\./, "").replace(/[^a-z0-9-]+/gi, "-");
+  let index = 0;
+  let targetDir = join(importRoot, `${baseName}-import`);
+  while (existsSync(targetDir)) {
+    index += 1;
+    targetDir = join(importRoot, `${baseName}-import-${String(index).padStart(2, "0")}`);
+  }
+
+  const relSource = toRepoRelativePath(cwd, legacyTicketDir);
+  const relTarget = toRepoRelativePath(cwd, targetDir);
+  if (dryRun) {
+    console.log(`[DRY-RUN] Would move ${label}: ${relSource} -> ${relTarget}`);
+    return;
+  }
+
+  mkdirSync(importRoot, { recursive: true });
+  renameSync(legacyTicketDir, targetDir);
+  console.log(`[MIGRATE] Moved ${label}: ${relSource} -> ${relTarget}`);
 }
 
 function migrateLegacyRootTicketDir(cwd, dryRun) {
@@ -695,7 +851,7 @@ function canonicalizeAgentRootLayout(cwd, dryRun) {
   const agentRoot = join(cwd, AGENT_ROOT_DIR);
   if (!existsSync(agentRoot)) return;
   const allowedDirs = new Set(["docs", "knowledge", "tickets", "templates", "skill-templates", "skills"]);
-  const allowedFiles = new Set(["config.json", "telemetry.jsonl"]);
+  const allowedFiles = new Set(["config.json", "telemetry.jsonl", "skills.json", "usage.json"]);
 
   for (const entry of sortedDirEntries(agentRoot, { withFileTypes: true })) {
     const sourceAbs = join(agentRoot, entry.name);
@@ -759,6 +915,14 @@ function canonicalizeTicketArchivePath(cwd, dryRun) {
     if (relParts.length < 2) continue;
 
     const fileName = basename(sourceAbs);
+    if (/-legacy-docs(?:-\d{2})?\.md$/i.test(fileName)) {
+      const targetAbs = join(dirname(sourceAbs), archiveLegacyVariantBaseName(fileName));
+      const variantResult = mergeArchiveVariantIntoCanonical(sourceAbs, targetAbs, cwd, dryRun, "ticket archive cleanup");
+      if (variantResult.moved && !dryRun) {
+        console.log(`[CLEANUP] ticket archive normalized: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, variantResult.finalTarget)}`);
+      }
+      continue;
+    }
     const sourceBase = basename(sourceAbs, ".md");
     const sourceMeta = parseFrontMatter(safeReadText(sourceAbs)).meta || {};
     const matchedEntry = byFileName.get(fileName)
@@ -774,9 +938,15 @@ function canonicalizeTicketArchivePath(cwd, dryRun) {
       : join(archiveRoot, group, partition.yearMonth, fileName);
     if (sourceAbs === targetAbs) continue;
 
-    const moved = moveOrMergeFile(sourceAbs, targetAbs, cwd, dryRun, "ticket archive cleanup");
+    let moved = moveOrMergeFile(sourceAbs, targetAbs, cwd, dryRun, "ticket archive cleanup");
+    let finalTarget = targetAbs;
+    if (!moved && sourceAbs.includes(`${AGENT_ROOT_DIR}/${TICKET_SUBDIR}/archive/sub/legacy-docs/`)) {
+      const conflictResult = mergeArchiveVariantIntoCanonical(sourceAbs, targetAbs, cwd, dryRun, "ticket archive cleanup");
+      moved = conflictResult.moved;
+      finalTarget = conflictResult.finalTarget;
+    }
     if (moved && sourceAbs !== targetAbs && !dryRun) {
-      console.log(`[CLEANUP] ticket archive normalized: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, targetAbs)}`);
+      console.log(`[CLEANUP] ticket archive normalized: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, finalTarget)}`);
     }
   }
 
@@ -1110,6 +1280,96 @@ function migrateHtmlMarkersToHeadings(cwd, dryRun) {
   }
 }
 
+const INIT_SURFACE_IGNORE_DIRS = new Set([
+  ".git",
+  ".hg",
+  ".svn",
+  AGENT_ROOT_DIR,
+  "node_modules",
+  "dist",
+  "build",
+  ".next",
+  ".nuxt",
+  "coverage"
+]);
+
+function walkInitTextSurfaces(dir, callback) {
+  if (!existsSync(dir)) return;
+  for (const entry of sortedDirEntries(dir, { withFileTypes: true })) {
+    const absPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (INIT_SURFACE_IGNORE_DIRS.has(entry.name)) continue;
+      walkInitTextSurfaces(absPath, callback);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (entry.name === "AGENTS.md" || entry.name === "PROJECT_RULE.md") callback(absPath);
+  }
+}
+
+function removeLegacyHtmlManagedBlock(content) {
+  const oldBegin = "<!-- deuk-agent-rule:begin -->";
+  const oldEnd = "<!-- deuk-agent-rule:end -->";
+  const src = String(content || "");
+  const beginIdx = src.indexOf(oldBegin);
+  const endIdx = src.lastIndexOf(oldEnd);
+  if (beginIdx === -1 || endIdx <= beginIdx) return null;
+  return [
+    src.slice(0, beginIdx).trim(),
+    src.slice(endIdx + oldEnd.length).trim()
+  ].filter(Boolean).join("\n\n");
+}
+
+function canonicalizeAgentSurfaceFile(absPath, cwd, bundleRoot, dryRun) {
+  if (!existsSync(absPath)) return false;
+  const fileName = basename(absPath);
+  const before = readFileSync(absPath, "utf8");
+  const isAgents = fileName === "AGENTS.md";
+
+  if (!/DeukAgentRules|DeukAgentFlow|deuk-agent-rule/.test(before)) return false;
+
+  if (isAgents) {
+    const unmanagedContent = removeLegacyHtmlManagedBlock(before);
+    if (unmanagedContent !== null) {
+      const pointer = generateSpokeContent({ format: "markdown" }, bundleRoot).trimEnd();
+      const next = unmanagedContent
+        ? `${unmanagedContent.trimEnd()}\n\n${pointer}\n`
+        : `${pointer}\n`;
+      if (next !== before) {
+        if (!dryRun) writeFileSync(absPath, next, "utf8");
+        console.log(`[MIGRATE] ${dryRun ? "Would replace" : "Replaced"} legacy HTML AGENTS.md block: ${toRepoRelativePath(cwd, absPath)}`);
+        return true;
+      }
+      return false;
+    }
+
+    const { pointer, projectDoc } = splitProjectDoc(before);
+    if (isGeneratedDeukPointer(pointer)) {
+      const nextPointer = generateSpokeContent({ format: "markdown" }, bundleRoot).trimEnd();
+      const next = projectDoc ? `${nextPointer}\n\n${projectDoc.trimEnd()}\n` : `${nextPointer}\n`;
+      if (next !== before) {
+        if (!dryRun) writeFileSync(absPath, next, "utf8");
+        console.log(`[MIGRATE] ${dryRun ? "Would replace" : "Replaced"} legacy AGENTS.md pointer: ${toRepoRelativePath(cwd, absPath)}`);
+        return true;
+      }
+      return false;
+    }
+  }
+
+  return canonicalizeTextFile(absPath, cwd, bundleRoot, dryRun, "legacy init surface reference");
+}
+
+function canonicalizeRecursiveInitSurfaces(cwd, bundleRoot, dryRun) {
+  let count = 0;
+  walkInitTextSurfaces(cwd, (absPath) => {
+    if (canonicalizeAgentSurfaceFile(absPath, cwd, bundleRoot, dryRun)) count += 1;
+  });
+  if (count > 0) {
+    console.log(`[SUMMARY] ${dryRun ? "Would update" : "Updated"} ${count} legacy init surface(s) under ${basename(cwd)}.`);
+  }
+  return count;
+}
+
 function syncTemplates(cwd, bundleRoot, dryRun) {
   const tplDestDir = join(cwd, AGENT_ROOT_DIR, TEMPLATE_SUBDIR);
   const tplSourceDir = join(bundleRoot, "templates");
@@ -1144,6 +1404,99 @@ function syncSkillTemplates(cwd, bundleRoot, dryRun) {
     return;
   }
   console.log(`[SYNC] skill templates synced to ${toRepoRelativePath(cwd, skillDestDir)} (dry-run mode)`);
+}
+
+function canonicalizeLegacyDeukAgentText(content, bundleRoot) {
+  const coreRulesPath = join(bundleRoot, "core-rules", "AGENTS.md");
+  return String(content || "")
+    .replace(/DeukAgentRules/g, "DeukAgentFlow")
+    .replace(/deuk-agent-rule/g, "deuk-agent-flow")
+    .replace(/Deuk Agent Rules/g, "Deuk Agent Flow")
+    .replace(/file:\/\/[^)\s]+\/DeukAgentRules\/core-rules\/AGENTS\.md/g, `file://${coreRulesPath}`)
+    .replace(/\/home\/joy\/workspace\/DeukAgentRules\/core-rules\/AGENTS\.md/g, coreRulesPath);
+}
+
+function normalizeExistingSpokeContent(existingContent, managedContent, bundleRoot) {
+  const current = String(existingContent || "");
+  if (!current.trim()) return current;
+  if (isGeneratedDeukPointer(current)) return "";
+
+  const normalizedManaged = String(managedContent || "").trim();
+  const canonicalize = (value) => canonicalizeLegacyDeukAgentText(value, bundleRoot).trim();
+
+  if (canonicalize(current) === normalizedManaged) return "";
+
+  const currentBlock = splitManagedBlock(current);
+  if (!currentBlock) return current;
+
+  const before = canonicalize(currentBlock.before) === normalizedManaged ? "" : currentBlock.before;
+  const after = canonicalize(currentBlock.after) === normalizedManaged ? "" : currentBlock.after;
+  return [before, wrapManagedBlock(managedContent), after].filter(Boolean).join("\n\n").trimEnd() + "\n";
+}
+
+function canonicalizeTextFile(absPath, cwd, bundleRoot, dryRun, label) {
+  if (!existsSync(absPath)) return false;
+  const before = readFileSync(absPath, "utf8");
+  const after = canonicalizeLegacyDeukAgentText(before, bundleRoot);
+  if (before === after) return false;
+  if (!dryRun) writeFileSync(absPath, after, "utf8");
+  console.log(`[MIGRATE] ${dryRun ? "Would canonicalize" : "Canonicalized"} ${label}: ${toRepoRelativePath(cwd, absPath)}`);
+  return true;
+}
+
+function splitProjectDoc(content) {
+  const marker = "--- project-doc ---";
+  const idx = String(content || "").indexOf(marker);
+  if (idx === -1) return { pointer: content, projectDoc: "" };
+  return {
+    pointer: content.slice(0, idx),
+    projectDoc: content.slice(idx).trimStart()
+  };
+}
+
+function isGeneratedDeukPointer(content) {
+  const src = String(content || "");
+  return (/Managed by DeukAgent(?:Rules|Flow)/.test(src) || /# Deuk Agent Rules\b|# Deuk Agent Flow\b/.test(src))
+    && /Core rules are at:/i.test(src)
+    && /thin bootstrap, not a second workflow contract/i.test(src);
+}
+
+function canonicalizeAgentPointer(cwd, bundleRoot, dryRun) {
+  const agentsPath = join(cwd, "AGENTS.md");
+  if (!existsSync(agentsPath)) return;
+
+  const current = readFileSync(agentsPath, "utf8");
+  if (!/DeukAgentRules|DeukAgentFlow|deuk-agent-rule/.test(current)) return;
+
+  const { pointer, projectDoc } = splitProjectDoc(current);
+  if (!isGeneratedDeukPointer(pointer)) {
+    canonicalizeTextFile(agentsPath, cwd, bundleRoot, dryRun, "AGENTS.md legacy references");
+    return;
+  }
+
+  const nextPointer = generateSpokeContent({ format: "markdown" }, bundleRoot).trimEnd();
+  const next = projectDoc ? `${nextPointer}\n\n${projectDoc.trimEnd()}\n` : `${nextPointer}\n`;
+  if (current === next) return;
+  if (!dryRun) writeFileSync(agentsPath, next, "utf8");
+  console.log(`[MIGRATE] ${dryRun ? "Would replace" : "Replaced"} legacy AGENTS.md pointer with DeukAgentFlow canonical pointer`);
+}
+
+function canonicalizeGeneratedCommandReferences(cwd, bundleRoot, dryRun) {
+  const targets = [
+    join(cwd, "PROJECT_RULE.md"),
+    join(cwd, "docs", "project", "AGENTS.md"),
+    join(cwd, ".github", "copilot-instructions.md"),
+    join(cwd, ".codex", "AGENTS.md"),
+  ];
+
+  for (const target of targets) {
+    canonicalizeTextFile(target, cwd, bundleRoot, dryRun, "legacy command reference");
+  }
+
+  const templateDir = join(cwd, AGENT_ROOT_DIR, TEMPLATE_SUBDIR);
+  walkMdFiles(templateDir, (absPath) => {
+    canonicalizeTextFile(absPath, cwd, bundleRoot, dryRun, "legacy template command reference");
+  });
 }
 
 /**
@@ -1264,7 +1617,7 @@ This pointer is a thin bootstrap, not a second workflow contract.
 2. Then read local \`PROJECT_RULE.md\` and internally identify applicable DC-* rules.
 3. After the core hub is loaded, \`core-rules/AGENTS.md\` is the DeukAgentFlow SSoT for TDW, RAG, silence, scope, and verification.
 
-Do not print pointer/core metadata, version, DC-* lists, progress commentary, or interim summaries. Only the single required ticket-start line may appear before the final answer unless the user explicitly asks for live narration or a blocker/user decision must be surfaced.
+Do not print pointer/core metadata, version, DC-* lists, progress commentary, or interim summaries. Before the final answer, only the single required ticket-start line, blockers, explicit user-requested output, or explicit command results may appear. During approved_execution, command_running, or search_running, stay silent unless the user explicitly asks for live narration or a blocker/user decision must be surfaced.
 `;
 
   if (spoke.format === "mdc") {
@@ -1282,62 +1635,28 @@ export function mergeManagedRuleContent(existingContent, managedContent) {
   return mergeManagedBlock(existingContent, managedContent);
 }
 
-function hasCustomUserRules(filePath) {
-  try {
-    const content = readFileSync(filePath, "utf8");
-    const withoutLegacyHtmlMarkers = content
-      .replace(/<!-- deuk-agent-rule-cursorrules:begin -->[\s\S]*?<!-- deuk-agent-rule-cursorrules:end -->/g, "")
-      .replace(/<!-- deuk-agent-rule:begin -->[\s\S]*?<!-- deuk-agent-rule:end -->/g, "");
-    if (!withoutLegacyHtmlMarkers.trim()) return false;
-
-    const idx = content.indexOf("## DeukAgentFlow");
-    let stripped = content;
-    if (idx !== -1) {
-      // Find the preceding horizontal rule
-      let blockStart = idx;
-      const prevText = content.slice(0, idx);
-      const hrIndex = prevText.lastIndexOf("---");
-      if (hrIndex !== -1 && prevText.slice(hrIndex).trim() === "") {
-        blockStart = hrIndex;
-      }
-      stripped = content.slice(0, blockStart);
-    }
-    const isPointer = content.includes("This project follows the Deuk Agent Rules framework") || 
-                      content.includes("centralized in:") ||
-                      content.includes("[AGENTS.md]");
-    if (isPointer) return false;
-
-    return stripped.trim().length > 0;
-  } catch (err) {
-    if (process.env.DEBUG) console.warn(`[DEBUG] Failed to read ${filePath}:`, err);
-    return false;
-  }
-}
-
 function deploySpokePointers(cwd, bundleRoot, dryRun, selectedTools = []) {
   for (const spoke of SPOKE_REGISTRY) {
-    // Always clean legacy files, but backup if they contain custom user rules
-    if (spoke.legacy) {
-      const legacyPath = join(cwd, spoke.legacy);
-      if (existsSync(legacyPath)) {
-        if (hasCustomUserRules(legacyPath)) {
-          const bakPath = legacyPath + ".bak";
-          if (!dryRun) renameSync(legacyPath, bakPath);
-          console.log(`[MIGRATE] Backed up user rules to ${spoke.legacy}.bak`);
-        } else {
-          if (!dryRun) unlinkSync(legacyPath);
-          console.log(`[CLEANUP] removed legacy: ${spoke.legacy}`);
-        }
+    const legacyPath = spoke.legacy ? join(cwd, spoke.legacy) : null;
+    const legacyExisted = Boolean(legacyPath && existsSync(legacyPath));
+
+    // Legacy root files are replaced by canonical spoke targets.
+    if (legacyPath) {
+      if (legacyExisted) {
+        if (!dryRun) unlinkSync(legacyPath);
+        console.log(`[CLEANUP] removed legacy: ${spoke.legacy}`);
       }
     }
 
-    if (!isSelectedTool(selectedTools, spoke.id) && !spoke.detect(cwd, selectedTools)) continue;
+    const shouldInstallDefaultHub = spoke.id === "antigravity" && existsSync(join(cwd, AGENT_ROOT_DIR));
+    if (!isSelectedTool(selectedTools, spoke.id) && !spoke.detect(cwd, selectedTools) && !legacyExisted && !shouldInstallDefaultHub) continue;
 
     const targetPath = join(cwd, spoke.target);
     const targetDir = dirname(targetPath);
     const managedContent = generateSpokeContent(spoke, bundleRoot);
     const existingContent = existsSync(targetPath) ? safeReadText(targetPath) : "";
-    const nextContent = mergeManagedBlock(existingContent, managedContent);
+    const normalizedContent = normalizeExistingSpokeContent(existingContent, managedContent, bundleRoot);
+    const nextContent = mergeManagedBlock(normalizedContent, managedContent);
     if (existingContent === nextContent) {
       console.log(`spoke synced: ${spoke.target} (${spoke.id})`);
       continue;
@@ -1354,12 +1673,11 @@ function deploySpokePointers(cwd, bundleRoot, dryRun, selectedTools = []) {
 
 function removeDuplicateRuleCopies(cwd, dryRun) {
   // Note: AGENTS.md is now the Antigravity spoke target — do NOT delete it here.
-  // GEMINI.md legacy cleanup is handled by deploySpokePointers (spoke.legacy field).
+  // CLAUDE.md/GEMINI.md legacy cleanup is handled by deploySpokePointers (spoke.legacy field).
   // .gemini is the Antigravity platform directory — preserve it.
   const duplicatePaths = [
     join(cwd, AGENT_ROOT_DIR, "rules"),
     join(cwd, ".cursor", "rules", "deuk-agent-rule-multi-ai-workflow.mdc"),
-    join(cwd, "CLAUDE.md"),
   ];
 
   for (const p of duplicatePaths) {
@@ -1380,6 +1698,16 @@ export async function runInit(opts, bundleRoot) {
     throw new Error(
       `[WORKFLOW BLOCKED] plan mode is active for ${opts.cwd}. Re-run with --workflow execute or --approval approved to apply file mutations. Use --dry-run for preparation only.`
     );
+  }
+
+  if (opts.sourceShims !== false) {
+    const sourceShimResult = ensureSourceModeCommandShims(bundleRoot, { dryRun: opts.dryRun });
+    if (sourceShimResult.created.length > 0) {
+      console.log(`[SOURCE MODE] Installed command shims in ${sourceShimResult.binDir}: ${sourceShimResult.created.join(", ")}`);
+      if (!sourceShimResult.onPath) {
+        console.warn(`[SOURCE MODE] ${sourceShimResult.binDir} is not on PATH; add it before using deuk-agent-flow by name.`);
+      }
+    }
   }
 
   // 0. Sync Global Codex Instructions
@@ -1416,6 +1744,7 @@ async function initSingleWorkspace(subCwd, opts, bundleRoot, selectedTools) {
   // 1. Migration & Directory Setup
   migrateLegacyStructure(subCwd, opts.dryRun);
   migrateHtmlMarkersToHeadings(subCwd, opts.dryRun);
+  canonicalizeAgentPointer(subCwd, bundleRoot, opts.dryRun);
   ensureTicketDirAndGitignore({ ...opts, cwd: subCwd });
   
   // 2. Normalize INDEX.json paths (fix stale paths)
@@ -1451,6 +1780,8 @@ async function initSingleWorkspace(subCwd, opts, bundleRoot, selectedTools) {
   // 5. Templates Sync (.deuk-agent/templates/)
   syncTemplates(subCwd, bundleRoot, opts.dryRun);
   syncSkillTemplates(subCwd, bundleRoot, opts.dryRun);
+  canonicalizeGeneratedCommandReferences(subCwd, bundleRoot, opts.dryRun);
+  canonicalizeRecursiveInitSurfaces(subCwd, bundleRoot, opts.dryRun);
 }
 
 export function runMerge(opts, bundleRoot) {

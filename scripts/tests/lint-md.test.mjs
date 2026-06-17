@@ -66,3 +66,26 @@ test("lintMarkdownPaths accepts walkthrough reports with explicit outcome sectio
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("lintMarkdownPaths treats generated pointer docs as markdown, not YAML frontmatter", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-lint-pointer-"));
+  try {
+    const rel = ".codex/AGENTS.md";
+    mkdirSync(join(cwd, ".codex"), { recursive: true });
+    writeFileSync(join(cwd, rel), [
+      "---",
+      "",
+      "## DeukAgentRules",
+      "",
+      "> Managed by DeukAgentRules. Remove this section if not installed.",
+      "",
+      "# Deuk Agent Rules",
+      ""
+    ].join("\n"), "utf8");
+
+    const result = lintMarkdownPaths([rel], cwd);
+    assert.deepStrictEqual(result.errors, []);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

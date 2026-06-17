@@ -8,10 +8,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- **init/ticket:** restore the intended month-only archive policy by normalizing legacy `archive/sub/YYYY-MM/DD/...` tickets into `archive/sub/YYYY-MM/...`, rebuilding archive shard indexes without `archiveDay`, and preventing new day-depth imports during `init`.
-- **cli:** extend reinforcement output to ticket next, close, archive, and handoff lifecycle surfaces.
-- **cli:** remove silent latest-ticket fallback for lifecycle commands; require explicit ticket selection in non-interactive mode.
-- **cli:** stop ticket discovery from inheriting a parent workspace once a repo boundary is reached.
+- **cli:** stop ticket discovery at the current agent-rule boundary instead of inheriting the parent workspace.
+
+## [4.0.21] - 2026-05-08
+
+### Fixed
+
+- **docs:** repaired the custom downloads badge endpoint payload so Shields accepts it, and restored the combined `deuk-flow` downloads badge at the top of the English and Korean README surfaces.
+- **release:** synced `docs/badges/npm-downloads.json` into the public mirror and removed internal-only package payload leakage from the npm release surface.
+
+## [4.0.20] - 2026-05-08
+
+### Fixed
+
+- **docs:** restored the combined npm downloads badge to the top of the English and Korean README surfaces while keeping the public `deuk-flow` label.
+- **release:** synced `docs/badges/` into the public mirror so the README downloads badge survives OSS sync and patch republish flow.
+
+## [4.0.12] - 2026-05-07
+
+### Fixed
+
+- **init:** preserve AgentFlow spokes during migration by replacing installed legacy `CLAUDE.md` surfaces without creating `.bak` files, while still installing a default root `AGENTS.md` pointer for `.deuk-agent` projects without detected agent tool surfaces.
+- **skill:** report installed skills from either the registry or on-disk `.deuk-agent/skills/<id>/SKILL.md` files so `deuk-agent-flow skill list` reflects migrated skill directories.
+- **rules:** map AgentFlow skill-status questions to `deuk-agent-flow skill list` and use fully qualified `deuk-agent-flow ticket ...` command examples in the core agent rules.
+
+## [4.0.11] - 2026-05-07
+
+### Fixed
+
+- **init/ticket:** restore the intended month-only archive policy by normalizing older deep archive layouts into the canonical month bucket layout, rebuilding archive shard indexes without obsolete archive-depth metadata, and preventing new non-canonical imports during `init`.
 
 ## [3.3.3] - 2026-05-06
 
@@ -38,7 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **migration:** add summary/planLink/caution auto-enrichment for legacy tickets
 -  Phase 0 search limiter - max 2 MCP calls, skip when context sufficient
 -  replace legacy fill-in-the-blank rule check with Version Gating and Task Relevance check
-- **rules:** enforce hard guardrails and urgency response without any bypass path
+- **rules:** enforce hard guardrails, add hotfix protocol and urgency response
 - **rules:** harden document boundary workflow
 - **spoke:** add fill-in completion template for rule enforcement
 - **T-114:** 1-CALL ticket discovery rule + CLI max call limits
@@ -107,7 +132,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - **ticket:** enforce a decision-first cleanup flow when open tickets exceed the configured limit, while allowing closed tickets to be archived automatically.
-- **ticket:** organize archived tickets by year-month and day to reduce active ticket repository clutter.
+- **ticket:** organize archived tickets by year-month buckets to reduce active ticket repository clutter.
 - **docs:** update README document indexes and GitHub topic guidance to emphasize the agent guardrail, instruction hub, skill registry, and project memory positioning.
 
 ### Fixed
@@ -196,3 +221,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - add Codex CLI support (.codexrules) and apply globally
 - implement ticket chaining (--chain) for automated ticket linkage
 - improve submodule isolation logic
+## [4.0.19] - 2026-05-08
+
+### Fixed
+
+- **publish:** restore generated spoke replacement during init so legacy DeukAgentRules pointers do not survive beside the new DeukAgentFlow managed block
+- **telemetry:** switch client-label normalization to the shared `toSlug` utility so architecture guard tests pass during release validation
+
+### Changed
+
+- **docs:** align the English and Korean maintainer publish sections around the dual-package npm flow and the combined downloads badge
+
+## [4.0.18] - 2026-05-08
+
+### Fixed
+
+- **skills:** preserve `.deuk-agent/skills.json` and `usage.json` during init layout cleanup, and let `skill list` detect real Claude/Cursor exposure pointers even when registry state is stale
+- **telemetry:** normalize model/client labels so analytics do not fragment across case and spacing variants
+- **ticket:** prefer the newest open ticket when syncing the active ticket pointer so `ticket continue` follows the current work instead of an older open ticket

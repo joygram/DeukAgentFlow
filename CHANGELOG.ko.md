@@ -8,9 +8,33 @@
 
 ## [Unreleased]
 
+## [4.0.21] - 2026-05-08
+
 ### 수정됨 (Fixed)
 
-- **init/ticket:** 의도했던 month-only archive 정책을 복원했습니다. `init`가 legacy `archive/sub/YYYY-MM/DD/...` 티켓을 `archive/sub/YYYY-MM/...`로 정규화하고, `archiveDay` 없는 archive shard index를 다시 쓰며, 새 legacy import도 더 이상 day-depth 경로를 만들지 않도록 수정했습니다.
+- **docs:** Shields가 허용하는 형식으로 커스텀 다운로드 배지 JSON을 복구하고, 영문/한글 README 상단의 통합 `deuk-flow` 다운로드 배지를 다시 노출했습니다.
+- **release:** `docs/badges/npm-downloads.json`를 공개 미러에도 동기화하고 npm 공개 패키지 표면에서 내부 전용 payload 유입을 제거했습니다.
+
+## [4.0.20] - 2026-05-08
+
+### 수정됨 (Fixed)
+
+- **docs:** 영문/한글 README 상단에 통합 npm 다운로드 배지를 복구하고, 공개 표기는 `deuk-flow` 라벨로 유지했습니다.
+- **release:** `docs/badges/`를 공개 미러에도 동기화하도록 보강해 README 다운로드 배지가 OSS sync와 patch 재배포 뒤에도 유지되게 했습니다.
+
+## [4.0.12] - 2026-05-07
+
+### 수정됨 (Fixed)
+
+- **init:** 마이그레이션 중 AgentFlow spoke가 사라지지 않도록 설치된 legacy `CLAUDE.md` 표면은 `.bak` 없이 교체하고, 감지된 agent tool 표면이 없는 `.deuk-agent` 프로젝트에도 기본 root `AGENTS.md` 포인터를 설치하도록 수정했습니다.
+- **skill:** registry뿐 아니라 온디스크 `.deuk-agent/skills/<id>/SKILL.md` 파일도 설치된 skill로 판정하여 `deuk-agent-flow skill list`가 마이그레이션된 skill 디렉터리 상태를 정확히 보여주도록 수정했습니다.
+- **rules:** AgentFlow skill 상태 질문은 `deuk-agent-flow skill list`로 확인하도록 명시하고, core agent rules의 ticket 예시를 완전한 `deuk-agent-flow ticket ...` 명령으로 정규화했습니다.
+
+## [4.0.11] - 2026-05-07
+
+### 수정됨 (Fixed)
+
+- **init/ticket:** 의도했던 month-only archive 정책을 복원했습니다. `init`가 예전의 깊은 archive 레이아웃을 canonical month bucket 레이아웃으로 정규화하고, 낡은 archive depth metadata 없이 archive shard index를 다시 쓰며, 새 비정규 import가 생기지 않도록 수정했습니다.
 
 ## [3.3.3] - 2026-05-06
 
@@ -38,7 +62,7 @@
 ### 변경됨 (Changed)
 
 - **ticket:** 열린 티켓이 설정된 한도를 넘을 때 자동 정리 대신 사용자가 목록을 보고 결정할 수 있는 cleanup flow를 강화했습니다.
-- **ticket:** 닫힌 티켓은 자동 아카이브할 수 있게 하고, 아카이브된 티켓은 년월/일 단위로 정리되도록 했습니다.
+- **ticket:** 닫힌 티켓은 자동 아카이브할 수 있게 하고, 아카이브된 티켓은 년월 단위 버킷으로 정리되도록 했습니다.
 - **docs:** README 문서 목록과 GitHub topic 가이드를 agent guardrail, instruction hub, skill registry, project memory 포지셔닝에 맞게 갱신했습니다.
 
 ### 수정됨 (Fixed)
@@ -193,3 +217,21 @@
 
 - **docs:** 외부 공개용 릴리즈 가이드 및 동기화 스크립트 주석 갱신
 - **docs:** 리드미(README)에 토큰 비용 차단 메커니즘 설정 및 제로 터치 스캐폴딩 문서 개편
+## [4.0.19] - 2026-05-08
+
+### 수정됨 (Fixed)
+
+- **publish:** init 시 레거시 DeukAgentRules 포인터가 새 DeukAgentFlow managed block 옆에 남지 않도록 generated spoke 교체 경로를 복구했습니다.
+- **telemetry:** release 검증의 architecture guard를 통과하도록 client label 정규화를 공용 `toSlug` 유틸로 통일했습니다.
+
+### 변경됨 (Changed)
+
+- **docs:** 영문/한글 메인테이너 배포 섹션을 dual-package npm 배포 흐름과 통합 다운로드 배지 설명 기준으로 맞췄습니다.
+
+## [4.0.18] - 2026-05-08
+
+### 수정됨 (Fixed)
+
+- **skills:** `init` 정리 단계가 `.deuk-agent/skills.json`과 `usage.json`을 오배치 파일로 이동시키던 회귀를 막고, 실제 Claude/Cursor 노출 파일도 `skill list`에 반영하도록 보강
+- **telemetry:** 모델/클라이언트 표기를 정규화해 대소문자·공백 차이로 분석 결과가 분산되던 문제 수정
+- **ticket:** active ticket 동기화가 가장 최근 open ticket 대신 오래된 open ticket을 유지해 `ticket continue`가 잘못된 티켓을 가리키던 문제 수정

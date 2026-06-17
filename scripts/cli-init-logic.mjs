@@ -2,7 +2,8 @@ import { existsSync, appendFileSync, writeFileSync, mkdirSync, readFileSync } fr
 import { join } from "path";
 import { AGENT_ROOT_DIR, LEGACY_IGNORE_DIR, LEGACY_TICKET_DIR, LEGACY_TICKET_DIR_PLURAL, TICKET_DIR_NAME } from "./cli-utils.mjs";
 
-const GITIGNORE_AGENT_MARKER = "# deuk-agent-rule: agent hub directory (local, not committed by default)";
+const GITIGNORE_AGENT_MARKER = "# deuk-agent-flow: agent hub directory (local, not committed by default)";
+const LEGACY_GITIGNORE_AGENT_MARKER = "# deuk-agent-rule: agent hub directory (local, not committed by default)";
 
 function hasExactGitignoreLine(content, line) {
   return content
@@ -43,15 +44,20 @@ export function ensureTicketDirAndGitignore(opts) {
   const legacyIgnore1 = `${LEGACY_TICKET_DIR}/`;
   const legacyIgnore2 = `${LEGACY_TICKET_DIR_PLURAL}/`;
   const legacyIgnore3 = LEGACY_IGNORE_DIR;
-  const cleanedGi = removeExactGitignoreLines(gi, [legacyIgnore1, legacyIgnore2, legacyIgnore3]);
+  const cleanedGi = removeExactGitignoreLines(gi, [legacyIgnore1, legacyIgnore2, legacyIgnore3, LEGACY_GITIGNORE_AGENT_MARKER]);
   if (cleanedGi !== gi) {
     writeFileSync(gitignorePath, cleanedGi.replace(/\n*$/, "\n"), "utf8");
     gi = cleanedGi;
     console.log("[INIT] Removed legacy deuk-agent-rule .gitignore entries");
   }
 
-  if (!hasExactGitignoreLine(gi, ignoreLine) && !opts.shareTickets) {
-    const block = "\n" + GITIGNORE_AGENT_MARKER + "\n" + ignoreLine + "\n";
+  const hasIgnoreLine = hasExactGitignoreLine(gi, ignoreLine);
+  const hasMarkerLine = hasExactGitignoreLine(gi, GITIGNORE_AGENT_MARKER);
+  if ((!hasIgnoreLine || !hasMarkerLine) && !opts.shareTickets) {
+    const linesToAdd = [];
+    if (!hasMarkerLine) linesToAdd.push(GITIGNORE_AGENT_MARKER);
+    if (!hasIgnoreLine) linesToAdd.push(ignoreLine);
+    const block = "\n" + linesToAdd.join("\n") + "\n";
     appendFileSync(gitignorePath, block, "utf8");
     console.log(`[INIT] Added ${ignoreLine} to .gitignore`);
   }

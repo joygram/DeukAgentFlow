@@ -61,6 +61,26 @@ function isLegacyArchivedTemplateArtifact(relPath, content) {
   return src.includes("<%=") || src.includes("<%-") || /^id:\s*(module-rule-template|ticket-list-template|ticket-template-ko|ticket-template)\s*$/m.test(src);
 }
 
+function looksLikeYamlFrontmatter(content) {
+  if (!(content.startsWith("---\n") || content.startsWith("---\r\n"))) return false;
+  const afterOpening = content.replace(/^---\r?\n/, "");
+  const lines = afterOpening.split(/\r?\n/);
+  const frontmatterLines = [];
+
+  for (const line of lines) {
+    if (line.trim() === "---") break;
+    frontmatterLines.push(line);
+  }
+
+  if (frontmatterLines.length === 0) return false;
+
+  const firstNonEmpty = frontmatterLines.find(line => line.trim());
+  if (!firstNonEmpty) return false;
+  if (/^(#|>|- |\* |\d+\.)/.test(firstNonEmpty.trim())) return false;
+
+  return frontmatterLines.some(line => /^[A-Za-z0-9_-]+\s*:/.test(line.trim()));
+}
+
 function lintWalkthroughReportStructure(relPath, content) {
   const errors = [];
   const hasSummary = /##\s+(Summary|요약)(?:\s|$)/i.test(content);
@@ -114,7 +134,7 @@ function lintFile(absPath, repoRoot) {
     errors.push(`${rel}: unmatched fenced code block`);
   }
 
-  if (content.startsWith("---\n") || content.startsWith("---\r\n")) {
+  if (looksLikeYamlFrontmatter(content)) {
     const match = content.match(/^---\r?\n([\s\S]+?)\r?\n---\r?\n?/);
     if (!match) {
       const afterOpeningRule = content.replace(/^---\r?\n/, "");

@@ -50,9 +50,6 @@ Running `deuk-agent-flow init` triggers the following lifecycle:
 4. **Phase Transition**: After the Phase 1 plan is reviewable and the user approves execution, the agent moves the ticket to Phase 2 (Execute).
 5. **Execute & Verify (Phase 2)**: Changes are made and verified within the isolated boundary.
 6. **Knowledge Distillation Archive**: When archiving, core information is extracted (Zero-Token Distillation) to save context tokens for long-term memory.
-7. **No Exception Path**: Every piece of work starts with a ticket. Nothing bypasses the ticket flow for closed, archived, or untracked work.
-
-- Lifecycle commands do not infer a ticket silently in non-interactive mode; pass `--topic` or `--latest` explicitly when you mean a specific ticket.
 
 ## 6. Ticket Files in Git
 

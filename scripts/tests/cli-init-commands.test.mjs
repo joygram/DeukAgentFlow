@@ -1,9 +1,327 @@
 import test from "node:test";
 import assert from "node:assert";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildGlobalCodexInstructions, canonicalizeDocsArchiveBuckets, enforceCanonicalAgentLayout, generateSpokeContent, mergeManagedRuleContent, migrateLegacyStructure, runInit } from "../cli-init-commands.mjs";
+import { buildGlobalCodexInstructions, canonicalizeDocsArchiveBuckets, enforceCanonicalAgentLayout, ensureSourceModeCommandShims, generateSpokeContent, mergeManagedRuleContent, migrateLegacyStructure, runInit } from "../cli-init-commands.mjs";
+
+test("source mode creates installed-command shims when CLI commands are not on PATH", () => {
+  const root = mkdtempSync(join(tmpdir(), "deuk-source-mode-"));
+  const binDir = join(root, "bin-out");
+  const sourceRoot = join(root, "DeukAgentFlow");
+  const sourceBin = join(sourceRoot, "bin");
+  mkdirSync(sourceBin, { recursive: true });
+  writeFileSync(join(sourceBin, "deuk-agent-flow.js"), "#!/usr/bin/env node\n", "utf8");
+  writeFileSync(join(sourceBin, "deuk-agent-rule.js"), "#!/usr/bin/env node\n", "utf8");
+
+  try {
+    const result = ensureSourceModeCommandShims(sourceRoot, {
+      binDir,
+      pathEnv: "",
+      platform: "linux"
+    });
+
+    assert.deepStrictEqual(result.created, ["deuk-agent-flow", "deukagentflow", "deuk-agent-rule", "deukagentrule"]);
+    assert.strictEqual(result.onPath, false);
+    assert.ok(lstatSync(join(binDir, "deuk-agent-flow")).isSymbolicLink());
+    assert.ok(lstatSync(join(binDir, "deuk-agent-rule")).isSymbolicLink());
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("source mode skips shim creation when installed command already exists on PATH", () => {
+  const root = mkdtempSync(join(tmpdir(), "deuk-source-mode-installed-"));
+  const sourceRoot = join(root, "DeukAgentFlow");
+  const sourceBin = join(sourceRoot, "bin");
+  const pathBin = join(root, "path-bin");
+  const shimBin = join(root, "shim-bin");
+  mkdirSync(sourceBin, { recursive: true });
+  mkdirSync(pathBin, { recursive: true });
+  writeFileSync(join(sourceBin, "deuk-agent-flow.js"), "#!/usr/bin/env node\n", "utf8");
+  writeFileSync(join(sourceBin, "deuk-agent-rule.js"), "#!/usr/bin/env node\n", "utf8");
+  writeFileSync(join(pathBin, "deuk-agent-flow"), "#!/bin/sh\n", "utf8");
+
+  try {
+    const result = ensureSourceModeCommandShims(sourceRoot, {
+      binDir: shimBin,
+      pathEnv: pathBin,
+      platform: "linux"
+    });
+
+    assert.ok(result.skipped.includes("deuk-agent-flow"));
+    assert.ok(!existsSync(join(shimBin, "deuk-agent-flow")));
+    assert.ok(existsSync(join(shimBin, "deuk-agent-rule")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runInit replaces broken DeukAgentRules AGENTS pointer with DeukAgentFlow canonical pointer", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-canonical-agents-"));
+  try {
+    writeFileSync(join(cwd, "AGENTS.md"), [
+      "---",
+      "",
+      "## DeukAgentRules",
+      "",
+      "> Managed by DeukAgentRules. Remove this section if not installed.",
+      "",
+      "# Deuk Agent Rules",
+      "",
+      "**[MANDATORY — TOOL CALL REQUIRED]** Core rules are at: [AGENTS.md](file:///home/joy/workspace/DeukAgentRules/core-rules/AGENTS.md)",
+      "",
+      "This pointer is a thin bootstrap, not a second workflow contract.",
+      ""
+    ].join("\n"), "utf8");
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved",
+      sourceShims: false
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    const body = readFileSync(join(cwd, "AGENTS.md"), "utf8");
+    assert.match(body, /## DeukAgentFlow/);
+    assert.match(body, /file:\/\/\/home\/joy\/workspace\/DeukAgentFlow\/core-rules\/AGENTS\.md/);
+    assert.doesNotMatch(body, /DeukAgentRules/);
+    assert.doesNotMatch(body, /DeukAgentRules\/core-rules/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("runInit migrates nested legacy AGENTS surfaces through init", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-nested-agents-"));
+  try {
+    const nestedDir = join(cwd, "apps", "web");
+    mkdirSync(nestedDir, { recursive: true });
+    writeFileSync(join(nestedDir, "AGENTS.md"), [
+      "<!-- deuk-agent-rule:begin -->",
+      "# Old Workflow",
+      "Use npx deuk-agent-rule ticket create.",
+      "<!-- deuk-agent-rule:end -->",
+      ""
+    ].join("\n"), "utf8");
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved",
+      sourceShims: false
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    const body = readFileSync(join(nestedDir, "AGENTS.md"), "utf8");
+    assert.match(body, /## DeukAgentFlow/);
+    assert.match(body, /file:\/\/\/home\/joy\/workspace\/DeukAgentFlow\/core-rules\/AGENTS\.md/);
+    assert.doesNotMatch(body, /deuk-agent-rule/);
+    assert.doesNotMatch(body, /<!-- deuk-agent-rule:begin -->/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("enforceCanonicalAgentLayout preserves runtime skill and usage state files", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-agent-layout-state-"));
+  try {
+    const agentRoot = join(cwd, ".deuk-agent");
+    mkdirSync(agentRoot, { recursive: true });
+    writeFileSync(join(agentRoot, "skills.json"), JSON.stringify({ installed: ["project-pilot"] }, null, 2) + "\n", "utf8");
+    writeFileSync(join(agentRoot, "usage.json"), JSON.stringify({ platform: "codex" }, null, 2) + "\n", "utf8");
+
+    enforceCanonicalAgentLayout(cwd, false);
+
+    assert.ok(existsSync(join(agentRoot, "skills.json")));
+    assert.ok(existsSync(join(agentRoot, "usage.json")));
+    assert.strictEqual(JSON.parse(readFileSync(join(agentRoot, "skills.json"), "utf8")).installed[0], "project-pilot");
+    assert.strictEqual(JSON.parse(readFileSync(join(agentRoot, "usage.json"), "utf8")).platform, "codex");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("runInit replaces legacy generated spoke content and rewrites gitignore marker", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-legacy-spoke-"));
+  try {
+    mkdirSync(join(cwd, ".claude", "rules"), { recursive: true });
+    mkdirSync(join(cwd, ".cursor", "rules"), { recursive: true });
+    writeFileSync(join(cwd, ".claude", "rules", "deuk-agent.md"), [
+      "---",
+      "",
+      "## DeukAgentRules",
+      "",
+      "> Managed by DeukAgentRules. Remove this section if not installed.",
+      "",
+      "# Deuk Agent Rules",
+      "",
+      "**[MANDATORY — TOOL CALL REQUIRED]** Core rules are at: [AGENTS.md](file:///home/joy/workspace/DeukAgentRules/core-rules/AGENTS.md)",
+      "",
+      "This pointer is a thin bootstrap, not a second workflow contract.",
+      "",
+      "1. FIRST tool call: read the core rules file above and internally note its frontmatter version.",
+      "2. Then read local `PROJECT_RULE.md` and internally identify applicable DC-* rules.",
+      "3. After the core hub is loaded, `core-rules/AGENTS.md` is the DeukAgentRules SSoT for TDW, RAG, silence, scope, and verification.",
+      "",
+      "Do not print pointer/core metadata, version, DC-* lists, progress commentary, or interim summaries. Before the final answer, only the single required ticket-start line, blockers, explicit user-requested output, or explicit command results may appear. After approval, do not narrate progress unless the user explicitly asks for live narration or a blocker/user decision must be surfaced.",
+      ""
+    ].join("\n"), "utf8");
+    writeFileSync(join(cwd, ".cursor", "rules", "deuk-agent.mdc"), [
+      "---",
+      'description: "Deuk Agent Rules - Project conventions and ticket workflow"',
+      'globs: ["**/*"]',
+      "alwaysApply: true",
+      "---",
+      "# Deuk Agent Rules",
+      "",
+      "**[MANDATORY — TOOL CALL REQUIRED]** Core rules are at: [AGENTS.md](file:///home/joy/workspace/DeukAgentRules/core-rules/AGENTS.md)",
+      "",
+      "This pointer is a thin bootstrap, not a second workflow contract.",
+      "",
+      "1. FIRST tool call: read the core rules file above and internally note its frontmatter version.",
+      "2. Then read local `PROJECT_RULE.md` and internally identify applicable DC-* rules.",
+      "3. After the core hub is loaded, `core-rules/AGENTS.md` is the DeukAgentRules SSoT for TDW, RAG, silence, scope, and verification.",
+      "",
+      "Do not print pointer/core metadata, version, DC-* lists, progress commentary, or interim summaries. Before the final answer, only the single required ticket-start line, blockers, explicit user-requested output, or explicit command results may appear. After approval, do not narrate progress unless the user explicitly asks for live narration or a blocker/user decision must be surfaced.",
+      ""
+    ].join("\n"), "utf8");
+    writeFileSync(join(cwd, ".gitignore"), [
+      "# deuk-agent-rule: agent hub directory (local, not committed by default)",
+      ".deuk-agent/",
+      ""
+    ].join("\n"), "utf8");
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved",
+      sourceShims: false
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    const claudeBody = readFileSync(join(cwd, ".claude", "rules", "deuk-agent.md"), "utf8");
+    const cursorBody = readFileSync(join(cwd, ".cursor", "rules", "deuk-agent.mdc"), "utf8");
+    const gitignoreBody = readFileSync(join(cwd, ".gitignore"), "utf8");
+
+    assert.doesNotMatch(claudeBody, /DeukAgentRules/);
+    assert.doesNotMatch(cursorBody, /DeukAgentRules/);
+    assert.match(claudeBody, /## DeukAgentFlow/);
+    assert.match(cursorBody, /# Deuk Agent Flow/);
+    assert.equal((claudeBody.match(/deuk-agent-managed:begin/g) || []).length, 1);
+    assert.equal((cursorBody.match(/deuk-agent-managed:begin/g) || []).length, 1);
+    assert.doesNotMatch(gitignoreBody, /# deuk-agent-rule:/);
+    assert.match(gitignoreBody, /# deuk-agent-flow: agent hub directory/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("runInit replaces legacy CLAUDE.md with claude spoke without backup churn", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-claude-legacy-"));
+  try {
+    writeFileSync(join(cwd, "CLAUDE.md"), [
+      "---",
+      "",
+      "## DeukAgentRules",
+      "",
+      "> Managed by DeukAgentRules. Remove this section if not installed.",
+      "",
+      "# Deuk Agent Rules",
+      "",
+      "**[MANDATORY — TOOL CALL REQUIRED]** Core rules are at: [AGENTS.md](file:///home/joy/workspace/DeukAgentRules/core-rules/AGENTS.md)",
+      "",
+      "This pointer is a thin bootstrap, not a second workflow contract.",
+      ""
+    ].join("\n"), "utf8");
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved",
+      sourceShims: false
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    assert.ok(!existsSync(join(cwd, "CLAUDE.md")));
+    assert.ok(!existsSync(join(cwd, "CLAUDE.md.bak")));
+    const spoke = readFileSync(join(cwd, ".claude", "rules", "deuk-agent.md"), "utf8");
+
+    assert.match(spoke, /## DeukAgentFlow/);
+    assert.match(spoke, /deuk-agent-managed:begin/);
+    assert.doesNotMatch(spoke, /DeukAgentRules/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("runInit installs root AGENTS.md for existing .deuk-agent projects without detected tools", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-agent-root-default-"));
+  try {
+    mkdirSync(join(cwd, ".deuk-agent"), { recursive: true });
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved",
+      sourceShims: false
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    const body = readFileSync(join(cwd, "AGENTS.md"), "utf8");
+    assert.match(body, /## DeukAgentFlow/);
+    assert.match(body, /Core rules are at:/);
+    assert.doesNotMatch(body, /DeukAgentRules/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("runInit moves legacy .deuk-agent-ticket out of active ticket roots", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-legacy-ticket-root-"));
+  try {
+    const legacySub = join(cwd, ".deuk-agent-ticket", "sub");
+    mkdirSync(legacySub, { recursive: true });
+    writeFileSync(join(legacySub, "001-legacy.md"), [
+      "# Legacy Ticket",
+      "- old command: deuk-agent-rule ticket use",
+      ""
+    ].join("\n"), "utf8");
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved",
+      sourceShims: false
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    assert.ok(!existsSync(join(cwd, ".deuk-agent-ticket")), "legacy ticket root should be removed");
+    assert.ok(!existsSync(join(cwd, ".deuk-agent", "tickets", "sub", "001-legacy.md")), "legacy tickets should not become active tickets");
+
+    const archiveRoot = join(cwd, ".deuk-agent", "tickets", "archive", "sub");
+    const stack = [archiveRoot];
+    let archived = false;
+    while (stack.length > 0) {
+      const dir = stack.pop();
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (lstatSync(p).isDirectory()) stack.push(p);
+        if (p.endsWith("001-legacy.md")) archived = true;
+      }
+    }
+    assert.ok(archived, "legacy ticket should be moved under archive import");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
 
 test("init migration moves legacy reports and prunes empty legacy ticket dirs", () => {
   const cwd = mkdtempSync(join(tmpdir(), "deuk-init-migrate-"));
@@ -76,7 +394,8 @@ test("generated agent spoke is a thin bootstrap with clear precedence", () => {
   assert.doesNotMatch(content, /confirming its version number/);
   assert.match(content, /core-rules\/AGENTS\.md` is the DeukAgentFlow SSoT/);
   assert.match(content, /Do not print pointer\/core metadata/);
-  assert.match(content, /Only the single required ticket-start line may appear before the final answer/);
+  assert.match(content, /only the single required ticket-start line, blockers, explicit user-requested output, or explicit command results may appear/i);
+  assert.match(content, /During approved_execution, command_running, or search_running, stay silent unless the user explicitly asks for live narration/i);
 });
 
 test("global codex instructions stay locator-only", () => {
@@ -210,7 +529,8 @@ test("init migration skips empty legacy docs instead of creating placeholder tic
       dryRun: false,
       nonInteractive: true,
       workflow: "execute",
-      approval: "approved"
+      approval: "approved",
+      sourceShims: false
     }, "/home/joy/workspace/DeukAgentFlow");
 
     const emptyTicketPath = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "legacy-docs", "123.md");
@@ -276,7 +596,8 @@ test("runInit canonicalizes legacy day-depth archive tickets into year-month buc
       dryRun: false,
       nonInteractive: true,
       workflow: "execute",
-      approval: "approved"
+      approval: "approved",
+      sourceShims: false
     }, "/home/joy/workspace/DeukAgentFlow");
 
     const normalizedPath = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "2026-05", "301-legacy-archive-depth-host.md");
@@ -288,6 +609,36 @@ test("runInit canonicalizes legacy day-depth archive tickets into year-month buc
     assert.ok(entry, "archive index should include normalized ticket");
     assert.strictEqual(entry.archiveYearMonth, "2026-05");
     assert.ok(!Object.prototype.hasOwnProperty.call(entry, "archiveDay"), "archive index should drop archiveDay metadata");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("runInit merges conflicting legacy-docs archive tickets into canonical month buckets", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-archive-legacy-docs-"));
+  try {
+    const monthDir = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "2026-05");
+    const legacyDir = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "legacy-docs");
+    mkdirSync(monthDir, { recursive: true });
+    mkdirSync(legacyDir, { recursive: true });
+
+    writeFileSync(join(monthDir, "project-rule.md"), "---\nsummary: a\nstatus: archived\npriority: P3\ntags: migrated\n---\nA\n", "utf8");
+    writeFileSync(join(legacyDir, "project-rule.md"), "---\nsummary: b\nstatus: archived\npriority: P3\ntags: migrated\n---\nA\n\nB with different history\n", "utf8");
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved",
+      sourceShims: false
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    assert.ok(existsSync(join(monthDir, "project-rule.md")));
+    assert.ok(!existsSync(join(monthDir, "project-rule-legacy-docs.md")));
+    assert.ok(!existsSync(join(legacyDir, "project-rule.md")));
+    const merged = readFileSync(join(monthDir, "project-rule.md"), "utf8");
+    assert.match(merged, /B with different history/);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

@@ -73,6 +73,7 @@ function parseArgs(argv) {
     tag: null,
     otp: null,
     skipTests: false,
+    skipSmoke: false,
     aliasOnly: false,
   };
 
@@ -80,6 +81,7 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg === "--dry-run") opts.dryRun = true;
     else if (arg === "--skip-tests") opts.skipTests = true;
+    else if (arg === "--skip-smoke") opts.skipSmoke = true;
     else if (arg === "--alias-only") opts.aliasOnly = true;
     else if (arg === "--access") opts.access = argv[++i];
     else if (arg === "--tag") opts.tag = argv[++i];
@@ -117,6 +119,9 @@ export function main(argv = process.argv.slice(2)) {
 
   if (!opts.skipTests) {
     run("npm", ["test"], rootDir);
+  }
+  if (!opts.skipSmoke) {
+    run("node", ["scripts/smoke-npm-local.mjs"], rootDir);
   }
 
   const args = publishArgs(opts);

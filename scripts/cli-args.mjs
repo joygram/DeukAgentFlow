@@ -9,8 +9,10 @@ export function parseTicketArgs(argv) {
     else if (a === "--group") out.group = argv[++i];
     else if (a === "--project") out.project = argv[++i];
     else if (a === "--content") out.content = argv[++i];
+    else if (a === "--content-file") out.contentFile = argv[++i];
     else if (a === "--from") out.from = argv[++i];
     else if (a === "--plan-body") out.planBody = argv[++i];
+    else if (a === "--plan-body-file") out.planBodyFile = argv[++i];
     else if (a === "--ref") out.ref = argv[++i];
     else if (a === "--limit") out.limit = Number(argv[++i]);
     else if (a === "--submodule") out.submodule = argv[++i];
@@ -29,6 +31,10 @@ export function parseTicketArgs(argv) {
     else if (a === "--chain") out.chain = true;
     else if (a === "--render") out.render = true;
     else if (a === "--docs-language") out.docsLanguage = argv[++i];
+    else if (a === "--workflow") out.workflowMode = argv[++i];
+    else if (a === "--approval") out.approval = argv[++i];
+    else if (a === "--ticket-started") out.ticketStarted = true;
+    else if (a === "--ticket-reviewed") out.ticketReviewed = true;
     else if (a === "--evidence") out.evidence = argv[++i];
     else if (a === "--skip-phase0") out.skipPhase0 = true;
     else if (a === "--summary") out.summary = argv[++i];

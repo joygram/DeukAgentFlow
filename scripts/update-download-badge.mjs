@@ -5,12 +5,14 @@ import { dirname, join } from "path";
 const DEFAULT_PACKAGES = ["deuk-agent-flow", "deuk-agent-rule"];
 const DEFAULT_RANGE = "last-month";
 const DEFAULT_OUT = "docs/badges/npm-downloads.json";
+const DEFAULT_CANONICAL_PACKAGE = "deuk-agent-flow";
 
 function parseArgs(argv) {
   const opts = {
     packages: [...DEFAULT_PACKAGES],
     range: DEFAULT_RANGE,
     out: DEFAULT_OUT,
+    canonicalPackage: DEFAULT_CANONICAL_PACKAGE,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -21,6 +23,8 @@ function parseArgs(argv) {
       opts.range = argv[++i];
     } else if (arg === "--out") {
       opts.out = argv[++i];
+    } else if (arg === "--canonical") {
+      opts.canonicalPackage = argv[++i];
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -61,19 +65,23 @@ function formatDownloads(value) {
 }
 
 export async function buildDownloadsBadge(opts) {
+  const canonicalPackage = opts.canonicalPackage || opts.packages[0];
   const packages = await Promise.all(opts.packages.map((name) => fetchDownloads(name, opts.range)));
   const total = packages.reduce((sum, pkg) => sum + pkg.downloads, 0);
+  const canonical = packages.find((pkg) => pkg.package === canonicalPackage) || packages[0];
+  const aliases = packages.filter((pkg) => pkg.package !== canonical.package);
+  const aliasTotal = aliases.reduce((sum, pkg) => sum + pkg.downloads, 0);
+  void canonical;
+  void aliasTotal;
+  void aliases;
 
   return {
     schemaVersion: 1,
-    label: "npm downloads",
+    label: "deuk-flow downloads",
     message: `${formatDownloads(total)}/${opts.range}`,
     color: "2f6fed",
     namedLogo: "npm",
     cacheSeconds: 86400,
-    total,
-    range: opts.range,
-    packages,
   };
 }
 
