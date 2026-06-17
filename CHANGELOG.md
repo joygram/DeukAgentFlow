@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-04-17
+
+
+### Added
+
+-  AI 파이프라인 연동 기반 및 선택적 동기화 시스템 고도화
+- **cli:** add --submodule filter to ticket list command
+- **cli:** restore ticket archive and reports workflows to modular architecture
+- **rules:** advance rules for Unity Client, WebApp, and C++ Server hybrid environment
+- **ticket:** implementation of decentralized ticket management & sharing policy
+- **ticket:** upgrade to V2 YAML Front-matter and Categorized List
+
+
+### Fixed
+
+- **ticket:** deprecate LATEST.md, unify pointer to ACTIVE_TICKET.md
+- **ticket:** DeukAgentRules 현재 진행중인 티켓 안나오던 문제 해결
+
+
+### Changed
+
+- **readme:** clarify YAML front matter preservation and distributed ticket workflow for v2.2.2
+- **readme:** restore count headers and npm badges
+- **rules:** enforce CLI usage for ticket reading to prevent manual JSON parsing
+-  update CLI reference with close and migrate commands
+
 ## [1.0.18] - 2026-04-12
 
 
