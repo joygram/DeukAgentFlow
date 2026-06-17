@@ -477,7 +477,8 @@ export function syncActiveTicketPointer(cwd) {
  */
 export function getHostnameSlug() {
   try {
-    return osHostname().toLowerCase().replace(/[^a-z0-9\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'local';
+    const slug = osHostname().toLowerCase().replace(/[^a-z0-9\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    return slug.slice(0, 8).replace(/-$/, '') || 'local';
   } catch {
     return 'local';
   }
