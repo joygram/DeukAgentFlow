@@ -1,8 +1,19 @@
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs";
 import { basename, dirname, join, relative } from "path";
 import YAML from "yaml";
 
-export const INIT_CONFIG_FILENAME = ".deuk-agent-rule.config.json";
+export const AGENT_ROOT_DIR = ".deuk-agent";
+export const TICKET_SUBDIR = "tickets";
+export const TEMPLATE_SUBDIR = "templates";
+export const RULES_SUBDIR = "rules";
+
+export const TICKET_DIR_NAME = `${AGENT_ROOT_DIR}/${TICKET_SUBDIR}`;
+export const TICKET_INDEX_FILENAME = "INDEX.json";
+export const TICKET_LIST_FILENAME = "TICKET_LIST.md";
+export const TICKET_LIST_TEMPLATE_FILENAME = "TICKET_LIST.template.md";
+
+export const INIT_CONFIG_FILENAME = `${AGENT_ROOT_DIR}/config.json`;
+export const LEGACY_INIT_CONFIG_FILENAME = ".deuk-agent-rule.config.json";
 export const INIT_CONFIG_VERSION = 1;
 
 export const STACKS = [
@@ -22,9 +33,13 @@ export const AGENT_TOOLS = [
 
 export function loadInitConfig(cwd) {
   const p = join(cwd, INIT_CONFIG_FILENAME);
-  if (!existsSync(p)) return null;
+  const legacyP = join(cwd, LEGACY_INIT_CONFIG_FILENAME);
+  
+  let target = existsSync(p) ? p : (existsSync(legacyP) ? legacyP : null);
+  if (!target) return null;
+
   try {
-    const j = JSON.parse(readFileSync(p, "utf8"));
+    const j = JSON.parse(readFileSync(target, "utf8"));
     if (j.version !== INIT_CONFIG_VERSION) return null;
     return j;
   } catch {
@@ -74,6 +89,21 @@ export function formatTimestampForFile(d = new Date()) {
 
 export function makeEntryId() {
   return `000-fallback-${Date.now().toString(36)}`;
+}
+
+export function findFileRecursively(dir, fileName) {
+  if (!existsSync(dir)) return null;
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const res = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const found = findFileRecursively(res, fileName);
+      if (found) return found;
+    } else if (entry.name === fileName) {
+      return res;
+    }
+  }
+  return null;
 }
 
 export function detectProjectFromBody(body) {
@@ -144,7 +174,10 @@ export function stringifyFrontMatter(meta, content) {
   return `---\n${yamlStr}\n---\n\n${content.trim()}\n`;
 }
 
-export function semverGt(a, b) {
+/**
+ * Returns true if semver a is less than b
+ */
+export function semverLt(a, b) {
   const pa = String(a || "0").replace(/[^0-9.]/g, "").split(".").map(Number);
   const pb = String(b || "0").replace(/[^0-9.]/g, "").split(".").map(Number);
   for (let i = 0; i < 3; i++) {
@@ -166,7 +199,7 @@ export async function checkUpdateNotifier() {
     if (res.ok) {
       const data = await res.json();
       // Only notify when registry version is strictly newer than local (handles local dev symlink case)
-      if (data.version && semverGt(currentVersion, data.version)) {
+      if (data.version && semverLt(currentVersion, data.version)) {
         console.warn(`\n\x1b[33m💡 Update available! ${currentVersion} → ${data.version}\x1b[0m`);
         console.warn(`\x1b[36mRun 'npm install -g deuk-agent-rule' to update.\x1b[0m\n`);
       }
@@ -174,4 +207,32 @@ export async function checkUpdateNotifier() {
   } catch(e) {
     // Ignore timeout or network errors silently
   }
+}
+
+/**
+ * Recursively finds all directories containing deuk-agent ticket structures.
+ */
+export function discoverAllSubmodules(baseCwd, out = new Set()) {
+  if (!existsSync(baseCwd)) return Array.from(out);
+
+  const hasLegacy1 = existsSync(join(baseCwd, ".deuk-agent-ticket"));
+  const hasLegacy2 = existsSync(join(baseCwd, ".deuk-agent-tickets"));
+  const hasNew = existsSync(join(baseCwd, AGENT_ROOT_DIR, TICKET_SUBDIR));
+
+  if (hasLegacy1 || hasLegacy2 || hasNew) {
+    out.add(baseCwd);
+  }
+
+  try {
+    const entries = readdirSync(baseCwd, { withFileTypes: true });
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      // Skip system or noisy directories
+      if (ent.name === "node_modules" || ent.name === ".git" || ent.name === AGENT_ROOT_DIR || ent.name.startsWith(".deuk-agent")) continue;
+      discoverAllSubmodules(join(baseCwd, ent.name), out);
+    }
+  } catch {
+    // Ignore permission errors on specific subfolders
+  }
+  return Array.from(out);
 }

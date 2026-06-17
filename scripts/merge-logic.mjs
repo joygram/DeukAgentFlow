@@ -266,34 +266,6 @@ export function removeTaggedBlock(content, begin, end) {
   return { ok: true, content: next };
 }
 
-/**
- * Strip `deuk-agent-rule-cursorrules` (or custom markers) region from `.cursorrules`.
- * @param {{ cwd: string, markers: { begin: string, end: string }, dryRun?: boolean, backup?: boolean }} opts
- */
-export function removeCursorrules(opts) {
-  const { cwd, markers, dryRun, backup } = opts;
-  const targetPath = join(cwd, ".cursorrules");
-  if (!existsSync(targetPath)) {
-    return { action: "skip", reason: "no file" };
-  }
-  const existing = readFileSync(targetPath, "utf8");
-  const result = removeTaggedBlock(existing, markers.begin, markers.end);
-  if (!result.ok) {
-    return { action: "skip", path: targetPath, reason: result.reason };
-  }
-  if (dryRun) {
-    return { action: "would-write", path: targetPath, mode: "remove-tagged" };
-  }
-  if (backup && existsSync(targetPath)) {
-    copyFileSync(targetPath, targetPath + ".bak");
-  }
-  if (result.content === "") {
-    unlinkSync(targetPath);
-    return { action: "delete", path: targetPath, mode: "remove-tagged" };
-  }
-  writeFileSync(targetPath, result.content, "utf8");
-  return { action: "write", path: targetPath, mode: "remove-tagged" };
-}
 
 /**
  * @param {{

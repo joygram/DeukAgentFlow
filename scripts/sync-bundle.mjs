@@ -21,6 +21,8 @@ const agentsSrc = join(publishDir, "AGENTS.md");
 const agentsDest = join(pkgRoot, "bundle", "AGENTS.md");
 const cursorrulesSrc = join(publishDir, ".cursorrules");
 const cursorrulesDest = join(pkgRoot, "bundle", ".cursorrules");
+const geminiSrc = join(publishDir, "gemini.md");
+const geminiDest = join(pkgRoot, "bundle", "gemini.md");
 
 if (!existsSync(publishDir)) {
   throw new Error("Missing publish template dir: " + publishDir);
@@ -56,7 +58,20 @@ if (existsSync(templatesSrc)) {
   }
 }
 
+const dynamicRulesSrc = join(publishDir, "rules.d");
+const dynamicRulesDest = join(pkgRoot, "bundle", "rules.d");
+if (existsSync(dynamicRulesSrc)) {
+  if (existsSync(dynamicRulesDest)) {
+    rmSync(dynamicRulesDest, { recursive: true });
+  }
+  mkdirSync(dynamicRulesDest, { recursive: true });
+  for (const name of readdirSync(dynamicRulesSrc)) {
+    copyFileSync(join(dynamicRulesSrc, name), join(dynamicRulesDest, name));
+  }
+}
+
 const agentsBody = readFileSync(agentsSrc, "utf8");
 writeFileSync(agentsDest, agentsBody, "utf8");
 copyFileSync(cursorrulesSrc, cursorrulesDest);
+if (existsSync(geminiSrc)) copyFileSync(geminiSrc, geminiDest);
 console.log("deuk-agent-rule: synced bundle from publish/ template.");

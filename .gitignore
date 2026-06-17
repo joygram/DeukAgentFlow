@@ -2,3 +2,8 @@ bundle/
 node_modules/
 *.tgz
 .DS_Store
+
+# deuk-agent-rule: ticket directory (local, not committed by default)
+.deuk-agent-ticket/
+
+.deuk-agent/docs/scratch/

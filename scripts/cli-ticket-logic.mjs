@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, unlinkSync, copyFileSync } from "fs";
-import { basename, dirname, join, relative } from "path";
+import { basename, dirname, join, relative, resolve } from "path";
 import { createHash } from "crypto";
 import { hostname as osHostname } from "os";
-import { toPosixPath, toRepoRelativePath, toSlug, formatTimestampForFile, makeEntryId, detectProjectFromBody, deriveTopicFromBaseName, parseFrontMatter, stringifyFrontMatter, loadInitConfig } from "./cli-utils.mjs";
-
-export const TICKET_DIR_NAME = ".deuk-agent-ticket";
-export const TICKET_INDEX_FILENAME = "INDEX.json";
-export const TICKET_LIST_FILENAME = "TICKET_LIST.md";
-export const TICKET_LIST_TEMPLATE_FILENAME = "TICKET_LIST.template.md";
+import { 
+  toPosixPath, toRepoRelativePath, toSlug, formatTimestampForFile, makeEntryId, 
+  detectProjectFromBody, deriveTopicFromBaseName, parseFrontMatter, stringifyFrontMatter, 
+  loadInitConfig, findFileRecursively,
+  AGENT_ROOT_DIR, TICKET_SUBDIR, TEMPLATE_SUBDIR, RULES_SUBDIR,
+  TICKET_DIR_NAME, TICKET_INDEX_FILENAME, TICKET_LIST_FILENAME, TICKET_LIST_TEMPLATE_FILENAME
+} from "./cli-utils.mjs";
 
 const DEFAULT_TICKET_LIST_TEMPLATE = `# Ticket List
 
@@ -32,37 +33,52 @@ const DEFAULT_TICKET_LIST_TEMPLATE = `# Ticket List
 `;
 
 export function detectConsumerTicketDir(startDir, opts = {}) {
-  let curr = startDir;
+  let curr = resolve(startDir);
   while (curr && curr !== dirname(curr)) {
-    const p = join(curr, TICKET_DIR_NAME);
-    if (existsSync(p)) return p;
+    // Priority 1: New consolidated path
+    const newPath = join(curr, AGENT_ROOT_DIR, TICKET_SUBDIR);
+    if (existsSync(newPath)) return newPath;
+    
+    // Priority 2: Legacy path
+    const legacyPath = join(curr, ".deuk-agent-ticket");
+    if (existsSync(legacyPath)) return legacyPath;
+    
     curr = dirname(curr);
   }
-  // If not found and creation allowed (init), return default local path.
-  // Otherwise return null to indicate no ticket system found.
-  return opts.createIfMissing ? join(startDir, TICKET_DIR_NAME) : null;
+  // If not found and creation allowed (init), return default new local path.
+  return opts.createIfMissing ? join(startDir, AGENT_ROOT_DIR, TICKET_SUBDIR) : null;
 }
 
 export function readTicketIndexJson(cwd) {
   const dir = detectConsumerTicketDir(cwd);
   if (!dir) return { version: 1, updatedAt: null, entries: [] };
   const p = join(dir, TICKET_INDEX_FILENAME);
-  if (!existsSync(p)) return { version: 1, updatedAt: null, entries: [] };
+  if (!existsSync(p)) {
+    return { version: 1, updatedAt: null, entries: [] };
+  }
   try {
     const j = JSON.parse(readFileSync(p, "utf8"));
     const entries = Array.isArray(j.entries) ? j.entries.map(e => ({ ...e, status: e.status || "open" })) : [];
-    return { version: 1, updatedAt: j.updatedAt ?? null, entries };
-  } catch {
-    return { version: 1, updatedAt: null, entries: [] };
+    return { version: 1, updatedAt: j.updatedAt ?? null, activeTicketId: j.activeTicketId ?? null, entries };
+  } catch (err) {
+    console.error(`[ERROR] Failed to parse ${TICKET_INDEX_FILENAME} at ${p}:`, err.message);
+    // Return empty but do NOT overwrite immediately unless forced
+    return { version: 1, updatedAt: null, activeTicketId: null, entries: [], _corrupt: true };
   }
 }
 
 export function writeTicketIndexJson(cwd, indexJson, opts = {}) {
+  if (indexJson._corrupt && !opts.force) {
+    console.error(`[ABORT] Refusing to overwrite potentially corrupt ${TICKET_INDEX_FILENAME}. Use --force to override.`);
+    return;
+  }
   const dir = detectConsumerTicketDir(cwd, { createIfMissing: true });
   const p = join(dir, TICKET_INDEX_FILENAME);
   if (opts.dryRun) return;
   mkdirSync(dir, { recursive: true });
-  writeFileSync(p, JSON.stringify(indexJson, null, 2) + "\n", "utf8");
+  const out = { ...indexJson };
+  delete out._corrupt;
+  writeFileSync(p, JSON.stringify(out, null, 2) + "\n", "utf8");
 }
 
 export function renderTicketListMarkdown(cwd, entries) {
@@ -75,9 +91,10 @@ export function renderTicketListMarkdown(cwd, entries) {
 
   let latestBlock = "- No active ticket entries yet.";
   if (latest) {
-    const relPath = toPosixPath(relative(ticketDir, join(cwd, latest.path)));
+    const absPath = join(cwd, latest.path);
+    const fileUri = `file://${toPosixPath(absPath)}`;
     const safeLatestTitle = String(latest.title || "").replace(/\[|\]/g, '').replace(/\n/g, ' ');
-    latestBlock = `- [${safeLatestTitle}](${relPath})\n- status: \`${latest.status}\` / group: \`${latest.group}\` / project: \`${latest.project}\``;
+    latestBlock = `- [${safeLatestTitle}](${fileUri})\n- status: \`${latest.status}\` / group: \`${latest.group}\` / project: \`${latest.project}\``;
   }
 
   const activeRows = sorted.filter(e => e.status !== "archived").map((e, i) => renderLine(e, i, ticketDir, cwd));
@@ -89,7 +106,7 @@ export function renderTicketListMarkdown(cwd, entries) {
                      (archivedRows.join("\n") || "| - | - | - | No archived tickets | - | - | - | - |");
 
   return template
-    .replaceAll("{{SOURCE_INDEX}}", `${TICKET_DIR_NAME}/${TICKET_INDEX_FILENAME}`)
+    .replaceAll("{{SOURCE_INDEX}}", `${toRepoRelativePath(cwd, ticketDir)}/${TICKET_INDEX_FILENAME}`)
     .replaceAll("{{LATEST_BLOCK}}", latestBlock)
     .replaceAll("{{ENTRIES_ROWS}}", combinedRows)
     .replaceAll("{{CMD_LIST}}", "npx deuk-agent-rule ticket list")
@@ -97,14 +114,16 @@ export function renderTicketListMarkdown(cwd, entries) {
 }
 
 function renderLine(e, i, ticketDir, cwd) {
-  const relPath = toPosixPath(relative(ticketDir, join(cwd, e.path)));
+  const absPath = join(cwd, e.path);
+  const fileUri = `file://${toPosixPath(absPath)}`;
   const statusIcon = e.status === "active" ? "🔥 " : (e.status === "archived" ? "📦 " : "[ ] ");
   const safeTitle = String(e.title || "").replace(/\|/g, '&#124;').replace(/(\n|\\n)+/g, ' ');
   const prio = e.priority || "P2";
-  return `| ${i + 1} | ${statusIcon}${e.status} | ${prio} | ${safeTitle} | ${e.group} | ${e.project} | ${e.createdAt.split('T')[0]} | [open](${relPath}) |`;
+  return `| ${i + 1} | ${statusIcon}${e.status} | ${prio} | ${safeTitle} | ${e.group} | ${e.project} | ${e.createdAt.split('T')[0]} | [open](${fileUri}) |`;
 }
 
 export function writeTicketListFile(cwd, entries, opts = {}) {
+  if (!opts.render) return; // Make it on-demand
   const ticketDir = detectConsumerTicketDir(cwd, { createIfMissing: true });
   const p = join(ticketDir, TICKET_LIST_FILENAME);
   if (opts.dryRun) return;
@@ -116,9 +135,9 @@ export function writeTicketListFile(cwd, entries, opts = {}) {
 export function appendTicketEntry(cwd, entry, opts = {}) {
   const indexJson = readTicketIndexJson(cwd);
   entry.status = entry.status || "open";
-  const next = { version: 1, updatedAt: new Date().toISOString(), entries: [entry, ...indexJson.entries] };
+  const next = { version: 1, updatedAt: new Date().toISOString(), activeTicketId: indexJson.activeTicketId, entries: [entry, ...indexJson.entries] };
   writeTicketIndexJson(cwd, next, opts);
-  writeTicketListFile(cwd, next.entries, opts);
+  if (opts.render) writeTicketListFile(cwd, next.entries, opts);
 }
 
 export function updateTicketEntryStatus(cwd, opts = {}) {
@@ -147,7 +166,7 @@ export function updateTicketEntryStatus(cwd, opts = {}) {
 }
 
 export function performUpgradeMigration(cwd, opts = {}) {
-  const root = join(cwd, TICKET_DIR_NAME);
+  const root = detectConsumerTicketDir(cwd, { createIfMissing: true });
   const archiveDir = join(root, "archive");
   
   const files = collectTicketMarkdownFiles(root).filter(p => {
@@ -224,7 +243,8 @@ export function performUpgradeMigration(cwd, opts = {}) {
 }
 
 export function performDefragmentation(cwd, opts = {}) {
-  const rootTicketDir = join(cwd, TICKET_DIR_NAME);
+  const rootTicketDir = detectConsumerTicketDir(cwd);
+  if (!rootTicketDir) return;
   const tickets = collectTicketMarkdownFiles(rootTicketDir).filter(p => {
     const base = basename(p);
     return base !== "LATEST.md" && base !== TICKET_LIST_FILENAME && base !== TICKET_LIST_TEMPLATE_FILENAME && base !== "ACTIVE_TICKET.md";
@@ -239,19 +259,19 @@ export function performDefragmentation(cwd, opts = {}) {
     if (meta.submodule && meta.submodule !== "global") {
       const subPath = join(cwd, meta.submodule);
       if (existsSync(subPath) && statSync(subPath).isDirectory()) {
-        const subTicketDir = join(subPath, TICKET_DIR_NAME);
+        const subTicketDir = join(subPath, AGENT_ROOT_DIR, TICKET_SUBDIR);
         mkdirSync(subTicketDir, { recursive: true });
         
         const relToRoot = relative(rootTicketDir, abs);
         const destAbs = join(subTicketDir, relToRoot);
         
         if (opts.dryRun) {
-          console.log(`[DRY-RUN] Would move to submodule: ${relToRoot} -> ${meta.submodule}/${TICKET_DIR_NAME}/`);
+          console.log(`[DRY-RUN] Would move to submodule: ${relToRoot} -> ${meta.submodule}/${AGENT_ROOT_DIR}/${TICKET_SUBDIR}/`);
         } else {
           mkdirSync(dirname(destAbs), { recursive: true });
           copyFileSync(abs, destAbs);
           unlinkSync(abs);
-          console.log(`[DEFRAG] Moved: ${meta.submodule}/${TICKET_DIR_NAME}/${relToRoot}`);
+          console.log(`[DEFRAG] Moved: ${meta.submodule}/${AGENT_ROOT_DIR}/${TICKET_SUBDIR}/${relToRoot}`);
           modifiedSubmodules.add(subPath);
         }
       }
@@ -262,14 +282,15 @@ export function performDefragmentation(cwd, opts = {}) {
   if (!opts.dryRun) {
     for (const subCwd of modifiedSubmodules) {
       rebuildTicketIndexFromTopicFilesIfNeeded(subCwd, { ...opts, force: true });
-      syncActiveTicketPointer(subCwd);
+      syncActiveTicketId(subCwd);
     }
   }
 }
 
 function moveFileToArchive(cwd, abs, group) {
-  const archiveBase = join(cwd, TICKET_DIR_NAME, "archive");
-  const targetSubDir = (group === TICKET_DIR_NAME || !group) ? "sub" : group;
+  const ticketDir = detectConsumerTicketDir(cwd);
+  const archiveBase = join(ticketDir, "archive");
+  const targetSubDir = (basename(ticketDir) === TICKET_SUBDIR || !group) ? "sub" : group;
   const targetDir = join(archiveBase, targetSubDir);
   mkdirSync(targetDir, { recursive: true });
   const finalAbs = join(targetDir, basename(abs));
@@ -302,21 +323,30 @@ export function collectTicketMarkdownFiles(dir, out = []) {
 }
 
 /**
- * Finds all .deuk-agent-ticket directories recursively, skipping node_modules/.git
+ * Finds all ticket directories recursively, skipping node_modules/.git
  */
 export function discoverAllTicketDirs(baseCwd, out = []) {
   if (!existsSync(baseCwd)) return out;
   const entries = readdirSync(baseCwd, { withFileTypes: true });
   
-  // If current dir has .deuk-agent-ticket, add it
-  const local = join(baseCwd, TICKET_DIR_NAME);
-  if (existsSync(local) && statSync(local).isDirectory()) {
-    out.push(local);
+  // New path check
+  const localNew = join(baseCwd, AGENT_ROOT_DIR, TICKET_SUBDIR);
+  if (existsSync(localNew) && statSync(localNew).isDirectory()) {
+    out.push(localNew);
+  }
+  // Legacy path check (singular and plural)
+  const localLegacy1 = join(baseCwd, ".deuk-agent-ticket");
+  if (existsSync(localLegacy1) && statSync(localLegacy1).isDirectory()) {
+    out.push(localLegacy1);
+  }
+  const localLegacy2 = join(baseCwd, ".deuk-agent-tickets");
+  if (existsSync(localLegacy2) && statSync(localLegacy2).isDirectory()) {
+    out.push(localLegacy2);
   }
 
   for (const ent of entries) {
     if (!ent.isDirectory()) continue;
-    if (ent.name === "node_modules" || ent.name === ".git" || ent.name === TICKET_DIR_NAME) continue;
+    if (ent.name === "node_modules" || ent.name === ".git" || ent.name === AGENT_ROOT_DIR || ent.name === ".deuk-agent-ticket" || ent.name === ".deuk-agent-tickets") continue;
     discoverAllTicketDirs(join(baseCwd, ent.name), out);
   }
   return out;
@@ -324,15 +354,15 @@ export function discoverAllTicketDirs(baseCwd, out = []) {
 
 export function rebuildTicketIndexFromTopicFilesIfNeeded(cwd, opts = {}) {
   const indexJson = readTicketIndexJson(cwd);
-  // Hierarchical Scan: If we are at root, discover all sub-dirs. 
-  const isRoot = existsSync(join(cwd, "DeukAgentRules")) || existsSync(join(cwd, "project_i"));
+  // Hierarchical Scan: If we are at root (has AGENT_ROOT_DIR), discover all sub-dirs. 
+  const isRoot = existsSync(join(cwd, AGENT_ROOT_DIR)) || existsSync(join(cwd, ".git"));
   
   let ticketDirs = [];
   if (opts.recursive !== false && isRoot) {
     ticketDirs = discoverAllTicketDirs(cwd);
   } else {
-    const local = join(cwd, TICKET_DIR_NAME);
-    if (existsSync(local) && statSync(local).isDirectory()) {
+    const local = detectConsumerTicketDir(cwd);
+    if (local) {
       ticketDirs = [local];
     }
   }
@@ -366,7 +396,7 @@ export function rebuildTicketIndexFromTopicFilesIfNeeded(cwd, opts = {}) {
       topic: deriveTopicFromBaseName(basename(abs)),
       group: basename(dirname(abs)),
       project,
-      submodule: meta.submodule || (rel.startsWith(TICKET_DIR_NAME) ? "" : rel.split("/")[0]),
+      submodule: meta.submodule || (rel.startsWith(AGENT_ROOT_DIR) ? "" : rel.split("/")[0]),
       createdAt: meta.createdAt || statSync(abs).mtime.toISOString(),
       updatedAt: meta.updatedAt || statSync(abs).mtime.toISOString(),
       path: rel,
@@ -391,84 +421,31 @@ export function rebuildTicketIndexFromTopicFilesIfNeeded(cwd, opts = {}) {
   return indexJson;
 }
 
-export function parseLegacyTicketMeta(legacyBody) {
-  // Supports ## Task: ... or # Plan: ... or # Implementation Plan: ...
-  const titleMatch = legacyBody.match(/^(?:##\s+Task:|#\s+Plan:|#\s+Implementation Plan:)\s*(.+)$/m);
-  const title = titleMatch ? titleMatch[1].trim() : "Migrated legacy plan";
 
-  let group = "sub";
-  const lower = legacyBody.toLowerCase();
-  if (lower.includes("discussion")) group = "discussion";
-  else if (lower.includes("main")) group = "main";
-
-  return { title, group, project: detectProjectFromBody(legacyBody) };
-}
-
-export function getLegacyMigrationCandidate(cwd) {
-  const candidateFiles = ["LATEST.md"];
-  const candidateDirs = [cwd, join(cwd, TICKET_DIR_NAME), join(cwd, "ticket")];
-  for (const dir of candidateDirs) {
-    for (const file of candidateFiles) {
-      const p = join(dir, file);
-      if (existsSync(p)) {
-        const body = readFileSync(p, "utf8");
-        // Check for common plan or task markers
-        if (body.length > 50 && (/^##\s+Task:/m.test(body) || /^#\s+Plan:/m.test(body))) {
-          return { latestPath: p, body };
-        }
-      }
-    }
-  }
-  return null;
-}
-
-export function syncActiveTicketPointer(cwd) {
+export function syncActiveTicketId(cwd) {
   const index = readTicketIndexJson(cwd);
   // Find the single "active" ticket, or the most recent "open" ticket.
   const activeEntry = index.entries.find(e => e.status === "active") || 
-                      index.entries.find(e => e.status === "open");
+                       index.entries.find(e => e.status === "open");
   
   const ticketDir = detectConsumerTicketDir(cwd);
   if (!ticketDir) return;
 
-  // LATEST.md is deprecated. Remove it on every sync to prevent stale reads.
-  const legacyLatestPath = join(ticketDir, "LATEST.md");
-  if (existsSync(legacyLatestPath)) {
-    unlinkSync(legacyLatestPath);
+  const activeId = activeEntry ? activeEntry.id : null;
+  if (index.activeTicketId !== activeId) {
+      writeTicketIndexJson(cwd, { ...index, activeTicketId: activeId });
   }
 
+  // Cleanup redundant pointers from legacy approach
+  const legacyLatestPath = join(ticketDir, "LATEST.md");
   const pointerPathMd = join(ticketDir, "ACTIVE_TICKET.md");
   const pointerPathJson = join(ticketDir, "ACTIVE_TICKET.json");
   
-  if (activeEntry) {
-    const srcAbs = join(cwd, activeEntry.path);
-    if (existsSync(srcAbs)) {
-      const redirectBody = `# 🚀 Active Ticket Redirect\n\n> **[STOP] DO NOT EDIT THIS FILE!**\n> This is a pointer file. Editing this file will result in data loss because it is not the original ticket.\n\n**Please open and edit the original ticket here:**\n🔗 [${basename(activeEntry.path)}](/${toPosixPath(activeEntry.path)})\n\n---\n*Original Path:* \`${activeEntry.path}\`\n*Topic:* \`${activeEntry.topic}\``;
-      const redirectContent = stringifyFrontMatter({
-          id: activeEntry.id || "pointer",
-          title: activeEntry.title || "ACTIVE_TICKET_POINTER",
-          topic: activeEntry.topic || "",
-          status: activeEntry.status || "active",
-          submodule: activeEntry.submodule || "",
-          project: activeEntry.project || "",
-          createdAt: activeEntry.createdAt || new Date().toISOString()
-      }, redirectBody);
-      writeFileSync(pointerPathMd, redirectContent, "utf8");
-      writeFileSync(pointerPathJson, JSON.stringify({ ...activeEntry, syncedAt: new Date().toISOString() }, null, 2), "utf8");
-      
-      // Hook: Optional background sync to remote pipeline
-      const config = loadInitConfig(cwd);
-      if (config && config.remoteSync && config.pipelineUrl) {
-        syncToPipeline(config.pipelineUrl, { action: "sync_active", ticket: activeEntry });
-      }
-      return;
+  for (const p of [legacyLatestPath, pointerPathMd, pointerPathJson]) {
+    if (existsSync(p)) {
+      unlinkSync(p);
     }
   }
-
-  // If no active ticket, clear pointers
-  const noTicketMsg = "# No Active Ticket Found\nUse `npx deuk-agent-rule ticket list` to find open tasks.\n";
-  writeFileSync(pointerPathMd, noTicketMsg, "utf8");
-  writeFileSync(pointerPathJson, JSON.stringify({ status: "none", message: "No active ticket" }), "utf8");
 }
 
 
@@ -485,27 +462,57 @@ export function getHostnameSlug() {
 }
 
 /**
+ * Normalizes all paths in INDEX.json by finding the actual files in the ticket directory.
+ * Useful after migration or manual folder restructuring.
+ */
+export function normalizeTicketPaths(cwd, opts = {}) {
+  const index = readTicketIndexJson(cwd);
+  const ticketDir = detectConsumerTicketDir(cwd);
+  const entries = index.entries || [];
+  let modified = false;
+
+  for (const entry of entries) {
+    if (!entry.path) continue;
+    
+    const currentAbs = join(cwd, entry.path);
+    if (!existsSync(currentAbs)) {
+      const fileName = basename(entry.path);
+      const found = findFileRecursively(ticketDir, fileName);
+      if (found) {
+        const newRel = toRepoRelativePath(cwd, found);
+        if (entry.path !== newRel) {
+          entry.path = newRel;
+          modified = true;
+        }
+      }
+    }
+  }
+
+  if (modified) {
+    index.updatedAt = new Date().toISOString();
+    writeTicketIndexJson(cwd, index);
+    if (!opts.silent) console.log(`[NORMALIZE] Corrected stale paths in ${basename(cwd)}/INDEX.json`);
+  }
+  return modified;
+}
+
+/**
  * Computes next sequential 3-digit ticket number by scanning all entries
- * in the current INDEX.json. Parses both legacy (`ticket_NNN_*`) and
- * new (`NNN-topic-hostname`) formats for backward compatibility.
+ * in the current INDEX.json. Parses new (`NNN-topic-hostname`) format.
  *
  * @param {object[]} existingEntries - entries array from INDEX.json
  * @returns {{ num: number, hostname: string }}
  */
 export function computeNextTicketNumber(existingEntries) {
   const hostname = getHostnameSlug();
-  // Legacy: ticket_NNN_*  |  New: NNN-* (NNN is strictly 3-4 digits, NOT a unix timestamp)
-  const legacyRe = /^ticket_(\d{3,4})_/;
   const newRe = /^(\d{3,4})-/;
   let max = 0;
   for (const e of (existingEntries || [])) {
     const id = String(e.id || '');
-    const mLegacy = id.match(legacyRe);
-    const mNew = id.match(newRe);
-    const m = mLegacy || mNew;
+    const m = id.match(newRe);
     if (m) {
       const n = parseInt(m[1], 10);
-      if (n > max) max = n;
+      if (n > max && n < 10000) max = n; // Sanity check for 4-digit limit
     }
   }
   return { num: max + 1, hostname };
@@ -521,23 +528,21 @@ export function computeNextTicketNumber(existingEntries) {
  * @param {object[]} existingEntries - entries array from INDEX.json (may be empty)
  */
 export function generateTicketId(topicSlug, existingEntries) {
-  const { num, hostname } = computeNextTicketNumber(existingEntries);
-  const numStr = String(num).padStart(3, '0');
-  const slug = toSlug(topicSlug || 'ticket').slice(0, 32);
-  return `${numStr}-${slug}-${hostname}`;
-}
-
-/**
- * @deprecated Use generateTicketId(topicSlug, existingEntries)
- * Kept for backwards compatibility.
- */
-export function generateTicketIdLegacy(title) {
-  const seed = `${title}-${Date.now()}-${Math.random()}`;
-  try {
-    return "ticket_" + createHash("md5").update(seed).digest("hex").slice(0, 12);
-  } catch {
-    return "ticket_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+  const hostname = getHostnameSlug();
+  const slug = toSlug(topicSlug || 'ticket');
+  
+  // If topicSlug already starts with NNN-, respect it
+  const match = slug.match(/^(\d{3,4})-(.*)/);
+  if (match) {
+    const numStr = match[1];
+    const restSlug = match[2].slice(0, 32);
+    return `${numStr}-${restSlug}-${hostname}`;
   }
+
+  const { num } = computeNextTicketNumber(existingEntries);
+  const numStr = String(num).padStart(3, '0');
+  const finalSlug = slug.slice(0, 32);
+  return `${numStr}-${finalSlug}-${hostname}`;
 }
 
 /**

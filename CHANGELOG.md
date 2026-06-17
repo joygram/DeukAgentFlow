@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.11] - 2026-04-22
+
+### Added
+
+- implement modernized workflow diagrams with Mermaid v8.8.0 compatibility, semantic color palette, and native SVG text rendering for IDE dark mode compatibility
+
+## [2.5.1] - 2026-04-22
+
+### Added
+
+- **cli:** add --clean flag to init command for safe configuration reset
+
+## [2.5.0] - 2026-04-22
+
+### Added
+
+-  Agent-Agnostic Workflow and Archiving Protocol
+- **cli:** parse DeukRag config for conditions and auto-scaffold plan templates
+-  implement Frontmatter-driven modular rule assembly (Ticket 045)
+-  Model-specific hard rules (gemini.md) and Continuous RAG enforcement
+- **rules:** enforce Phase 0 MCP RAG in multi-ai-workflow MDC
+- **rules:** harden post-mortem workflow and mandate follow-up chaining
+- **templates:** enforce Phase 0 RAG Research checklists in ticket template
+
+
+### Fixed
+
+-  handoff path format, 3-tier template system, recursive init with normalization
+-  improve migration robustness with merging logic and cleanup dead code
+-  recursive directory merge for legacy migration
+
+
+### Changed
+
+-  add ticket 045 completion report
+-  add what's new for v2.4, RAG engine notice, and SEO keywords
+- **rules:** Add Fast-Track workflow to prevent ticket loop overhead
+- **rules:** enforce Continuous RAG Policy and Absolute MCP Priority
+- **rules:** Mandate Continuous RAG during execution and verification phases
+- **rules:** Restore TDD workflow but ban interactive CLI looping
+-  upgrade workflow diagram and add migration troubleshooting guide
+
 ## [2.4.6] - 2026-04-19
 
 ### Fixed

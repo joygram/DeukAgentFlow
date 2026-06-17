@@ -1,0 +1,5 @@
+<!-- deuk-agent-rule:deprecated -->
+This file is deprecated. Rules have moved to:
+- Target: .cursor/rules/deuk-agent.mdc
+- All agents: AGENTS.md
+<!-- deuk-agent-rule:deprecated:end -->

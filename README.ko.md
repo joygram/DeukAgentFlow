@@ -21,6 +21,13 @@ Cursor, GitHub Copilot, Gemini / Antigravity, Claude, Windsurf, JetBrains AI Ass
 > **🚀 핵심 가치:**
 > 세션당 약 1,500~2,000 토큰에 달하는 강제 로드 컨텍스트를 200~300 토큰 수준으로 압축합니다. AI가 모놀리식 전체 레포지토리를 헤매지 않도록, 작업이 속한 **"해당 서브모듈(Submodule)"** 내부에 티켓을 격리하여 가장 정확한 맥락에서 작업을 지시할 수 있습니다.
 
+### 📢 What's New in v2.4 (최신 버전 소개)
+최신 2.4 버전에서는 **Dynamic Rule Assembly(동적 룰 조립) 엔진**이 도입되어, 프로젝트 환경(예: DeukRag 활성화 여부 등)을 스크립트가 스스로 감지하고 필요한 룰만 조합하여 `AGENTS.md`에 주입합니다.
+또한 CLI 티켓 시스템이 고도화되어 `deuk-agent-rule ticket create` 명령 시 설계(Plan) 문서를 자동 스캐폴딩하고 티켓과 연결해 줍니다. Phase 기반 이슈 추적 기능도 대폭 강화되었습니다.
+
+> **💡 RAG 엔진 연동 가이드 준비 중!**
+> 현재 사내 지식 검색 엔진인 **DeukRag** 시스템 (MCP)과 본 에이전트 룰을 완벽히 연동하여, AI가 티켓을 해결할 때 관련 과거 히스토리와 사내 규약을 스스로 찾아보고 적용하여 **효과를 극대화**할 수 있도록 하는 심화 기능 및 매뉴얼을 준비 중에 있습니다.
+
 ---
 
 ## 🛠️ 워크스페이스 초기화 (Getting Started)
@@ -56,17 +63,43 @@ deuk-agent-rule init
 기존 환경 설정(`.deuk-agent-rule.config.json`)을 기억하고 있으므로 `--non-interactive`를 주면 묻지도 따지지도 않고 규칙만 즉시 최신화해 줍니다.
 ```bash
 npm install deuk-agent-rule@latest
-npx deuk-agent-rule init --non-interactive
+deuk-agent-rule init --non-interactive
 ```
+
+> [!TIP]
+> **💡 구버전 마이그레이션 실패 시 강제 초기화 방법**
+> 기존 템플릿 구조가 너무 구버전이거나 설정 파일(`.config.json`)이 꼬여서 마이그레이션 및 동기화가 계속 실패한다면, `--clean` 옵션으로 기존 룰셋과 설정을 날리고 새로 세팅하는 것이 가장 빠릅니다. **(기존 작성된 티켓들은 영향을 받지 않습니다)**
+> ```bash
+> deuk-agent-rule init --clean --interactive
+> ```
 
 ---
 
 ## 🎯 핵심 워크플로우 (The Distributed Ticket Workflow)
 
-`npx deuk-agent-rule init`을 실행하면 현재 저장소 루트(서브모듈 포함)에 아래 두 개의 핵심 폴더가 등장합니다. 
+`deuk-agent-rule init`을 실행하면 현재 저장소 루트(서브모듈 포함)에 아래 두 개의 핵심 폴더가 등장합니다. 
 
 1. **`.deuk-agent-templates/` (에이전트 템플릿)**: AI가 어떠한 양식으로 작업을 처리하고 보고해야 하는지 정의된 공식 뼈대(`TICKET_TEMPLATE.md`)가 지정됩니다.
 2. **`.deuk-agent-ticket/` (티켓 실행 공간)**: 실제 지시서(`TICKET-XXX.md`)가 발급되는 공간입니다. 서브모듈 단위로 티켓을 분산 관리할 수 있어 서브모듈만 떼어가도 히스토리가 유지됩니다. (공유 정책에 따라 `.gitignore`에 자동으로 기재될 수 있습니다.)
+
+### 💡 Workflow Overview
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}, "themeCSS": ".node text { fill: #ffffff !important; stroke: none !important; }"} }%%
+graph TD
+    classDef action fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
+    classDef phase fill:#475569,stroke:#334155,stroke-width:2px,color:#ffffff;
+    classDef decision fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;
+    classDef highlight fill:#dc2626,stroke:#b91c1c,stroke-width:2px,color:#ffffff;
+
+    A(Step 1: Ticket Creation):::action --> B(Step 2: Agent Execution):::phase
+    B --> C(Step 3: Verification & Closure):::phase
+    
+    C --> D{Issues Found?}:::decision
+    
+    D -->|Yes| E(MANDATORY Follow-up Chaining):::highlight
+    E --> F(Step 4: Archiving):::action
+    D -->|No| F
+```
 
 이러한 샌드박스 폴더들을 활용하여 스퍼트를 올리는 **최적의 AI 코딩 4단계**는 다음과 같습니다.
 
@@ -74,7 +107,7 @@ npx deuk-agent-rule init --non-interactive
 AI에게 중구난방으로 지시하지 마세요. 명확한 티켓을 발급하여 **문맥(Context)을 소속 저장소 단위로 좁혀주어야** 합니다.
 
 ```bash
-npx deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI
+deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI
 ```
 명령어를 치면 `.deuk-agent-ticket/` 폴더 내에 템플릿이 입혀진 `TICKET-ui-refactoring.md` 파일이 생성됩니다.
 
@@ -93,7 +126,7 @@ AI는 티켓 내에 정의된 Phase(진행 단계)를 충실히 읽고, **자신
 AI가 코드를 작성하며 티켓 내 마크업의 체크박스(`[x]`)를 갱신합니다. 에이전트의 세션(기억 한계)이 가득 차면, 티켓 내용만 디스크에 남겨둔 채 챗봇 창을 끄고 새 창을 열어 다시 [Step 2]를 지시하면 깔끔하게 인수인계가 이루어집니다.
 모든 작업이 끝나면 Phase 상태를 `[Phase 완료]`로 승급시킵니다. 터미널 명령어를 직접 치는 대신, **AI 챗봇 프롬프트에 "현재 진행 중인 티켓 리스트를 보여줘" 또는 "완료된 티켓들을 보고서와 함께 아카이브 해 줘"라고 자연어로 지시**하여 AI가 알아서 CLI를 호출해 리스트업 및 관리하게 위임할 수도 있습니다.
 ```bash
-npx deuk-agent-rule ticket list
+deuk-agent-rule ticket list
 ```
 ```text
 #  STATUS   SUBMODULE   GROUP       PROJECT     CREATED                  TITLE
@@ -140,19 +173,20 @@ AI는 `AGENTS.md`에 정의된 **[TICKET VERIFICATION RULE]**에 따라 즉시 3
 
 | 커맨드 | 설명 / 자연어 프롬프트 지시 예시 |
 |--------|------|
-| `npx deuk-agent-rule ticket create ...` | 신규 티켓 문서 생성 (`--group`, `--project`, `--submodule` 지정 가능) <br>💬 *"새 티켓 만들어 (주제: refactor, 타겟: sub1)"* |
-| `npx deuk-agent-rule ticket list` | 활성 티켓의 현재 상태 및 리스트업 (`--archived`, `--all`, `--json` 지원) <br>💬 *"티켓 리스트"* |
-| `npx deuk-agent-rule ticket use --latest ...` | 빌드 파이프라인 연동을 위해 최근 티켓의 파일 경로만 반환 <br>💬 *"최근 티켓 경로"* |
-| `npx deuk-agent-rule ticket close ...` | 파일을 물리적으로 이동시키지 않고 상태만 완료로 잠금(Soft-close) <br>💬 *"현재 티켓 상태 닫아 (완료)"* |
-| `npx deuk-agent-rule ticket upgrade` | 과거 티켓 구조를 V2(YAML FM)로 마이그레이션 및 서브모듈 분산(DEFRAG) 실행 <br>💬 *"티켓 V2 업그레이드"* |
-| `npx deuk-agent-rule ticket archive ...` | 완료된 티켓을 안전하게 보관소(`archive/`)로 이동 및 갱신 <br>💬 *"현재 티켓 아카이브해 (보고서 첨부)"* |
-| `npx deuk-agent-rule ticket reports` | 영구 보관된 에이전트 작업 보고서(`reports/`) 목록 조회 <br>💬 *"완료된 티켓 보고서 목록"* |
+| `deuk-agent-rule ticket create ...` | 신규 티켓 문서 생성 (`--group`, `--project`, `--submodule` 지정 가능) <br>💬 *"새 티켓 만들어 (주제: refactor, 타겟: sub1)"* |
+| `deuk-agent-rule ticket list` | 활성 티켓의 현재 상태 및 리스트업 (`--archived`, `--all`, `--json` 지원) <br>💬 *"티켓 리스트"* |
+| `deuk-agent-rule ticket use --latest ...` | 빌드 파이프라인 연동을 위해 최근 티켓의 파일 경로만 반환 <br>💬 *"최근 티켓 경로"* |
+| `deuk-agent-rule ticket close ...` | 파일을 물리적으로 이동시키지 않고 상태만 완료로 잠금(Soft-close) <br>💬 *"현재 티켓 상태 닫아 (완료)"* |
+| `deuk-agent-rule ticket upgrade` | 과거 티켓 구조를 V2(YAML FM)로 마이그레이션 및 서브모듈 분산(DEFRAG) 실행 <br>💬 *"티켓 V2 업그레이드"* |
+| `deuk-agent-rule ticket archive ...` | 완료된 티켓을 안전하게 보관소(`archive/`)로 이동 및 갱신 <br>💬 *"현재 티켓 아카이브해 (보고서 첨부)"* |
+| `deuk-agent-rule ticket reports` | 영구 보관된 에이전트 작업 보고서(`reports/`) 목록 조회 <br>💬 *"완료된 티켓 보고서 목록"* |
 
 ### Init 고급 옵션
 | 플래그 | 기본값 | 설명 |
 |--------|--------|------|
 | `--non-interactive` | 끔 | CI/스크립트용. 대화형 인터페이스를 끄고 기존 설정(`.config.json`)을 채택 |
 | `--interactive` | 끔 | 이미 생성된 설정값이 있어도 무시하고 강제로 다시 묻기 설정 시작 |
+| `--clean` | 끔 | 기존 템플릿과 설정 파일을 강제로 삭제한 뒤 초기화 진행 |
 | `--cwd <path>` | 현재 디렉터리 | 타깃이 되는 프로젝트의 워크스페이스 Root 절대/상대경로 지정 |
 | `--dry-run` | 끔 | 실제 파일을 생성/변조하지 않고 콘솔에 동작 결과 텍스트만 출력 |
 | `--backup` | 끔 | `AGENTS.md`나 룰 파일 덮어쓰기 전 원본을 `*.bak`으로 안전 보관 |
@@ -169,3 +203,8 @@ AI는 `AGENTS.md`에 정의된 **[TICKET VERIFICATION RULE]**에 따라 즉시 3
    
    위 명령어를 실행하면 내부적으로 `commit-and-tag-version` 툴이 작동되어 `package.json` 버전 상향, `CHANGELOG.md` 자동 갱신 요약, 릴리즈 커밋, 그리고 태깅 작업까지 한번에 즉시 처리됩니다.
 3. **분산 배포 보정 (OSS Sync)**: 에이전트를 통해 `npm run sync:oss`를 실행하면 자동화 스크립트가 릴리즈 에셋을 스캔하여 OSS 미러 저장소(`DeukAgentRulesOSS`)로 최종적인 퍼블리시 버전을 복제 및 반영합니다.
+
+---
+
+### 🏷️ Keywords for NPM & GitHub Search
+`#cursorrules` `#copilot-instructions` `#ai-agents` `#deuk-agent` `#mcp` `#rag` `#windsurf` `#cline` `#llm-workflow` `#productivity` `#prompt-engineering` `#developer-tools`

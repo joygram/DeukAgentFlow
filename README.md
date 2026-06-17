@@ -21,6 +21,13 @@ It standardizes project rules (`AGENTS.md`, `.cursor/rules`) and strongly preven
 > **🚀 Core Value:**
 > Compresses the mandatory loaded context of approx. 1,500~2,000 tokens per session down to a mere 200~300 tokens. By isolating the AI to a specific **"Target Submodule"** using exact tickets (work orders), it prevents the AI from wandering through an entire monolithic repository.
 
+### 📢 What's New in v2.4
+In the latest v2.4 release, the **Dynamic Rule Assembly Engine** has been introduced. The script automatically detects your project environment (e.g., DeukRag MCP integration) and injects only the necessary context-aware rules into `AGENTS.md`.
+The CLI ticketing system has also been upgraded: running `deuk-agent-rule ticket create` now automatically scaffolds design Plan documents and links them to the ticket, heavily reinforcing the Phase-based issue tracking workflow.
+
+> **💡 RAG Engine Integration Guide (Coming Soon)**
+> We are currently preparing an advanced integration manual and feature update. This will perfectly integrate these agent rules with our internal knowledge search engine **DeukRag (MCP)**, allowing your AI agent to automatically search past tickets and internal conventions to maximize its contextual awareness and problem-solving effectiveness!
+
 ---
 
 ## 🛠️ Getting Started (Workspace Initialization)
@@ -55,17 +62,43 @@ When a new version of the agent rules or templates is released, you can sync the
 Since your previous configurations are saved (`.deuk-agent-rule.config.json`), using the `--non-interactive` flag will quietly and cleanly overwrite the obsolete rules with the latest ones without asking any questions.
 ```bash
 npm install deuk-agent-rule@latest
-npx deuk-agent-rule init --non-interactive
+deuk-agent-rule init --non-interactive
 ```
+
+> [!TIP]
+> **💡 Troubleshooting: Legacy Version Migration Failures**
+> If you are migrating from a very old version and `init` repeatedly fails due to corrupted configurations or heavily modified template structures, the fastest fix is to perform a clean initialization using the `--clean` flag. **(This will not affect your existing tickets.)**
+> ```bash
+> deuk-agent-rule init --clean --interactive
+> ```
 
 ---
 
 ## 🎯 The Ticket Workflow
 
-Running `npx deuk-agent-rule init` deploys a **zero-touch scaffolding sandbox** at your workspace root, spawning two essential directories:
+Running `deuk-agent-rule init` deploys a **zero-touch scaffolding sandbox** at your workspace root, spawning two essential directories:
 
 1. **`.deuk-agent-templates/` (Agent Templates)**: Houses the official blueprint (`TICKET_TEMPLATE.md`) dictating how AIs must process and report tasks. Committed alongside your source code to serve as the team's rulebook.
 2. **`.deuk-agent-ticket/` (Ticket Execution Space)**: The covert space where volatile instructions (`TICKET-XXX.md`) are exchanged between agents and workers. (Automatically hidden by `.gitignore` to prevent security leaks and repository bloat).
+
+### 💡 Workflow Overview
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": false}, "themeCSS": ".node text { fill: #ffffff !important; stroke: none !important; }"} }%%
+graph TD
+    classDef action fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
+    classDef phase fill:#475569,stroke:#334155,stroke-width:2px,color:#ffffff;
+    classDef decision fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;
+    classDef highlight fill:#dc2626,stroke:#b91c1c,stroke-width:2px,color:#ffffff;
+
+    A(Step 1: Ticket Creation):::action --> B(Step 2: Agent Execution):::phase
+    B --> C(Step 3: Verification & Closure):::phase
+    
+    C --> D{Issues Found?}:::decision
+    
+    D -->|Yes| E(MANDATORY Follow-up Chaining):::highlight
+    E --> F(Step 4: Archiving):::action
+    D -->|No| F
+```
 
 The optimal **4-Step AI Coding Sequence** utilizing these sandbox folders is as follows.
 
@@ -73,7 +106,7 @@ The optimal **4-Step AI Coding Sequence** utilizing these sandbox folders is as 
 Do not issue scattered, unbounded commands to your AI. Narrowing the **context** via a clear ticket is strictly required to prevent astronomical costs and accidental code corruption.
 
 ```bash
-npx deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI
+deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI
 ```
 This command instantly creates a templated `TICKET-ui-refactoring.md` file within the `.deuk-agent-ticket/` directory.
 
@@ -92,7 +125,7 @@ The AI will faithfully read the defined Phases in the ticket and write optimized
 As the AI writes the code, it will simultaneously update the markup checkboxes (`[x]`) inside the ticket. If the agent's session memory limit is approaching, simply leave the ticket file saved, turn off the chat window, open a fresh session, and issue [Step 2] again. The handoff (session transfer) is seamlessly completed.
 Once all steps are accomplished, promote the Phase status to `[Phase Complete]`. Instead of manually typing terminal commands, **you can simply tell your AI chatbot via natural language prompt: "Show me the list of active tickets" or "Archive the completed tickets with reports"**, and the AI will autonomously invoke the CLI to manage them for you.
 ```bash
-npx deuk-agent-rule ticket list
+deuk-agent-rule ticket list
 ```
 ```text
 #  STATUS   SUBMODULE   GROUP       PROJECT     CREATED                  TITLE
@@ -139,19 +172,20 @@ Instead of manually typing the CLI commands below into the terminal, you can **d
 
 | Command | Description / Natural Language Prompt Example |
 |--------|------|
-| `npx deuk-agent-rule ticket create ...` | Generates a new ticket document (accepts `--group`, `--project`, `--submodule`) <br>💬 *"Create new ticket (topic: refactor)"* |
-| `npx deuk-agent-rule ticket list` | Lists and displays active tickets (`--archived`, `--all`, `--json` supported) <br>💬 *"Ticket list"* |
-| `npx deuk-agent-rule ticket use --latest ...` | Returns only the file path of the most recent ticket <br>💬 *"Recent ticket path"* |
-| `npx deuk-agent-rule ticket close ...` | Soft-closes a target ticket by locking its status to completed without moving the file <br>💬 *"Close this ticket"* |
-| `npx deuk-agent-rule ticket upgrade` | Migrates legacy ticket structures to V2 (YAML FM) and triggers submodule DEFRAG <br>💬 *"Upgrade tickets to v2"* |
-| `npx deuk-agent-rule ticket archive ...` | Securely moves completed tickets to `archive/` and updates INDEX <br>💬 *"Archive this ticket (attach report)"* |
-| `npx deuk-agent-rule ticket reports` | Lists structurally preserved agent work reports (`reports/`) <br>💬 *"List archived reports"* |
+| `deuk-agent-rule ticket create ...` | Generates a new ticket document (accepts `--group`, `--project`, `--submodule`) <br>💬 *"Create new ticket (topic: refactor)"* |
+| `deuk-agent-rule ticket list` | Lists and displays active tickets (`--archived`, `--all`, `--json` supported) <br>💬 *"Ticket list"* |
+| `deuk-agent-rule ticket use --latest ...` | Returns only the file path of the most recent ticket <br>💬 *"Recent ticket path"* |
+| `deuk-agent-rule ticket close ...` | Soft-closes a target ticket by locking its status to completed without moving the file <br>💬 *"Close this ticket"* |
+| `deuk-agent-rule ticket upgrade` | Migrates legacy ticket structures to V2 (YAML FM) and triggers submodule DEFRAG <br>💬 *"Upgrade tickets to v2"* |
+| `deuk-agent-rule ticket archive ...` | Securely moves completed tickets to `archive/` and updates INDEX <br>💬 *"Archive this ticket (attach report)"* |
+| `deuk-agent-rule ticket reports` | Lists structurally preserved agent work reports (`reports/`) <br>💬 *"List archived reports"* |
 
 ### Advanced Init Options
 | Flag | Default | Description |
 |--------|--------|------|
 | `--non-interactive` | Off | For CI/Scripts. Disables interactive UI and adopts existing `.config.json` |
 | `--interactive` | Off | Forces the interactive setup to reappear even if config already exists |
+| `--clean` | Off | Deletes legacy templates and configs before initializing |
 | `--cwd <path>` | Current dir | Adjust target workspace root (absolute/relative path) |
 | `--dry-run` | Off | Simulates the execution text in the console without generating/altering files |
 | `--backup` | Off | Safely creates `*.bak` copies of `AGENTS.md` and rule files before overwriting |
@@ -168,3 +202,8 @@ Before pushing any core updates, system templates, or feature changes to this pa
    
    Executing the bump command will trigger the `commit-and-tag-version` pipeline: it bumps the version in `package.json`, auto-generates the `CHANGELOG.md` log, creates a release commit, and applies the release tag.
 3. **Synchronize & Mirror (OSS Sync)**: As a final step, ask your agent to run `npm run sync:oss`. The automation script will clean the release assets and push the bundled versions to the mirror repository (`DeukAgentRulesOSS`).
+
+---
+
+### 🏷️ Keywords for NPM & GitHub Search
+`#cursorrules` `#copilot-instructions` `#ai-agents` `#deuk-agent` `#mcp` `#rag` `#windsurf` `#cline` `#llm-workflow` `#productivity` `#prompt-engineering` `#developer-tools`

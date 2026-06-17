@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync } from "fs";
+import { existsSync, rmSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parseArgs, parseTicketArgs } from "./cli-args.mjs";
@@ -77,6 +77,14 @@ async function main() {
 // Removed legacy migration runTicketMigrate
 
 async function handleInit(opts) {
+  if (opts.clean && !opts.dryRun) {
+    console.log(`[CLEAN] Removing legacy templates and config...`);
+    const templatesDir = join(opts.cwd, ".deuk-agent-templates");
+    const configFile = join(opts.cwd, ".deuk-agent-rule.config.json");
+    if (existsSync(templatesDir)) rmSync(templatesDir, { recursive: true, force: true });
+    if (existsSync(configFile)) rmSync(configFile, { force: true });
+  }
+
   if (!opts.interactive && !opts.nonInteractive && !loadInitConfig(opts.cwd)) {
     // If no config and not interactive, prompt unless non-interactive
     await runInteractive(opts);

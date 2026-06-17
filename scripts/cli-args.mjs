@@ -38,6 +38,7 @@ export function parseArgs(argv) {
     else if (a === "--backup") out.backup = true;
     else if (a === "--non-interactive") out.nonInteractive = true;
     else if (a === "--interactive") out.interactive = true;
+    else if (a === "--clean") out.clean = true;
     else if (a === "--tag") out.tag = argv[++i];
     else if (a === "--marker-begin") out.markerBegin = argv[++i];
     else if (a === "--marker-end") out.markerEnd = argv[++i];
