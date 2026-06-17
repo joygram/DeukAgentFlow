@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
   <br />
-  <h1>Deuk Agent Flow v5.0.0</h1>
+  <h1>Deuk Agent Flow v5.0.2</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/dm/deuk-agent-flow.svg?label=downloads" alt="deuk-agent-flow npm downloads" /></a>
