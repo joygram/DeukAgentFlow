@@ -144,7 +144,7 @@ npm install -g deuk-agent-rule
 deuk-agent-rule init
 ```
 
-If you manage many repos under one workspace, run `deuk-agent-flow init` in each project root that owns its own rules and tickets. The workspace root can act as a shared pointer, but day-to-day work usually belongs to each project's `PROJECT_RULE.md` and `.deuk-agent/`.
+If you manage many repos under one workspace, run `deuk-agent-flow init` in each project root that owns its own rules and tickets. The workspace root can act as a shared pointer, but the project root owns the live `PROJECT_RULE.md` and `.deuk-agent/`, and those rule files outrank this guide when there is any conflict.
 
 This is where the effect compounds: use the workspace root as the shared entry point, each project root as an independent ticket/rule/verification boundary, and nested apps or servers as separate projects only when they have their own lifecycle.
 
@@ -180,7 +180,7 @@ npm run smoke:npm:docker
 
 The publish helper runs `npm test`, syncs the `deuk-agent-rule` compatibility package version to the root package version, publishes `deuk-agent-flow` first, and then publishes `deuk-agent-rule`.
 
-For the full migration sequence, see [docs/internal/deukagentflow-migration-plan.ko.md](docs/internal/deukagentflow-migration-plan.ko.md).
+For the full deployment and project-root setup flow, see the practical usage guide below.
 
 Legacy note: `deuk-agent-rule` remains available for compatibility during the transition, and the combined downloads badge counts both packages.
 

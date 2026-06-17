@@ -4,7 +4,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parseArgs, parseTicketArgs, parseSkillArgs, parseTelemetryArgs, parseUsageArgs } from "./cli-args.mjs";
 import { runInit, runMerge } from "./cli-init-commands.mjs";
-import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports, runTicketMeta, runTicketConnect, runTicketRebuild, runTicketReportAttach, runTicketMove, runTicketNext, runTicketHotfix, runTicketStatus, runTicketHandoff, runTicketEvidenceCheck, runTicketEvidenceReport } from "./cli-ticket-commands.mjs";
+import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports, runTicketMeta, runTicketConnect, runTicketRebuild, runTicketReportAttach, runTicketMove, runTicketNext, runTicketStatus, runTicketHandoff, runTicketEvidenceCheck, runTicketEvidenceReport } from "./cli-ticket-commands.mjs";
 import { runTelemetry } from "./cli-telemetry-commands.mjs";
 import { runUsage } from "./cli-usage-commands.mjs";
 import { performUpgradeMigration } from "./cli-ticket-migration.mjs";
@@ -40,7 +40,6 @@ async function main() {
     else if (action === "connect") await runTicketConnect(opts);
     else if (action === "rebuild") await runTicketRebuild(opts);
     else if (action === "move" || action === "step") await runTicketMove(opts);
-    else if (action === "hotfix") await runTicketHotfix(opts);
     else if (action === "status") await runTicketStatus(opts);
     else if (action === "handoff" || action === "continue") await runTicketHandoff(opts);
     else if (action === "report") {

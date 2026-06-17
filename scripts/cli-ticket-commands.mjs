@@ -422,9 +422,44 @@ function printUsageReminder(cwd) {
   }
 }
 
+function formatTicketReason(reason) {
+  switch (String(reason || "")) {
+    case "ticket_file_missing":
+      return "project ticket file missing";
+    case "phase1_incomplete":
+      return "phase 1 incomplete";
+    default:
+      return String(reason || "").replace(/_/g, " ");
+  }
+}
+
+function formatTicketReasonList(reasons = []) {
+  return reasons.map(formatTicketReason).join(", ");
+}
+
+function summarizeForLine(text, limit = 120) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  return clean.length > limit ? `${clean.slice(0, limit - 3)}...` : clean;
+}
+
+function buildProblemReportLine(meta = {}, content = "") {
+  const sections = extractMarkdownSections(content, ["Problem Analysis", "Source Observations", "Cause Hypotheses"]);
+  const problem = sections["Problem Analysis"] || sections["Source Observations"] || sections["Cause Hypotheses"] || "";
+  const headline = summarizeForSentence(meta.summary || meta.title || meta.id || meta.topic || "");
+  const body = summarizeForLine(problem || headline);
+  if (!body) return "";
+  return `problem report: ${headline && problem ? summarizeForLine(`${headline} | ${problem}`) : body}`;
+}
+
+function printReinforcement(cwd, ticket = {}) {
+  printUsageReminder(cwd);
+  const report = buildProblemReportLine(ticket.meta || {}, ticket.content || "");
+  if (report) console.log(report);
+}
+
 function getHandoffSummary(out) {
   const next = out.nextTicket ? `${out.nextTicket.id}:${out.nextTicket.status}` : "none";
-  const blockers = out.reasons?.length ? out.reasons.join(",") : "none";
+  const blockers = out.reasons?.length ? formatTicketReasonList(out.reasons) : "none";
   return `${out.current.id} | phase=${out.current.phase} | status=${out.current.status} | next=${next} | blockers=${blockers}`;
 }
 
@@ -1331,7 +1366,7 @@ export async function runTicketCreate(opts) {
     }
 
     console.log(`${opts.dryRun ? "Ticket would be created" : "Ticket created"}: ${toFileUri(abs)}`);
-    printUsageReminder(opts.cwd);
+    printReinforcement(opts.cwd, { meta: meta, content: finalContent });
     if (!opts.dryRun) {
       appendTelemetryEvent(opts.cwd, {
         event: "ticket_created",
@@ -1426,9 +1461,9 @@ export async function runTicketStatus(opts) {
   }
 
   if (isCompactTicketOutput(opts)) {
-    const reasonText = out.reasons.length === 0 ? "ok" : out.reasons.join(", ");
+    const reasonText = out.reasons.length === 0 ? "ok" : formatTicketReasonList(out.reasons);
     console.log(`${out.id} | phase=${out.phase} | status=${out.status} | ${reasonText}`);
-    printUsageReminder(opts.cwd);
+    printReinforcement(opts.cwd, { meta: parsed.meta, content: parsed.content });
     return;
   }
 
@@ -1438,9 +1473,9 @@ export async function runTicketStatus(opts) {
   console.log(`Path: ${out.path}`);
   if (opts.statusDetail || out.reasons.length > 0) {
     if (out.reasons.length === 0) console.log("Reasons: none");
-    else console.log(`Reasons: ${out.reasons.join(", ")}`);
+    else console.log(`Reasons: ${formatTicketReasonList(out.reasons)}`);
   }
-  printUsageReminder(opts.cwd);
+  printReinforcement(opts.cwd, { meta: parsed.meta, content: parsed.content });
 }
 
 export async function runTicketHandoff(opts) {
@@ -1715,7 +1750,7 @@ export async function runTicketUse(opts) {
     console.log(`Active ticket: ${found.id}`);
     console.log(`Path: [${posixPath}](file://${absPath})`);
     if (opts.printContent) console.log("\n" + readFileSync(join(opts.cwd, found.path), "utf8"));
-    printUsageReminder(opts.cwd);
+    printReinforcement(opts.cwd, { meta: foundParsed.meta, content: foundParsed.content });
   }
 }
 
@@ -2032,7 +2067,7 @@ export async function runTicketMove(opts) {
       status: meta.status
     });
     console.log(`ticket: moved -> ${entry.topic} is now in Phase ${nextPhase} (${meta.status})`);
-    printUsageReminder(opts.cwd);
+    printReinforcement(opts.cwd, { meta, content: newBody });
   } catch (err) {
     rollbackTicketLifecycleArtifacts(opts.cwd, previousIndex, body, abs, opts);
     throw err;
@@ -2077,85 +2112,4 @@ function isTicketNextRunnableCandidate(cwd, entry) {
   const { meta } = parseFrontMatter(readFileSync(absPath, "utf8"));
   const lifecycleSource = String(meta.lifecycleSource || meta.ticketLifecycleSource || "").trim();
   return lifecycleSource === "ticket-create";
-}
-
-export async function runTicketHotfix(opts) {
-  if (!opts.topic && !opts.latest) {
-    if (opts.nonInteractive) {
-      throw new Error("ticket hotfix: --topic or --latest is required in non-interactive mode.");
-    }
-    opts.latest = true;
-  }
-  
-  if (!opts.reason) {
-    throw new Error("[HOTFIX DENIED] A mandatory --reason must be provided to justify bypassing standard rules (e.g., 'codegen is broken').");
-  }
-
-  // User explicit approval
-  if (!opts.nonInteractive) {
-    let proceed = false;
-    await withReadline(async (rl) => {
-      proceed = await new Promise(resolve => {
-        rl.question(`\n⚠️  [EMERGENCY HOTFIX] This will bypass standard APC rules.\nReason: ${opts.reason}\nProceed? (y/N): `, a => {
-          resolve(a.trim().toLowerCase() === 'y');
-        });
-      });
-    });
-    if (!proceed) {
-      console.log('Hotfix cancelled by user.');
-      return;
-    }
-  }
-
-  const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
-  const entry = pickTicketEntry(opts, index);
-  
-  if (!entry) throw new Error("No matching ticket found for hotfix.");
-
-  const abs = join(opts.cwd, entry.path);
-  if (!existsSync(abs)) throw new Error("Ticket file not found: " + entry.path);
-
-  const body = readFileSync(abs, "utf8");
-  const { meta, content } = parseFrontMatter(body);
-
-  // Force phase 2 and active status, bypassing APC checks
-  meta.phase = 2;
-  meta.status = "active";
-  meta.hotfix = true;
-  meta.hotfixReason = opts.reason;
-  
-  // Append hotfix record to content
-  const timestamp = new Date().toISOString();
-  const hotfixRecord = `\n\n> [!WARNING]\n> **EMERGENCY HOTFIX ACTIVATED** (${timestamp})\n> **Reason:** ${opts.reason}\n> Standard APC and Phase 1 guards were bypassed.\n`;
-  
-  const newBody = stringifyFrontMatter(meta, content + hotfixRecord);
-  writeFileSync(abs, newBody, "utf8");
-
-  // Re-sync index
-  opts.topic = entry.topic;
-  opts.status = "active";
-  updateTicketEntryStatus(opts.cwd, opts);
-  
-  syncActiveTicketId(opts.cwd);
-  console.log(`[EMERGENCY HOTFIX] Ticket ${entry.topic} is now ACTIVE. Rule guardrails bypassed for this session.`);
-
-  // Auto-create derivation ticket
-  const deriveTopic = `codegen-fix-${entry.topic}`;
-  const deriveSummary = `[DERIVED] Fix CodeGen source for hotfix: ${opts.reason}`;
-  console.log(`[HOTFIX] Auto-creating derivation ticket: ${deriveTopic}`);
-  
-  try {
-    await runTicketCreate({
-      cwd: opts.cwd,
-      topic: deriveTopic,
-      summary: deriveSummary,
-      chain: true,
-      tags: 'hotfix-derived,codegen',
-      priority: 'P1',
-      skipPhase0: true,
-      nonInteractive: true
-    });
-  } catch (err) {
-    console.warn(`[WARNING] Failed to auto-create derivation ticket: ${err.message}`);
-  }
 }

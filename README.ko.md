@@ -141,7 +141,7 @@ deuk-agent-flow init
 
 이후 일상 작업은 명령을 직접 치기보다 에이전트에게 짧게 말합니다. 예: "진행", "다음", "원인 다시 파악".
 
-여러 프로젝트를 한 `~/workspace` 아래에서 관리한다면 각 프로젝트 루트에서 `deuk-agent-flow init`을 실행합니다. workspace 루트는 공통 포인터 역할을 할 수 있지만, 실제 작업 티켓과 로컬 규칙은 보통 각 프로젝트의 `.deuk-agent/`와 `PROJECT_RULE.md`가 소유합니다.
+여러 프로젝트를 한 `~/workspace` 아래에서 관리한다면 각 프로젝트 루트에서 `deuk-agent-flow init`을 실행합니다. workspace 루트는 공통 포인터 역할을 할 수 있지만, 실제 작업 티켓과 로컬 규칙은 각 프로젝트 루트의 `.deuk-agent/`와 `PROJECT_RULE.md`가 소유하며, 충돌이 있으면 이 가이드보다 해당 규칙 파일이 우선합니다.
 
 이렇게 사용하면 효과가 극대화됩니다. workspace 루트는 공통 진입점, 각 프로젝트 루트는 독립 티켓/규칙/검증 단위로 나누고, 중첩 서버나 앱은 필요할 때 별도 프로젝트로 초기화하세요.
 
@@ -196,7 +196,7 @@ npm run smoke:npm:docker
 
 publish helper는 `npm test`를 실행하고, `deuk-agent-rule` compatibility 패키지 버전을 루트 패키지 버전에 맞춘 뒤, `deuk-agent-flow`를 먼저 배포하고 `deuk-agent-rule`을 이어서 배포합니다.
 
-전체 전환 절차는 [docs/internal/deukagentflow-migration-plan.ko.md](docs/internal/deukagentflow-migration-plan.ko.md)를 본다.
+전체 배포와 프로젝트 루트 설정 흐름은 아래의 실전 사용 가이드를 본다.
 
 호환 안내: `deuk-agent-rule`은 전환 기간 동안 사용할 수 있고, 합산 다운로드 배지는 두 패키지 다운로드를 함께 계산한다.
 

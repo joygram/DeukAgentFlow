@@ -35,7 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **migration:** add summary/planLink/caution auto-enrichment for legacy tickets
 -  Phase 0 search limiter - max 2 MCP calls, skip when context sufficient
 -  replace legacy fill-in-the-blank rule check with Version Gating and Task Relevance check
-- **rules:** enforce hard guardrails, add hotfix protocol and urgency response
+- **rules:** enforce hard guardrails and urgency response without any bypass path
 - **rules:** harden document boundary workflow
 - **spoke:** add fill-in completion template for rule enforcement
 - **T-114:** 1-CALL ticket discovery rule + CLI max call limits
