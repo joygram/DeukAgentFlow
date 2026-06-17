@@ -4,7 +4,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parseArgs, parseTicketArgs } from "./cli-args.mjs";
 import { runInit, runMerge } from "./cli-init-commands.mjs";
-import { runTicketCreate, runTicketList, runTicketUse, runTicketClose } from "./cli-ticket-commands.mjs";
+import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports } from "./cli-ticket-commands.mjs";
 import { loadInitConfig, writeInitConfig } from "./cli-prompts.mjs";
 import { runInteractive } from "./cli-prompts.mjs";
 
@@ -28,6 +28,8 @@ async function main() {
     else if (action === "list") await runTicketList(opts);
     else if (action === "use") await runTicketUse(opts);
     else if (action === "close") await runTicketClose(opts);
+    else if (action === "archive") await runTicketArchive(opts);
+    else if (action === "reports") await runTicketReports(opts);
     else if (action === "migrate") await runTicketMigrate(opts);
     else {
       console.error("Unknown ticket action: " + action);
@@ -84,7 +86,7 @@ function printHelp() {
 Usage:
   npx deuk-agent-rule init   [options]
   npx deuk-agent-rule merge  [options]
-  npx deuk-agent-rule ticket <create|list|use|close|migrate> [options]
+  npx deuk-agent-rule ticket <create|list|use|close|archive|reports|migrate> [options]
 
 Options:
   --cwd <path>          Target repo root

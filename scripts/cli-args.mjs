@@ -17,6 +17,8 @@ export function parseTicketArgs(argv) {
     else if (a === "--print-content") out.printContent = true;
     else if (a === "--all") out.all = true;
     else if (a === "--status") out.status = argv[++i];
+    else if (a === "--archived") out.archived = true;
+    else if (a === "--report") out.report = argv[++i];
   }
   return out;
 }

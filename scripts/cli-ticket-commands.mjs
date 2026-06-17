@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
-import { basename, join } from "path";
-import { toSlug, toRepoRelativePath, inferRefTitleAndTopic, resolveReferencedTicketPath } from "./cli-utils.mjs";
-import { TICKET_DIR_NAME, appendTicketEntry, rebuildTicketIndexFromTopicFilesIfNeeded, detectConsumerTicketDir } from "./cli-ticket-logic.mjs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, copyFileSync, readdirSync, rmSync, statSync } from "fs";
+import { basename, join, dirname, relative, resolve } from "path";
+import { toSlug, toRepoRelativePath, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath } from "./cli-utils.mjs";
+import { TICKET_DIR_NAME, appendTicketEntry, rebuildTicketIndexFromTopicFilesIfNeeded, detectConsumerTicketDir, readTicketIndexJson, writeTicketIndexJson, writeTicketListFile } from "./cli-ticket-logic.mjs";
 
 import { createInterface } from "readline";
 import { selectOne } from "./cli-prompts.mjs";
@@ -118,7 +118,6 @@ export async function runTicketUse(opts) {
 }
 
 import { getLegacyMigrationCandidate, parseLegacyTicketMeta } from "./cli-ticket-logic.mjs";
-import { dirname } from "path";
 
 export async function runTicketMigrate(opts) {
   const candidate = getLegacyMigrationCandidate(opts.cwd);
@@ -156,4 +155,115 @@ export async function runTicketMigrate(opts) {
       console.log("ticket: deleted legacy LATEST.md");
     }
   }
+}
+
+export function pickTicketEntry(opts, indexJson) {
+  const rows = [...indexJson.entries].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  if (rows.length === 0) return null;
+  if (opts.topic) {
+    const key = String(opts.topic).toLowerCase();
+    return rows.find(e => String(e.topic || "").toLowerCase().includes(key)) || null;
+  }
+  return rows[0];
+}
+
+export async function runTicketArchive(opts) {
+  if (!opts.latest && !opts.topic) {
+    if (process.stdout.isTTY) {
+      const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, opts);
+      const choices = index.entries
+        .filter(e => e.status !== "archived")
+        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
+      if (choices.length > 0) {
+        const { createInterface } = await import("readline");
+        const { selectOne } = await import("./cli-prompts.mjs");
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        try {
+          opts.topic = await selectOne(rl, "Choose a ticket to archive (this will move the file to archive/):", choices);
+        } finally {
+          rl.close();
+        }
+      } else {
+        throw new Error("No active tickets found to archive.");
+      }
+    } else {
+      throw new Error("ticket archive requires --latest or --topic <prefix>");
+    }
+  }
+  
+  const indexJson = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, opts);
+  const found = pickTicketEntry(opts, indexJson);
+  if (!found) throw new Error("ticket archive: no matching entry");
+
+  const absPath = join(opts.cwd, found.path);
+  if (!existsSync(absPath)) {
+    throw new Error("ticket archive: file not found " + found.path);
+  }
+
+  const archiveDir = join(opts.cwd, TICKET_DIR_NAME, "archive", found.group || "sub");
+  if (!opts.dryRun) mkdirSync(archiveDir, { recursive: true });
+  
+  const fileName = found.path.split(/[/\\]/).pop();
+  const newAbsPath = join(archiveDir, fileName);
+  const bodyLines = readFileSync(absPath, "utf8").trimEnd().split(/\r?\n/);
+  
+  if (opts.report) {
+    const reportSrc = resolve(opts.cwd, opts.report);
+    if (!existsSync(reportSrc)) {
+      throw new Error("ticket archive: report file not found " + opts.report);
+    }
+    const reportDir = join(opts.cwd, TICKET_DIR_NAME, "reports");
+    if (!opts.dryRun) mkdirSync(reportDir, { recursive: true });
+    
+    const reportDest = join(reportDir, `REPORT-${fileName}`);
+    if (!opts.dryRun) copyFileSync(reportSrc, reportDest);
+    console.log("ticket archive: copied report to " + toRepoRelativePath(opts.cwd, reportDest));
+    
+    bodyLines.push("");
+    bodyLines.push("## 📄 Attached Report");
+    const relativeLink = toPosixPath(relative(dirname(newAbsPath), reportDest));
+    bodyLines.push(`- [View Report](${relativeLink})`);
+  }
+
+  if (opts.dryRun) {
+    console.log("ticket archive: would move " + toRepoRelativePath(opts.cwd, absPath) + " to " + toRepoRelativePath(opts.cwd, newAbsPath));
+    return;
+  }
+
+  writeFileSync(newAbsPath, bodyLines.join("\n") + "\n", "utf8");
+  rmSync(absPath);
+  console.log("ticket archive: moved ticket to " + toRepoRelativePath(opts.cwd, newAbsPath));
+
+  const entryIdx = indexJson.entries.findIndex(e => e.id === found.id);
+  if (entryIdx >= 0) {
+    indexJson.entries[entryIdx].status = "archived";
+    indexJson.entries[entryIdx].path = toRepoRelativePath(opts.cwd, newAbsPath);
+    indexJson.entries[entryIdx].updatedAt = new Date().toISOString();
+  }
+
+  writeTicketIndexJson(opts.cwd, indexJson, opts);
+  writeTicketListFile(opts.cwd, indexJson.entries, opts);
+}
+
+export async function runTicketReports(opts) {
+  const reportDir = join(opts.cwd, TICKET_DIR_NAME, "reports");
+  console.log("\n📄 Agent Reports:");
+  if (!existsSync(reportDir)) {
+    console.log("  No reports found.");
+    return;
+  }
+  const files = readdirSync(reportDir).filter(f => f.startsWith("REPORT-") && f.endsWith(".md"));
+  if (files.length === 0) {
+    console.log("  No reports found.");
+    return;
+  }
+  
+  const sorted = files.sort((a, b) => {
+    return statSync(join(reportDir, b)).mtime.getTime() - statSync(join(reportDir, a)).mtime.getTime();
+  });
+  
+  sorted.slice(0, opts.limit || 30).forEach(f => {
+    console.log(`  - [${f}]`);
+  });
+  console.log("");
 }
