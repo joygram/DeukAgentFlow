@@ -477,11 +477,19 @@ export function resolveTicketSystemPaths(cwd) {
  */
 export function detectConsumerTicketDir(startDir, opts = {}) {
   let curr = resolve(startDir);
+  let projectRoot = null;
   while (curr && curr !== dirname(curr)) {
     const paths = resolveTicketSystemPaths(curr);
     if (existsSync(paths.primary)) return paths.primary;
     if (paths.legacy.length > 0) return paths.legacy[0];
+    if (existsSync(join(curr, ".git"))) {
+      projectRoot = curr;
+      break;
+    }
     curr = dirname(curr);
+  }
+  if (projectRoot) {
+    return opts.createIfMissing ? resolveTicketSystemPaths(projectRoot).primary : null;
   }
   return opts.createIfMissing ? resolveTicketSystemPaths(startDir).primary : null;
 }
