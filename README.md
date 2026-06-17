@@ -134,5 +134,15 @@ Instead of manually typing the CLI commands below into the terminal, you can **d
 | `--dry-run` | Off | Simulates the execution text in the console without generating/altering files |
 | `--backup` | Off | Safely creates `*.bak` copies of `AGENTS.md` and rule files before overwriting |
 
-## Versioning Policy
-Before pushing any core updates/feature changes to this package (`DeukAgentRules`), strictly bump the `version` inside `package.json` and publish it (`npm run sync:oss`).
+## 📦 Release & Changelog Policy
+
+Before pushing any core updates, system templates, or feature changes to this package (`DeukAgentRules`), you must strictly follow this procedure to bump the version safely:
+
+1. **Apply Changes**: Complete documentation and rule script updates, then `git add` and `git commit` (Conventional Commits format recommended, e.g., `feat: ...`, `fix: ...`).
+2. **Version Bump & Automated Changelog**:
+   * Patch (Bug fixes): `npm run bump:patch`
+   * Minor (New features): `npm run bump:minor`
+   * Major (Core/Breaking changes): `npm run bump:major`
+   
+   Executing the bump command will trigger the `commit-and-tag-version` pipeline: it bumps the version in `package.json`, auto-generates the `CHANGELOG.md` log, creates a release commit, and applies the release tag.
+3. **Synchronize & Mirror (OSS Sync)**: As a final step, ask your agent to run `npm run sync:oss`. The automation script will clean the release assets and push the bundled versions to the mirror repository (`DeukAgentRulesOSS`).

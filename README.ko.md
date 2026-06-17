@@ -135,5 +135,15 @@ npx deuk-agent-rule ticket list
 | `--dry-run` | 끔 | 실제 파일을 생성/변조하지 않고 콘솔에 동작 결과 텍스트만 출력 |
 | `--backup` | 끔 | `AGENTS.md`나 룰 파일 덮어쓰기 전 원본을 `*.bak`으로 안전 보관 |
 
-## 버전 관리 정책
-본 패키지(`DeukAgentRules`)의 업데이트 및 기능 변경 전에는 필히 `package.json`의 `version` 상향 후 퍼블리시(`npm run sync:oss`) 해 주시기 바랍니다.
+## 📦 릴리즈 및 체인지로그 (Changelog) 정책
+
+본 패키지(`DeukAgentRules`)의 시스템 템플릿 추가 및 기능 변경을 배포하기 전에 반드시 다음 절차를 따라 릴리즈 프로세스를 진행해야 합니다:
+
+1. **변경사항 커밋**: 문서 및 룰 스크립트 수정 완료 후 `git add` & `git commit` (Conventional Commits 형식 권장, ex: `feat: ...`, `fix: ...`)
+2. **버전 펌핑 및 체인지로그 자동 생성**:
+   * Patch (버그 수정): `npm run bump:patch`
+   * Minor (기능 추가): `npm run bump:minor`
+   * Major (룰/템플릿 대격변): `npm run bump:major`
+   
+   위 명령어를 실행하면 내부적으로 `commit-and-tag-version` 툴이 작동되어 `package.json` 버전 상향, `CHANGELOG.md` 자동 갱신 요약, 릴리즈 커밋, 그리고 태깅 작업까지 한번에 즉시 처리됩니다.
+3. **분산 배포 보정 (OSS Sync)**: 에이전트를 통해 `npm run sync:oss`를 실행하면 자동화 스크립트가 릴리즈 에셋을 스캔하여 OSS 미러 저장소(`DeukAgentRulesOSS`)로 최종적인 퍼블리시 버전을 복제 및 반영합니다.
