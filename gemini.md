@@ -28,10 +28,10 @@ You are Antigravity, powered by Google Gemini. To ensure zero-regression and arc
 <!-- RULE MODULE: core-workflow -->
 ## 🔗 Modernized Ticket-Driven Development (TDD)
 
-에이전트는 모든 작업 수행 시 반드시 아래 워크플로우를 준수해야 하며, RAG 엔진(`DeukRag`)이 전체 프로세스의 "Single Source of Truth"가 되어야 합니다.
+에이전트는 모든 작업 수행 시 반드시 아래 워크플로우를 준수해야 하며, Context 엔진(`DeukContext`)이 전체 프로세스의 "Single Source of Truth"가 되어야 합니다.
 
 1.  **Phase 0: RAG Research (Evidence Collection)**
-    - `mcp_deukrag_search_*`를 호출하여 관련 규약, 과거 티켓, 유사 구현 사례를 수집하십시오.
+    - `mcp_deukcontext_search_*`를 호출하여 관련 규약, 과거 티켓, 유사 구현 사례를 수집하십시오.
     - 검색된 결과(Evidence)가 티켓 설계의 근거가 되어야 합니다.
 2.  **Phase 0.5: Deep Analysis (Optional)**
     - 복잡한 아키텍처 변경이나 타 모듈 영향도가 높은 경우, 코드를 건드리기 전 별도의 분석 아티팩트를 작성하여 승인받으십시오.
@@ -44,7 +44,7 @@ You are Antigravity, powered by Google Gemini. To ensure zero-regression and arc
     - 티켓의 체크박스(`[ ]` -> `[x]`)를 실시간으로 업데이트하십시오.
 5.  **Phase 3: Verification & Post-Mortem (MANDATORY)**
     - 코드 수정 완료 후, 빌드/테스트 등을 통해 확인 절차를 거치십시오.
-    - **[RAG Synthesis]** 구현된 내용이 전역 룰에 부합하는지 `mcp_deukrag_synthesize_knowledge`로 최종 검증하십시오.
+    - **[RAG Synthesis]** 구현된 내용이 전역 룰에 부합하는지 `mcp_deukcontext_synthesize_knowledge`로 최종 검증하십시오.
     - **[Post-Mortem Hard Lock]**: 심층 분석이나 구현 중 발견된 모든 제약사항, 부작용, 기술 부채를 반드시 `Potential Issue Table`에 기록하십시오.
 6.  **Phase 4: Follow-up Chaining (Next Tickets MANDATORY)**
     - Phase 3의 `Potential Issue Table`에서 당장 해결하지 않은 항목은 반드시 별도의 후속 티켓으로 발행하십시오.
@@ -68,7 +68,7 @@ All Tickets and docs are volatile and strictly local. Do not attempt to version 
 - **기타 에이전트**: 인라인 출력만 가능한 경우, 설계가 필요한 작업은 직접 `.deuk-agent/docs/plans/`에 파일을 생성할 것
 
 ### RAG 보존
-`.deuk-agent/docs/plans/`와 `walkthroughs/`의 파일은 DeukRag에 의해 자동 인덱싱되어 과거 설계 히스토리를 차기 세션에서 `mcp_deukrag_search_tickets`로 검색할 수 있습니다.
+`.deuk-agent/docs/plans/`와 `walkthroughs/`의 파일은 DeukContext에 의해 자동 인덱싱되어 과거 설계 히스토리 및 컨텍스트를 차기 세션에서 `mcp_deukcontext_search_tickets`로 검색할 수 있습니다.
 
 ### 🚀 Ticket Finding & Starting Protocol (Anti-Shoveling Rule)
 - **[JSON 조작 절대 금지 (하드룰)]**: 절대 `sed`, `awk`, `echo` 등의 텍스트 정규식 치환 명령어나 스크립트를 사용하여 `.deuk-agent/tickets/INDEX.json` 혹은 티켓 파일에 강제로 데이터를 끼워 넣거나 수정하지 마십시오. 새로운 티켓 생성은 오로지 `npx deuk-agent-rule ticket create` 명령어를 통해서만 수행해야 합니다. 이를 어길 시 심각한 규약 위반으로 간주됩니다.
