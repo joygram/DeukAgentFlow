@@ -1,23 +1,35 @@
 {
   "name": "deuk-agent-rule",
-  "version": "1.0.5",
+  "version": "1.0.13",
   "description": "DeukAgentRules: generic AGENTS.md + .cursor rule templates with init/merge CLI (npm name: deuk-agent-rule).",
   "keywords": [
     "agents-md",
     "cursor-rules",
     "copilot",
     "gemini",
+    "claude",
+    "windsurf",
+    "jetbrains",
     "handoff",
     "deuk-family",
     "deukpack-ecosystem"
   ],
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joygram/DeukAgentRules.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joygram/DeukAgentRules/issues"
+  },
+  "homepage": "https://github.com/joygram/DeukAgentRules#readme",
   "files": [
     "LICENSE",
     "bundle/**/*",
     "scripts/**/*.mjs",
     "README.md",
-    "README.ko.md"
+    "README.ko.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "sync": "node scripts/sync-bundle.mjs",
@@ -28,13 +40,5 @@
   },
   "bin": {
     "deuk-agent-rule": "./scripts/cli.mjs"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/joygram/DeukAgentRules.git"
-  },
-  "bugs": {
-    "url": "https://github.com/joygram/DeukAgentRules/issues"
-  },
-  "homepage": "https://github.com/joygram/DeukAgentRules#readme"
+  }
 }

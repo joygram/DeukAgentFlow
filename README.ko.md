@@ -6,7 +6,7 @@
 
 **English:** [README.md](https://github.com/joygram/DeukAgentRules/blob/master/README.md)
 
-Cursor, Copilot, Gemini 등 여러 에이전트·도구를 함께 쓸 때를 위한 `AGENTS.md`·`.cursor/rules` 버전 관리형 템플릿. 핸드오프·간결 응답으로 비용·성능을 개선합니다.
+Cursor, GitHub Copilot, Gemini / Antigravity, Claude(Cursor·Claude Code), Windsurf, JetBrains AI Assistant 등 코딩 에이전트와 함께 쓸 `AGENTS.md`·`.cursor/rules` 버전 관리형 템플릿. 그 밖에도 프로젝트 규칙을 읽는 유사 도구에 그대로 활용할 수 있습니다. 핸드오프·간결 응답으로 비용·성능을 개선합니다.
 
 ## 워크스페이스 초기화
 
@@ -15,7 +15,9 @@ npm install deuk-agent-rule
 npx deuk-agent-rule init
 ```
 
-`--non-interactive` 없이 실행하면 짧은 설정 질문이 시작됩니다:
+레포에 **처음** `init` 할 때만(`.deuk-agent-rule.config.json` 없음) **대화형** 질문이 나옵니다. **이후** `npx deuk-agent-rule init` 은 저장된 선택을 쓰고 템플릿만 갱신하므로, 매번 `--non-interactive` 할 필요 없습니다. **CI**에서만 `--non-interactive` 를 쓰면 됩니다. 선택을 바꾸려면 **`--interactive`** 이거나 설정 파일을 지우거나 수정하세요.
+
+첫 `init` 예시:
 
 ```
 $ npx deuk-agent-rule init
@@ -34,8 +36,11 @@ DeukAgentRules init — let's configure your workspace.
   1) Cursor
   2) GitHub Copilot
   3) Gemini / Antigravity
-  4) All of the above
-  5) Other / skip
+  4) Claude (Cursor / Claude Code)
+  5) Windsurf
+  6) JetBrains AI Assistant
+  7) All of the above
+  8) Other / skip
   Choices: 1,2
 
   Stack : unity
@@ -57,16 +62,23 @@ npx deuk-agent-rule init --non-interactive
 
 ```bash
 npm update deuk-agent-rule
-npx deuk-agent-rule init --non-interactive
+npx deuk-agent-rule init
 ```
 
-`AGENTS.md`의 **마커 안**만 갱신되고 바깥 내용은 유지됩니다.
+**CI·헤드리스**에서만 `init --non-interactive` 를 쓰면 됩니다. 일반 업그레이드에 **`merge`를 따로 돌릴 필요는 없습니다.** 기본 **`init`** 이 번들 **`.cursor/rules`** 를 다시 맞춥니다. `--rules prefix`(기본)일 때 이미 있는 **`deuk-agent-rule-*.mdc`** 는 새 패키지 내용으로 **덮어씁니다.** 접두 없이 둔 로컬 전용 룰 파일은 건드리지 않습니다. `AGENTS.md`는 **마커 안**만 갱신되고 바깥 내용은 유지됩니다.
+
+### 핸드오프 (멀티 세션·도구 넘김)
+
+`init` 시 **`.deuk-agent-handoff/`** 를 만들고 기본으로 **`.gitignore`** 에 넣습니다. 채팅만이 아니라 **파일로 남겨야 할** 작업 명세는 여기(또는 `DeukAgentRules/handoff/LATEST.md` 관례)에 `AGENTS.md`의 **Handoff format** 절 구조(과제, 수정 파일, 결정, 제약)로 적어 두면, 다음 세션이나 다른 에이전트가 이어 받기 쉽습니다.
+
+**플랜 패널**을 쓰는 환경에서는 동일 본문을 **`.cursor/plans/deuk-handoff.plan.md`** 등으로 **선택적으로 복제**해 둘 수 있습니다. 정본과 내용이 어긋나지 않게 맞추고, 에이전트 동작은 번들된 **`multi-ai-workflow.mdc`** 를 참고하세요.
 
 ### 주요 옵션
 
 | 플래그 | 기본값 | 설명 |
 |--------|--------|------|
-| `--non-interactive` | 끔 | 질문 생략, 플래그 기본값으로 실행 |
+| `--non-interactive` | 끔 | CI/스크립트: 질문 없음·저장 설정 미사용 |
+| `--interactive` | 끔 | `.deuk-agent-rule.config.json` 이 있어도 질문 다시 |
 | `--cwd <path>` | 현재 디렉터리 | 대상 레포 루트 |
 | `--dry-run` | 끔 | 쓰기 없이 동작만 출력 |
 | `--tag <id>` | `deuk-agent-rule` | 마커 id: `<!-- <id>:begin/end -->` |

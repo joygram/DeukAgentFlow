@@ -80,7 +80,7 @@ export function applyAgents(opts) {
   const region = findMarkerRegion(existing, markers.begin, markers.end);
 
   if (region) {
-    const inner = bundleContent.trimEnd() + (bundleContent.endsWith("\n") ? "" : "\n");
+    const inner = bundleContent.trimEnd() + "\n";
     const next =
       existing.slice(0, region.innerStart) +
       "\n" +
@@ -117,7 +117,7 @@ export function applyAgents(opts) {
     );
   }
 
-  const inner = bundleContent.trimEnd() + (bundleContent.endsWith("\n") ? "" : "\n");
+  const inner = bundleContent.trimEnd() + "\n";
   const block = "\n" + markers.begin + "\n\n" + inner + "\n" + markers.end + "\n";
   const next = existing ? existing.replace(/\s*$/, "") + block : markers.begin + "\n\n" + inner + "\n" + markers.end + "\n";
 
@@ -168,15 +168,7 @@ export function applyRules(opts) {
 
     if (rulesMode === "prefix" && existsSync(destPath)) {
       destPath = join(targetRulesDir, filePrefix + name);
-      if (existsSync(destPath)) {
-        actions.push({
-          action: "skip",
-          src,
-          dest: destPath,
-          reason: "prefixed target also exists",
-        });
-        continue;
-      }
+      // If prefixed file exists (repeat init after npm update), overwrite from bundle — do not skip.
     }
 
     if (dryRun) {

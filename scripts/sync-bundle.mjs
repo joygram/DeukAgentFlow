@@ -13,7 +13,7 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(__dirname, "..");
 
-/** Public npm bundle: generic template only (no monorepo paths or internal handoffs). */
+/** Copy publish/ templates into bundle/ for npm packaging. */
 const publishDir = join(pkgRoot, "publish");
 const publishRulesDir = join(publishDir, "rules");
 const rulesDest = join(pkgRoot, "bundle", "rules");
