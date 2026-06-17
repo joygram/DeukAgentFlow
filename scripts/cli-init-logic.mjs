@@ -1,4 +1,4 @@
-import { existsSync, appendFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, appendFileSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { TICKET_DIR_NAME } from "./cli-ticket-logic.mjs";
 
