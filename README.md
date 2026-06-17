@@ -1,4 +1,13 @@
-# DeukAgentRules
+<div align="center">
+  <br />
+  <h1>DeukAgentRules</h1>
+  <p>
+    <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg" alt="npm version" /></a>
+    <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dt/deuk-agent-rule.svg" alt="npm downloads" /></a>
+  </p>
+  <p><b>High-Signal Encoding & Rule Standardization Engine</b></p>
+  <p>Part of the <a href="https://deukpack.app">Deuk Family</a> ecosystem.</p>
+</div>
 
 > A core module of the **Deuk Family**. Maximizes collaboration efficiency of AI agents through structured rules.
 

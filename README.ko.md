@@ -1,4 +1,13 @@
-# DeukAgentRules (득에이전트룰스)
+<div align="center">
+  <br />
+  <h1>DeukAgentRules (득에이전트룰스)</h1>
+  <p>
+    <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg" alt="npm version" /></a>
+    <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dt/deuk-agent-rule.svg" alt="npm downloads" /></a>
+  </p>
+  <p><b>고신호(High-Signal) 인코딩 & 규칙 표준화 엔진</b></p>
+  <p><a href="https://deukpack.app">Deuk Family</a> 생태계의 핵심 에이전트 인프라</p>
+</div>
 
 > **Deuk Family**의 핵심 모듈 가운데 하나입니다. 구조화된 규칙으로 AI 에이전트의 협업 효율을 극대화합니다.
 
