@@ -1,7 +1,7 @@
 import { createInterface } from "readline";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { loadInitConfig, writeInitConfig, STACKS, AGENT_TOOLS } from "./cli-utils.mjs";
+import { STACKS, AGENT_TOOLS, DOC_LANGUAGE_CHOICES, resolveDocsLanguage, normalizeWorkflowMode, WORKFLOW_MODE_EXECUTE, WORKFLOW_MODE_PLAN } from "./cli-utils.mjs";
 
 export async function ask(rl, question) {
   return new Promise((resolve) => rl.question(question, resolve));
@@ -48,6 +48,13 @@ export async function runInteractive(opts) {
 
     const stack = await selectOne(rl, "What is your primary tech stack?", STACKS);
     const tools = await selectMany(rl, "Which agent tools do you use?", AGENT_TOOLS);
+    const docsLanguage = await selectOne(rl, "What document language should generated tickets/plans use?", DOC_LANGUAGE_CHOICES);
+    const workflowMode = opts.workflowMode
+      ? normalizeWorkflowMode(opts.workflowMode)
+      : await selectOne(rl, "What workflow mode should be saved?", [
+          { label: "Plan mode (prepare only)", value: WORKFLOW_MODE_PLAN },
+          { label: "Execute mode (apply changes)", value: WORKFLOW_MODE_EXECUTE },
+        ]);
     const shareTickets = await askYesNo("Do you want to share (git-track) tickets for this repository?", false);
 
     const targetAgents = join(opts.cwd, "AGENTS.md");
@@ -57,7 +64,7 @@ export async function runInteractive(opts) {
       console.log("\n  No AGENTS.md found — will create with markers.");
     } else {
       const content = readFileSync(targetAgents, "utf8");
-      const hasMarkers = content.includes("deuk-agent-rule:begin");
+      const hasMarkers = content.includes("deuk-agent-rule:begin") || content.includes("## DeukAgentRules");
       if (!hasMarkers) {
         const choice = await selectOne(rl, "AGENTS.md exists but has no markers. How to apply?", [
           { label: "Append managed block at the end (safe)", value: "inject" },
@@ -77,14 +84,16 @@ export async function runInteractive(opts) {
     opts.agents = opts.agents ?? agentsDefault;
     opts.stack = stack;
     opts.agentTools = tools;
+    opts.docsLanguage = resolveDocsLanguage(docsLanguage);
+    opts.workflowMode = normalizeWorkflowMode(opts.workflowMode || workflowMode);
     opts.shareTickets = shareTickets;
     opts.remoteSync = remoteSync;
     opts.pipelineUrl = pipelineUrl;
 
-    writeInitConfig(opts.cwd, opts);
-
     console.log("\n  Stack : " + stack);
     console.log("  Tools : " + (tools.join(", ") || "none"));
+    console.log("  Docs Language: " + opts.docsLanguage);
+    console.log("  Workflow Mode: " + opts.workflowMode);
     console.log("  Share Tickets: " + (opts.shareTickets ? "Yes (Shared)" : "No (Private)"));
     console.log("  Remote Sync:   " + (opts.remoteSync ? "Enabled" : "Disabled"));
     if (opts.remoteSync) console.log("  Pipeline URL:  " + opts.pipelineUrl);

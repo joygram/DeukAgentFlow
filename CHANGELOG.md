@@ -4,385 +4,179 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.5.15] - 2026-04-23
+## [3.3.2] - 2026-05-06
+
+### Positioning
+
+- Reframed the npm/GitHub identity around **AI coding agent guardrails for every repo**, with ticketed scope, verification, and shared `AGENTS.md` workflows visible in package metadata.
+- Added README comparison against `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, agent harnesses, and general guardrail frameworks to show where DeukAgentRules sits in the ecosystem.
+- Added a short "What's Next" section to set expectations for clearer first-run checks, compact CLI/RAG reminders, and visible companion surfaces for active ticket, phase, open-ticket count, and DeukAgentContext memory status.
 
 
 ### Added
 
--  add Codex CLI support (.codexrules) and apply globally
--  implement ticket chaining (--chain) for automated ticket linkage
--  replace .codexrules with global ~/.codex/AGENTS.md support
+-  AGENTS.md v12 + summary mandatory guard + PROJECT_RULE optimization
+- **cli:** add 'ticket next' command for instant task discovery (T[#295](https://github.com/joygram/DeukAgentRules/issues/295))
+- **cli:** enforce required frontmatter keys in lint:md (T-118)
+-  harden ticket paths and add DeukPack RAG schemas
+- **migration:** add summary/planLink/caution auto-enrichment for legacy tickets
+-  Phase 0 search limiter - max 2 MCP calls, skip when context sufficient
+-  replace legacy fill-in-the-blank rule check with Version Gating and Task Relevance check
+- **rules:** enforce hard guardrails, add hotfix protocol and urgency response
+- **rules:** harden document boundary workflow
+- **spoke:** add fill-in completion template for rule enforcement
+- **T-114:** 1-CALL ticket discovery rule + CLI max call limits
+- **T-115:** HARD BLOCK on write tools without active ticket
+- **T-116:** auto-close stale tickets on ticket create + Phase 4 NEVER skip
+- **T-116:** smart close based on checklist + phase state
+- **ticket:** enforce filled create flow and phase1 status guard
+- **ticket:** enforce open ticket cleanup flow
+- **ticket:** partition archive index by month
 
 
 ### Fixed
 
-- **cli:** enforce posix path normalization and harden ticket discovery protocol
-- **cli:** implement recursive cleanup for rule duplicates, enforce MCP tool name, and improve UX
--  enforce anti-shoveling rule against manual JSON modification
+-  add Refactor Safety Guard and Halt-and-Replan hard rules
+-  agent degradation remediation — planLink, inline TDW, token optimization
+-  align ticket APC template with phase gate
+- **docs:** correct frontmatter keys in AGENTS.md (remove fm_ prefix)
+- **init:** deploy Antigravity spoke to project root AGENTS.md
+-  register legitimate DR-04/DR-05 exceptions and update PROJECT_RULE.md
+-  remove duplicate phase key in ticket template and repair broken tickets
+- **rules:** announce active ticket at start
+- **rules:** keep planlink free of progress checkboxes
+- **rules:** make planlink capture agent analysis
+- **rules:** separate ticket and plan content
+- **spoke:** GLOBAL_AGENTS.md link text to actual filename AGENTS.md
+-  SSOT — init removes .deuk-agent/templates/ unconditionally (bundle is single source of truth)
+- **T-116:** parallel-safe auto-close - only close activeTicketId, warn others
+- **T-116:** replace auto-close with activeTicketId switch + warning
+- **ticket:** honor project and submodule filters
+- **ticket:** Sync close/archive status to frontmatter to prevent rebuild reversion
 
 
 ### Changed
 
--  complete ticket 059 and update implementation plan
+-  add Dependency Integrity Guard (HARD RULE) to AGENTS.md
+-  add lite accessibility vision plan
+-  add skill positioning release notes
+-  add version frontmatter to AGENTS.md for rule loading optimization
+-  align bad examples with plan/archive convention
+-  archive bmt coordination ticket 142
+-  archive bmt frontmatter cleanup ticket 144
+-  archive bmt go ticket 140
+-  archive bmt java ticket 139
+-  archive bmt matrix ticket 133
+-  archive bmt rust ticket 141
+-  bump AGENTS.md to v15 and strengthen dependency guards
+-  clarify ticket creation flow
+-  document rationale for docs/plan and fix section numbering
+-  Enforce strict rules for Scope Creep Handling
+-  enhance main features and workflow intro for v3.2.0
+-  optimize AGENTS.md — merge Dependency Integrity into Refactor Guard, compress Scope Creep
+-  position agent guardrail growth loop
+- **rules:** clarify phase one execution semantics
+- **rules:** mandate enrich_frontmatter for all plan/report files (T-118)
+- **spoke:** hard rule single directive
+-  update legacy path guidance to plan/archive layout
 
-## [2.5.14] - 2026-04-22
+## [3.3.0] - 2026-05-02
+
+### Added
+
+- **docs:** add AI coding agent guardrail positioning, vision, and organic growth research for VS Code, Open VSX, GitHub, and skill-driven discovery.
+- **docs:** add a deep comparison of Karpathy-style skills, DeukAgentRules, and DeukAgentContext, positioning skills as behavior playbooks, DeukAgentRules as workflow/permission control, and DeukAgentContext as ticketed engineering memory.
+- **seo:** add related-project positioning for `andrej-karpathy-skills` plus discovery keywords for Claude Code, AGENTS.md, Cursor rules, agent skills, and AI guardrails.
+
+### Changed
+
+- **ticket:** enforce a decision-first cleanup flow when open tickets exceed the configured limit, while allowing closed tickets to be archived automatically.
+- **ticket:** organize archived tickets by year-month and day to reduce active ticket repository clutter.
+- **docs:** update README document indexes and GitHub topic guidance to emphasize the agent guardrail, instruction hub, skill registry, and project memory positioning.
+
+### Fixed
+
+- **ticket:** prevent open ticket growth from silently exceeding the intended operating limit by surfacing cleanup decisions before new work proceeds.
+
+## [3.2.0] - 2026-04-28
+
+
+### Added
+
+- **agent:** implement platform coexistence and mode-aware workflow
+
+
+### Changed
+
+- **agents:** add Co-existence Protocol and Workflow Gate (T-120)
+-  update usage, architecture, and principles for v3.1.0
+
+## [3.1.0] - 2026-04-28
+
+
+### Added
+
+-  add ArchitectureGuard.test.mjs and create technical debt ticket T-103
+-  add first-class copilot and codex support
+- **arch:** implement APC v3 and simplify repository structure
+- **cli:** restrict --skip-phase0 based on MCP server status and update rules
+-  consolidate rule cleanup logic and enforce thin pointers for entry points
+-  enforce unidirectional AGENTS.md single source of truth
+-  enhance CLI reporting and add practical usage guide
+-  implement strict phase-driven ticket workflow with APC validation
+-  implement Zero-Copy architecture with absolute path pointing and frontmatter-based PROJECT_RULE.md
+-  implement zero-token knowledge distillation on ticket archive and cleanup dead code
+- **rules:** add AI Agent fallback guide to PROJECT_RULE.md template
+- **rules:** normalize canonical rules and decouple DeukPack rules
+- **telemetry:** add local-first telemetry CLI and update AGENTS.md
+- **ticket:** implement --plan-body for filled Phase 1 ticket body input and update project rules
 
 
 ### Fixed
 
-- **cli:** resolve marker nesting bug in AGENTS.md injection
-
-## [2.5.13] - 2026-04-22
-
-
-### Added
-
--  implement RAG-Miss fallback rule, fix ticket template formatting, and ignore tmp dirs in submodule discovery
-
-
-### Changed
-
--  squash mermaid diagram changelog noise into single entry
-
-## [2.5.12] - 2026-04-22
+-  auto-detect client tool from model and config in telemetry
+-  resolve agent loop on ticket navigation + archive 37 dead tickets
+- **rules:** bilingual ko/en PROJECT_RULE.md template
+- **rules:** remove redundant core rules link from PROJECT_RULE.md
+- **rules:** restore frontmatter in PROJECT_RULE.md
+- **rules:** restore mandatory ticket workflow and anti-shoveling rules
+- **rules:** sync restored strict workflow AGENTS.md and unified templates
 
 
 ### Changed
 
--  squash mermaid diagram changelog noise into single entry
+-  add markdown lint policy and workflow docs
+- **agent:** rename TDD to TDW, archive ticket 101, and remove DOMAIN_RULES
+-  AGENTS.md full cleanup - eliminate redundancy, unify English, remove dead rules
+-  finalize ticket 066 rule normalization
+-  modernize CLI architecture, implement state-driven path resolution, and comprehensive audit cleanup
+- **rules:** decouple DeukPack rules and fix merge injection logic
+-  update principles and cli compiler to DeukAgentContext
 
-## [2.5.11] - 2026-04-22
+## [3.0.0] - 2026-04-25
 
-### Added
+### 🚀 Major Breakthrough: Hub-Spoke Architecture
+- **Canonical Rule Hub**: Introduced `AGENTS.md` as the single source of truth for all AI agents.
+- **Thin Spoke Pointers**: IDE-specific rules (Cursor, Copilot, etc.) are now lightweight pointers to the central Hub, eliminating duplication and sync errors.
+- **Global CLI Proxy**: Implemented a smart entry point that automatically detects and routes execution to local workspace sources, ensuring zero-latency development.
 
-- implement modernized workflow diagrams with Mermaid v8.8.0 compatibility, semantic color palette, and native SVG text rendering for IDE dark mode compatibility
+### 🧹 Zero-Legacy & Cleanliness
+- **Auto-Purge**: `init` now unconditionally deletes deprecated `.cursorrules` files.
+- **Smart Backups**: Added logic to detect custom user rules and rename files to `.bak` instead of deletion.
+- **Submodule Scrubbing**: Automatically cleans empty submodule directory stubs and scrubs `.gitmodules`.
 
-## [2.5.1] - 2026-04-22
+### 🏗️ Branding & Infrastructure
+- **Identity Overhaul**: Rebranded as a "Zero-Latency, High-Signal AI Orchestration Protocol".
+- **Documentation v3**: New high-end 3D visual infographics and overhauled conceptual guides (Architecture, Principles, How-it-works).
+- **Domain Agnostic**: Generalized `bundle/AGENTS.md` to support any technology stack, removing domain-specific hardcoding.
 
-### Added
+### ⚙️ CLI Enhancements
+- **Proxy Routing**: `bin/deuk-agent-rule.js` performs directory traversal to find local scripts.
+- **Synchronized IO**: Refactored core logic to use synchronous FS operations for rock-solid CLI stability.
 
-- **cli:** add --clean flag to init command for safe configuration reset
-
-## [2.5.0] - 2026-04-22
-
-### Added
-
--  Agent-Agnostic Workflow and Archiving Protocol
-- **cli:** parse DeukRag config for conditions and auto-scaffold plan templates
--  implement Frontmatter-driven modular rule assembly (Ticket 045)
--  Model-specific hard rules (gemini.md) and Continuous RAG enforcement
-- **rules:** enforce Phase 0 MCP RAG in multi-ai-workflow MDC
-- **rules:** harden post-mortem workflow and mandate follow-up chaining
-- **templates:** enforce Phase 0 RAG Research checklists in ticket template
-
-
-### Fixed
-
--  handoff path format, 3-tier template system, recursive init with normalization
--  improve migration robustness with merging logic and cleanup dead code
--  recursive directory merge for legacy migration
-
-
-### Changed
-
--  add ticket 045 completion report
--  add what's new for v2.4, RAG engine notice, and SEO keywords
-- **rules:** Add Fast-Track workflow to prevent ticket loop overhead
-- **rules:** enforce Continuous RAG Policy and Absolute MCP Priority
-- **rules:** Mandate Continuous RAG during execution and verification phases
-- **rules:** Restore TDD workflow but ban interactive CLI looping
--  upgrade workflow diagram and add migration troubleshooting guide
-
-## [2.4.6] - 2026-04-19
-
-### Fixed
-
-- **cli:** suppress update notifier when local version is greater than or equal to registry version (fixes false-positive spam in local dev symlink environments)
-- **ticket:** cap `NNN` regex to 4 digits to prevent unix timestamps being incorrectly parsed as ticket sequential numbers, restoring correct `NNN-topic-hostname` format generation
-
-## [2.4.5] - 2026-04-18
-
-
-### Added
-
-- **cli:** add update notifier for checking latest npm version
-
-
-### Fixed
-
-- **ticket:** resolve discrepancy between filename and ticket ID generation
-- **ticket:** strictly enforce 8-character limit on hostname slug
-
-
-### Changed
-
--  add reasons for global installation
-- **changelog:** sync korean changelog with v2.4.0
--  generalize AGENTS.md and cleanup submodule-specific rules
-- **ticket:** new ID format NNN-topic-hostname with backward-compatible parsing
-
-## [2.4.4] - 2026-04-19
-
-### Changed
-
-- **rules:** generalize `AGENTS.md` by moving submodule-specific rules (DeukPack, C++, Unity) to their respective workspace `MODULE_RULE.md` files
-- **templates:** cleanup legacy templates in `bundle/` to match `publish/` source
-
-## [2.4.3] - 2026-04-18
-
-### Changed
-
-- **ticket:** new ID format `NNN-topic-hostname` (e.g. `001-add-feature-joy-nucb`) replacing legacy `ticket_NNN_hostname_topic` format
-- **ticket:** backward-compatible parsing supports both old and new formats in INDEX.json
-
-## [2.4.2] - 2026-04-18
-
-
-### Added
-
-- **cli:** add update notifier for checking latest npm version
-
-
-### Fixed
-
-- **ticket:** resolve discrepancy between filename and ticket ID generation
-- **ticket:** strictly enforce 8-character limit on hostname slug
-
-
-### Changed
-
--  add reasons for global installation
-- **changelog:** sync korean changelog with v2.4.0
-
-## [2.4.1] - 2026-04-18
-
-
-### Added
-
-- **cli:** add update notifier for checking latest npm version
-
-
-### Fixed
-
-- **ticket:** strictly enforce 8-character limit on hostname slug
-
-
-### Changed
-
--  add reasons for global installation
-- **changelog:** sync korean changelog with v2.4.0
+---
 
 ## [2.4.0] - 2026-04-18
-
-
-### Added
-
-- **init:** add obsolete template cleanup for cleaner migration
-- **rules:** add TICKET VERIFICATION RULE to original agents.md
-- **ticket:** add priority property to tickets
-- **ticket:** add sequential hostname-aware ticket naming (NNN-hostname-topic)
-- **ticket:** auto-sequence numbering and hostname-based naming (limit 8 chars)
-
-
-### Fixed
-
-- **rules:** force use of local latest deuk-agent-rule to avoid npx cache issues
-- **scripts:** correct log output for OSS repository url example
-
-
-### Changed
-
--  add Step 4 (Ticket Verification) to README files
--  clarify global installation and OS-specific permissions
--  enforce ticket reference in implementation artifacts
-
-## [2.3.2] - 2026-04-17
-
-
-### Fixed
-
-- **cli:** resolve `ERR_MODULE_NOT_FOUND` in distributed environments by fixing hardcoded `yaml` dependency path
-- **dependencies:** add `yaml` to explicit dependencies list
-
-## [2.3.1] - 2026-04-17
-
-
-### Changed
-
-- **readme:** add changelog and automated release instructions
-
-## [2.3.0] - 2026-04-17
-
-
-### Added
-
-- Advance AI pipeline integration and optional synchronization system
-- **cli:** add --submodule filter to ticket list command
-- **cli:** restore ticket archive and reports workflows to modular architecture
-- **rules:** advance rules for Unity Client, WebApp, and C++ Server hybrid environment
-- **ticket:** implementation of decentralized ticket management & sharing policy
-- **ticket:** upgrade to V2 YAML Front-matter and Categorized List
-
-
-### Fixed
-
-- **ticket:** deprecate LATEST.md, unify pointer to ACTIVE_TICKET.md
-- **ticket:** resolve issue where active tickets were not listed for DeukAgentRules repo
-
-
-### Changed
-
-- **readme:** clarify YAML front matter preservation and distributed ticket workflow for v2.2.2
-- **readme:** restore count headers and npm badges
-- **rules:** enforce CLI usage for ticket reading to prevent manual JSON parsing
-- Update CLI reference with close and migrate commands
-
-## [1.0.18] - 2026-04-12
-
-
-### Added
-
-- **ai:** map conversational ticket requests to implicit CLI execution
-- **cli:** implement ticket archive and reporting workflow
-- **rules:** map conversational ticket aliases to implicit CLI execution
-
-
-### Changed
-
-- **readme:** add ticket archive and reports CLI usage to documentation
-- **readme:** describe natural language CLI prompting alternatives
-- **readme:** provide explicit conversational prompt examples inside option tables
-- **readme:** provide explicit update guide
-- **rules:** add prompting guide and execution report archival rule
-
-## [1.0.17] - 2026-04-06
-
-
-### Fixed
-
-- **template:** move ticket repo-relative marker to bottom
-
-## [1.0.16] - 2026-04-05
-
-
-### Added
-
-- **workflow:** add auto-verification and final report to agent workflows
-
-## [1.0.15] - 2026-04-05
-
-
-### Added
-
-- Migrate and rename handoff terminology to ticket in CLI and templates
-
-
-### Changed
-
-- Add strict rule for DeukPack namespace requirement
-- Completely eradicate legacy Handoff references from AGENTS.md, templates, and mdc rules
-- Enforce DeukPack code format and API strictly as a hard rule
-- Refactor README usage guide and workflow
-
-## [1.0.14] - 2026-04-02
-
-
-### Added
-
-- **cli:** extend merge tooling and sync publish docs
-- **rules:** forbid 'sync' word in commit titles in agent rules
-- **handoff:** add indexed handoff workflow and CLI
-- **architecture:** migrate template architecture to zero-touch NPM bundle scaffolding
-
-
-### Fixed
-
-- **cli:** resolve html entity syntax error in template generator
-
-
-### Changed
-
-- **docs:** public-facing RELEASING and changelog wording; sync-bundle comment
-- **docs:** update README with token efficiency mechanism and zero-touch template scaffolding
-
-## [1.0.13] - 2026-03-28
-
-
-### Fixed
-
-- **deuk-agent-rule:** `printHandoffTip` missing in CLI (handoff tip after `init`)
-
-
-### Changed
-
-- **docs:** README § Handoffs; GitHub About text; npm keywords; CLI survey adds Claude, Windsurf, JetBrains AI Assistant
-- **agents:** optional `.cursor/plans/*.plan.md` mirror for plan-style UI; chat `Path:` line and optional first-line path in handoff files
-- **deuk-agent-rule:** `init` prints a short handoff tip after ensuring `.deuk-agent-handoff/`
-- **deuk-agent-rule:** default `--rules prefix` overwrites existing `deuk-agent-rule-*.mdc` on repeat `init` (package updates without a separate `merge`)
-- **deuk-agent-rule:** `.deuk-agent-rule.config.json` stores interactive choices; later `init` reuses them (`--interactive` to change; `--non-interactive` for CI only)
-
-
-## [1.0.12] - 2026-03-27
-
-
-### Fixed
-
-- **ci:** release workflow runs on pushes to `master`
-
-### Changed
-
-- **agents:** require full repo-root paths for handoff file links
-
-## [1.0.11] - 2026-03-26
-
-
-### Added
-
-- **ci:** GitHub Release workflow for version tags and `chore(release):` commits on `main` / `master`
-
-## [1.0.10] - 2026-03-26
-
-
-### Added
-
-- **deuk-agent-rule:** changelog template headers without per-commit links
-
-## [1.0.9] - 2026-03-27
-
-### Added
-
-- **deuk-agent-rule:** release changelog tooling; handoff directory gitignore; pre-work handoff scan; AGENTS inject newline fix
-
-### Changed
-
-- **agents:** DeukAgentRules/handoff/LATEST.md handoff path for consumer repos
-
-## [1.0.8] - 2026-03-27
-
-### Added
-
-- This changelog and npm `files` entry so releases are traceable.
-
-## [1.0.7] - 2026-03-27
-
-### Added
-
-- `init`: create `.deuk-agent-handoff/` and append `.gitignore` rules for local handoffs.
-- CLI: pre-work handoff scan; `publish/AGENTS.md` and `multi-ai-workflow.mdc` updates.
-
-### Fixed
-
-- AGENTS tagged-region merge: trailing newline after injected blocks.
-
-## [1.0.5] - 2026-03-26
-
-### Changed
-
-- README and package metadata (Deuk Family tagline, npm keywords, GitHub Topics note).
-
-## [1.0.4] - 2026-03-26
-
-### Changed
-
-- Release packaging includes `package-lock.json` for reproducible installs.
-- README: absolute links for the npm package page.
+- add Codex CLI support (.codexrules) and apply globally
+- implement ticket chaining (--chain) for automated ticket linkage
+- improve submodule isolation logic

@@ -1,210 +1,190 @@
 <div align="center">
   <br />
-  <h1>DeukAgentRules (득에이전트룰스)</h1>
+  <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentRules Architecture" />
+  <br />
+  <h1>DeukAgentRules v3.3.2</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg" alt="npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dt/deuk-agent-rule.svg" alt="npm downloads" /></a>
   </p>
-  <p><b>고신호(High-Signal) 인코딩 & 규칙 표준화 엔진</b></p>
-  <p><a href="https://deukpack.app">Deuk Family</a> 생태계의 핵심 에이전트 인프라</p>
+  <p><b>모든 레포를 위한 AI 코딩 에이전트 가드레일</b></p>
+  <p><i>Codex, Copilot, Claude Code, Cursor를 위한 티켓, 범위 계약, 검증, 기억 계층</i></p>
+  <p><a href="https://deukpack.app">Deuk Family</a> 생태계의 핵심 모듈입니다.</p>
 </div>
 
-> **Deuk Family**의 핵심 모듈 가운데 하나입니다. 구조화된 규칙으로 AI 에이전트의 협업 효율을 극대화합니다.
+---
 
-**npm 패키지:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
+**DeukAgentRules**는 AI 코딩 에이전트가 티켓, 범위 계약, 검증 기록, 프로젝트 기억을 공유된 방식으로 따라가게 만드는 레포 단위 워크플로우입니다.
 
-**English:** [README.md](https://github.com/joygram/DeukAgentRules/blob/master/README.md)
+단순한 프롬프트 모음에 머물지 않습니다. **Hub-Spoke 아키텍처**와 **티켓 기반 실행 모델**을 통해 `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills 같은 에이전트 지침 표면을 하나의 레포 워크플로우로 묶습니다.
 
-Cursor, GitHub Copilot, Gemini / Antigravity, Claude, Windsurf, JetBrains AI Assistant 등 다양한 코딩 에이전트와 함께 활용하는 **서브모듈 격리형 협업 프레임워크**입니다. 
-프로젝트 규칙(`AGENTS.md`, `.cursor/rules`)을 표준화하고, **티켓 기반 워크플로우**를 통해 쓸데없는 프롬프트 토큰 낭비와 AI의 맥락 환각(Hallucination)을 강력하게 방어합니다.
+티켓 관리는 `.deuk-agent/` 아래에서 이뤄지며, 진행 중인 작업은 `.deuk-agent/tickets/`에, 관련 문서와 계획, 아카이브 정보도 그 주변 구조에 함께 쌓입니다.
 
-> **🚀 핵심 가치:**
-> 세션당 약 1,500~2,000 토큰에 달하는 강제 로드 컨텍스트를 200~300 토큰 수준으로 압축합니다. AI가 모놀리식 전체 레포지토리를 헤매지 않도록, 작업이 속한 **"해당 서브모듈(Submodule)"** 내부에 티켓을 격리하여 가장 정확한 맥락에서 작업을 지시할 수 있습니다.
+> **현재 배포 기준:**
+> v3.3.2는 에이전트 기반 리포지토리에 배포해 사용할 수 있는 상태입니다. 현재는 **OpenAI Codex**와 **GitHub Copilot** 환경에서 가장 안정적으로 동작합니다. Cursor, Windsurf, Claude Code, MCP도 포인터 구조로 지원하지만, 워크스페이스별 검증을 권장합니다. MCP 서버 등록은 `init`에 딸려 들어가지 않고 별도로 설정합니다.
 
-### 📢 What's New in v2.4 (최신 버전 소개)
-최신 2.4 버전에서는 **Dynamic Rule Assembly(동적 룰 조립) 엔진**이 도입되어, 프로젝트 환경(예: DeukRag 활성화 여부 등)을 스크립트가 스스로 감지하고 필요한 룰만 조합하여 `AGENTS.md`에 주입합니다.
-또한 CLI 티켓 시스템이 고도화되어 `deuk-agent-rule ticket create` 명령 시 설계(Plan) 문서를 자동 스캐폴딩하고 티켓과 연결해 줍니다. Phase 기반 이슈 추적 기능도 대폭 강화되었습니다.
+> **아키텍처 기반:**
+> 거대하고 무거운 레거시 `.cursorrules` 방식을 공식적으로 폐기했습니다. v3.0은 `AGENTS.md`를 단일 진실 공급원으로 사용하는 **Hub-Spoke 모델**을 도입하여, IDE별 규칙은 얇은 진입점 포인터 역할만 수행합니다.
 
-> **💡 RAG 엔진 연동 가이드 준비 중!**
-> 현재 사내 지식 검색 엔진인 **DeukRag** 시스템 (MCP)과 본 에이전트 룰을 완벽히 연동하여, AI가 티켓을 해결할 때 관련 과거 히스토리와 사내 규약을 스스로 찾아보고 적용하여 **효과를 극대화**할 수 있도록 하는 심화 기능 및 매뉴얼을 준비 중에 있습니다.
+### 🗺️ 핵심 기능 및 아키텍처 (Main Features)
+
+DeukAgentRules는 AI 에이전트가 코드를 분석하고 작성하는 흐름을 안정적으로 이끄는 **4대 핵심 기능**을 제공합니다.
+
+1. **Zero-Copy Hub-Spoke 아키텍처**
+   - **Hub**: 단일 진실 공급원인 `AGENTS.md` (글로벌 룰)
+   - **Spoke**: `PROJECT_RULE.md` 등 워크스페이스별 로컬 규칙
+   - **효과**: IDE별(Cursor, Copilot, Windsurf) 설정 파일 중복을 제거하고, 에이전트가 오직 하나의 규약만 바라보게 하여 지시 사항의 충돌과 환각을 원천 차단합니다.
+
+2. **티켓 주도 워크플로우 (TDW: Ticket-Driven Workflow)**
+   - 계획(Plan) → 실행(Execute) → 검증(Verify) → 보관(Archive)의 분명한 라이프사이클로 작업을 이끕니다.
+   - 활성화된 티켓(`ACTIVE_TICKET.md`)을 중심으로 변경을 연결해 범위와 진행 상태가 계속 보이게 합니다.
+
+3. **플랫폼 공존 및 모드 인지형 게이트 (Mode-Aware Workflow Gate)**
+   - 에이전트의 현재 모드(Plan Mode vs. Execute Mode)를 인지하여, Plan Mode에서는 분석과 구현 계획서(Artifacts) 작성에 집중하도록 APC를 적용합니다.
+   - MCP(Model Context Protocol) Soft Gate와 연동되어 현재 티켓 컨텍스트에 맞는 변경 흐름을 유지합니다.
+
+4. **지식 증류 및 Zero-Legacy (Knowledge Distillation)**
+   - 완료된 작업은 `reports/`로 아카이빙되며, 이 과정에서 **Zero-Token 지식 증류** 기술이 적용되어 핵심 히스토리만 벡터 DB(DeukAgentContext)로 전달됩니다.
+   - 불필요한 과거 로그나 사용되지 않는 `.cursorrules` 스텁을 자동으로 청소하여 컨텍스트 윈도우 낭비를 막습니다.
+
+### 지침 파일만으로 부족한 이유
+
+이미 AI 코딩 에이전트 생태계에는 `AGENTS.md`, GitHub Copilot instructions, Cursor rules, Claude skills, 여러 에이전트 실행 도구, 일반 LLM 가드레일이 있습니다. DeukAgentRules는 이들과 경쟁하기보다 그 위에 **티켓 기반 레포 워크플로우**를 얹습니다.
+
+| 비슷한 접근 | 도움이 되는 부분 | DeukAgentRules가 더하는 것 |
+|---|---|---|
+| `AGENTS.md` 공개 형식 | 코딩 에이전트가 읽을 공통 지침 파일 | 티켓 생명주기, Phase Gate, 검증, 아카이브 가능한 기억 |
+| Copilot instructions / Cursor rules / Claude memory | 도구별 맞춤 지침 | 여러 에이전트가 공유하는 레포 소유 워크플로우 |
+| Claude/Copilot custom agent와 skill | 재사용 가능한 작업 playbook | skill이 워크플로우를 대체하지 않고 티켓 실행으로 들어가게 함 |
+| 에이전트 실행기와 harness | 여러 코딩 에이전트 실행 | 어떤 에이전트를 쓰든 레포 안에서 생명주기를 통제 |
+| 일반 LLM/MCP 가드레일 | 런타임 정책 검사 | 작업 지시서, 범위 계약, 깃에 남는 기록, 완료 근거 |
+
+DeukAgentRules는 AI 코딩 작업을 팀이 이해하고 이어받기 쉬운 흐름으로 만들고 싶을 때 특히 잘 맞습니다. 여러 파일에 걸친 변경, 검증, 기록, 다음 작업 연결이 자연스럽게 이어지도록 돕는 데 초점을 둡니다.
+
+### Karpathy식 skill과 같이 쓰면 좋은 점
+
+Karpathy식 skill은 한 작업 안에서 에이전트의 행동을 더 좋게 만드는 데 강합니다. DeukAgentRules는 그 작업을 레포 차원에서 티켓화하고, 범위를 맞추고, 검증하고, 다시 찾을 수 있게 남기는 데 강합니다.
+
+둘을 함께 쓰면 skill은 작업 수행 품질을 끌어올리고, DeukAgentRules는 그 결과를 팀 워크플로우에 연결합니다. 앞단에서는 행동 playbook이 작동하고, 뒷단에서는 티켓 생명주기와 DeukAgentContext 기억 계층이 남습니다.
+
+### 다음 개선 방향
+
+다음 단계는 이 워크플로우를 더 잘 보이고 더 쉽게 도입하게 만드는 것입니다. 첫 실행 점검을 더 명확히 하고, CLI/RAG 결과에 짧은 재각인 신호를 붙이며, README/npm 포지셔닝을 강화하고, active ticket, phase, open ticket count, DeukAgentContext memory status를 보여주는 companion 표면을 준비하는 방향입니다. 목표는 팀이 쓰는 코딩 에이전트를 바꾸지 않고도 같은 작업 규율을 자연스럽게 얻는 것입니다.
+
+### 📚 상세 문서
+| 문서 | 용도 |
+|---|---|
+| [docs/usage-guide.ko.md](docs/usage-guide.ko.md) | **[추천]** 실전 배포 및 단계별 사용 가이드 |
+| [docs/architecture.ko.md](docs/architecture.ko.md) | 고수준 시스템 구조 및 시각적 인포그래픽 |
+| [docs/how-it-works.ko.md](docs/how-it-works.ko.md) | 상세 CLI 메커니즘, 초기화 생명주기 및 파일 역할 |
+| [docs/principles.ko.md](docs/principles.ko.md) | 설계 철학: Hub-Spoke, Zero-Legacy, 소스 주권 |
+| [docs/product-positioning-research.ko.md](docs/product-positioning-research.ko.md) | AI 코딩 에이전트 가드레일 제품 포지셔닝 리서치 |
+| [docs/karpathy-skills-vs-deukagent-positioning.ko.md](docs/karpathy-skills-vs-deukagent-positioning.ko.md) | Karpathy식 skill, DeukAgentRules, DeukAgentContext 심층 비교 |
+| [docs/vision-agent-guardrails.ko.md](docs/vision-agent-guardrails.ko.md) | 멀티 에이전트 가드레일 허브 비전 문서 |
+| [docs/organic-growth-plan.ko.md](docs/organic-growth-plan.ko.md) | VS Code, Open VSX, GitHub, 스킬 루프 기반 오가닉 유입 계획 |
+| **English Docs** | [README.md](README.md) · [docs/architecture.md](docs/architecture.md) |
 
 ---
 
-## 🛠️ 워크스페이스 초기화 (Getting Started)
+## 🚀 빠른 시작 (Quick Start)
 
-본 패키지는 여러 서브모듈 및 프로젝트 전반에서 빈번하게 사용되는 CLI 도구이므로 **전역(Global) 설치를 강력히 권장**합니다.
+가장 빠르게 DeukAgentRules를 프로젝트에 도입하는 방법입니다.
 
 ```bash
+# 1. 글로벌 설치
+npm install -g deuk-agent-rule
+
+# 2. 프로젝트 초기화 (AGENTS.md 및 설정 생성)
+deuk-agent-rule init
+
+# 3. 첫 번째 작업 티켓 생성
+deuk-agent-rule ticket create --topic my-first-task
+```
+
+자세한 실전 활용법은 **[실전 사용 가이드](docs/usage-guide.ko.md)**를 참조하세요.
+
+## 🛠️ 설치 및 설정
+
+### 1. 글로벌 설치 (일반 사용자)
+\`npx\` 캐시 문제와 "로컬 트랩"을 방지하기 위해 글로벌 설치가 엄격히 권장됩니다.
+
+\`\`\`bash
 npm install -g deuk-agent-rule
 deuk-agent-rule init
-```
+\`\`\`
 
-> [!NOTE]
-> **전역 설치(Global Install) 권한 이슈 해결방안**:
-> - **Linux/macOS**: 기본적으로 `npm install -g` 실행 시 `EACCES` 권한 오류가 발생할 수 있습니다. Node 버전 매니저(`nvm`, `fnm` 등)를 사용하여 권한 제약을 회피하는 것이 가장 좋으나, 시스템 Node를 사용하는 경우 불가피하게 `sudo npm install -g deuk-agent-rule` 명령을 사용해야 합니다.
-> - **Windows**: Node.js가 `Program Files` 등 시스템 폴더에 설치된 경우, 터미널(PowerShell/CMD)을 **관리자 권한**으로 실행한 상태에서 설치해야 오류가 발생하지 않습니다.
+### 2. 로컬 소스 개발 (메인테이너/파워 유저)
+v3.0은 **Global CLI Proxy**를 도입했습니다. \`DeukAgentRules\` 워크스페이스 내부에서 개발 중이라면, 글로벌 명령이 자동으로 로컬 소스로 실행을 위임합니다.
 
-### 💡 전역(Global) 설치를 권장하는 이유
+\`\`\`bash
+cd ~/workspace/DeukAgentRules
+sudo npm link
+deuk-agent-rule init  # 자동으로 로컬 scripts/cli.mjs로 라우팅됨
+\`\`\`
 
-> [!WARNING]
-> **서브모듈 내 로컬 설치 절대 금지 (Local Trap 방지)**: 개별 타깃 서브모듈의 `package.json`에 `deuk-agent-rule`을 로컬 종속성(`npm install deuk-agent-rule`)으로 추가해서는 안 됩니다. 로컬에 구버전이 설치되어 있을 경우, `npx` 명령어는 전역에 설치된 최신 버전을 무시하고 로컬의 구버전을 강제로 실행하여 티켓 포맷이나 로직 충돌 등 심각한 오동작(Local Trap)을 유발합니다.
-
-1. **npx 캐시 및 로컬 트랩 이슈 예방**: `npx deuk-agent-rule` 명령어는 로컬 npm 의존성 및 캐시에 우선순위를 둡니다. 로컬 트랩을 방지하고 항상 최신 배포본을 안정적으로 실행하여 티켓 오동작을 예방하기 위해 전역 설치를 활용해야 합니다.
-2. **실행 속도 최적화**: 매번 임시로 패키지를 다운로드/확인하는 `npx` 방식 대비 챗봇 에이전트가 즉각적으로 CLI 응답을 받을 수 있습니다.
-3. **크로스 레포지토리 일관성**: Deuk Family의 여러 서브모듈 및 독립된 마이크로서비스 저장소들을 오가며 항상 동일한 버전의 에이전트 룰 엔진을 적용할 수 있습니다.
-
-초기화 시 프로젝트의 **기술 스택**, **사용 중인 에이전트 툴**, 그리고 **티켓 공유 정책**을 묻는 대화형 질문이 나타납니다. 
-- **티켓 공유 정책**: 각 저장소 단위의 `.deuk-agent-ticket/` 폴더를 Git으로 추적하여 팀과 공유할지, 아니면 로컬 전용으로 둘지 결정합니다.
-- 스택 변경이 필요 없으면 이후에는 `deuk-agent-rule init`만 쳐서 규칙을 최신화할 수 있습니다. (전역 설치를 하지 않았다면 `npx deuk-agent-rule init`으로 대체 가능합니다.)
-- CI나 스크립트 환경에서는 대화형 입력을 끄기 위해 `--non-interactive` 파라미터를 추가하세요.
-
-### 🔄 규칙 패키지 업데이트 (Update Rules)
-새로운 에이전트 워크플로우나 템플릿이 릴리즈되었을 경우, 패키지를 최신 버전으로 갱신하고 `init` 명령을 재실행하여 변경 사항을 쉽게 프로젝트에 동기화할 수 있습니다.
-기존 환경 설정(`.deuk-agent-rule.config.json`)을 기억하고 있으므로 `--non-interactive`를 주면 묻지도 따지지도 않고 규칙만 즉시 최신화해 줍니다.
-```bash
-npm install deuk-agent-rule@latest
-deuk-agent-rule init --non-interactive
-```
-
-> [!TIP]
-> **💡 구버전 마이그레이션 실패 시 강제 초기화 방법**
-> 기존 템플릿 구조가 너무 구버전이거나 설정 파일(`.config.json`)이 꼬여서 마이그레이션 및 동기화가 계속 실패한다면, `--clean` 옵션으로 기존 룰셋과 설정을 날리고 새로 세팅하는 것이 가장 빠릅니다. **(기존 작성된 티켓들은 영향을 받지 않습니다)**
-> ```bash
-> deuk-agent-rule init --clean --interactive
-> ```
+Codex나 Copilot을 주로 사용한다면 이 구성이 일상 운영에 가장 적합합니다. 현재는 이 두 환경에서 Hub-Spoke와 티켓 기반 워크플로우가 가장 부드럽게 동작합니다.
 
 ---
 
-## 🎯 핵심 워크플로우 (The Distributed Ticket Workflow)
+## 🎯 프로토콜 워크플로우
 
-`deuk-agent-rule init`을 실행하면 현재 저장소 루트(서브모듈 포함)에 아래 두 개의 핵심 폴더가 등장합니다. 
+워크플로우는 **티켓 기반 실행 계약(Ticket-Driven Execution Contract)**에 의해 통제됩니다.
 
-1. **`.deuk-agent-templates/` (에이전트 템플릿)**: AI가 어떠한 양식으로 작업을 처리하고 보고해야 하는지 정의된 공식 뼈대(`TICKET_TEMPLATE.md`)가 지정됩니다.
-2. **`.deuk-agent-ticket/` (티켓 실행 공간)**: 실제 지시서(`TICKET-XXX.md`)가 발급되는 공간입니다. 서브모듈 단위로 티켓을 분산 관리할 수 있어 서브모듈만 떼어가도 히스토리가 유지됩니다. (공유 정책에 따라 `.gitignore`에 자동으로 기재될 수 있습니다.)
-
-### 💡 Workflow Overview
-```mermaid
-%%{init: {"flowchart": {"htmlLabels": false}, "themeCSS": ".node text { fill: #ffffff !important; stroke: none !important; }"} }%%
-graph TD
-    classDef action fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
-    classDef phase fill:#475569,stroke:#334155,stroke-width:2px,color:#ffffff;
-    classDef decision fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;
-    classDef highlight fill:#dc2626,stroke:#b91c1c,stroke-width:2px,color:#ffffff;
-
-    A(Step 1: Ticket Creation):::action --> B(Step 2: Agent Execution):::phase
-    B --> C(Step 3: Verification & Closure):::phase
-    
-    C --> D{Issues Found?}:::decision
-    
-    D -->|Yes| E(MANDATORY Follow-up Chaining):::highlight
-    E --> F(Step 4: Archiving):::action
-    D -->|No| F
-```
-
-이러한 샌드박스 폴더들을 활용하여 스퍼트를 올리는 **최적의 AI 코딩 4단계**는 다음과 같습니다.
-
-### [Step 1] 티켓 발급 및 계층적 관리 (Ticket Creation & Delegation)
-AI에게 중구난방으로 지시하지 마세요. 명확한 티켓을 발급하여 **문맥(Context)을 소속 저장소 단위로 좁혀주어야** 합니다.
-
-```bash
-deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI
-```
-명령어를 치면 `.deuk-agent-ticket/` 폴더 내에 템플릿이 입혀진 `TICKET-ui-refactoring.md` 파일이 생성됩니다.
-
-> [!IMPORTANT]
-> **티켓 작성 (주의사항)**: 새로 생성된 티켓에는 **YAML Front Matter** (`--- id: ... ---`)가 포함되어 있습니다. 내용을 작성할 때 **파일 전체를 덮어쓰지 마십시오.** 반드시 헤더 아래에 내용을 추가하거나 부분 편집 도구를 사용하여 기존 YAML 메타데이터를 보존해야 합니다. 프론트매터가 삭제되면 티켓 인덱싱 시스템이 파손됩니다.
-
-개발자는 이 파일 내의 `[Target Submodule]` 속성에 AI가 들여다보아야 할 고립된 경로(예: `src/client`)만을 명시해 줍니다.
-
-### [Step 2] 세션 인수인계 및 에이전트 격리 실행 (Agent Execution)
-AI 챗봇(Cursor, Gemini 등)에게 다음과 같이 단 한 줄의 명령만 내립니다.
-> *"방금 발급된 `.deuk-agent-ticket/TICKET-ui-refactoring.md` 티켓을 열고, 명시된 타겟 서브모듈 내에서 체크리스트를 따라 작업을 시작해"*
-
-AI는 티켓 내에 정의된 Phase(진행 단계)를 충실히 읽고, **자신이 다루지 않아도 될 타 모듈의 불필요한 연산을 원천 차단**한 채 가장 최적화된 코드만 작성합니다. (이 과정을 통해 토큰 비용이 획기적으로 줄어듭니다.)
-
-### [Step 3] 검증 및 상태 갱신 (Review & Closure)
-AI가 코드를 작성하며 티켓 내 마크업의 체크박스(`[x]`)를 갱신합니다. 에이전트의 세션(기억 한계)이 가득 차면, 티켓 내용만 디스크에 남겨둔 채 챗봇 창을 끄고 새 창을 열어 다시 [Step 2]를 지시하면 깔끔하게 인수인계가 이루어집니다.
-모든 작업이 끝나면 Phase 상태를 `[Phase 완료]`로 승급시킵니다. 터미널 명령어를 직접 치는 대신, **AI 챗봇 프롬프트에 "현재 진행 중인 티켓 리스트를 보여줘" 또는 "완료된 티켓들을 보고서와 함께 아카이브 해 줘"라고 자연어로 지시**하여 AI가 알아서 CLI를 호출해 리스트업 및 관리하게 위임할 수도 있습니다.
-```bash
-deuk-agent-rule ticket list
-```
-```text
-#  STATUS   SUBMODULE   GROUP       PROJECT     CREATED                  TITLE
-1  [ ]      DeukPack    sub         global      2026-04-18T13:34:32.484Z naming-consistency
-```
-
-### [Step 4] 티켓 검증 (자가 교정)
-모든 진행 단계가 `[x]`로 완료되면, AI에게 마지막으로 다음과 같이 지시합니다:
-> *"이 작업에 대해 **티켓 검증**을 진행해 줘."*
-
-AI는 `AGENTS.md`에 정의된 **[TICKET VERIFICATION RULE]**에 따라 즉시 3단계 정밀 진단을 수행합니다:
-1. **오류 분석**: 잠재적인 빌드 경고나 깨진 의존성(Side Effects) 전수 조사.
-2. **규약 정합성**: 수정된 파일명과 클래스명이 프로젝트 아키텍처 가이드와 완벽히 일치하는지 재검증.
-3. **잠재 이슈 보고**: 하위 호환성 파괴 위험이나 네이티브 빌드 제약사항 등 미검증 시나리오 리스트업.
-
-이 과정을 통해 에이전트의 결과물은 단순한 "기능 구현"을 넘어 "프로덕션 레벨"의 아키텍처 정합성을 갖추게 됩니다.
+1. **스캐폴딩 (Scaffolding)**: `init` 명령어가 프로젝트의 성격을 파악하고 `.deuk-agent/templates/`와 `AGENTS.md` (혹은 `PROJECT_RULE.md` 포인터)를 자동 배치합니다.
+2. **티켓팅 (Plan Phase)**: `ticket create --topic feature-x` 명령어로 새로운 작업 지시서를 생성합니다. 이때 에이전트는 Plan Mode로 동작하며 코드를 수정할 수 없고 계획 수립에만 집중합니다.
+3. **실행 (Execute Phase)**: 사용자의 승인을 받은 후, 에이전트는 **타겟 서브모듈**에 고정되어 실질적인 코드 작성을 수행합니다. MCP Soft Gate가 인가되지 않은 파일의 수정을 감시합니다.
+4. **검증 (Verify Phase)**: 개발 작업 종료 전 사이드 이펙트 감사(Audit) 및 컨벤션(DC-DUP 등 아키텍처 규칙) 체크를 수행합니다.
+5. **아카이빙 (Archive Phase)**: 완료된 티켓은 Zero-Token 지식 증류를 거쳐 `reports/`로 이동하며, 이 데이터는 DeukAgentContext 벡터 데이터베이스에 저장되어 영구적인 **엔지니어링 메모리 엔진**으로 작동합니다.
 
 ---
 
-## 🤖 에이전트 프롬프팅 가이드 (Prompting Guide)
+## ⚙️ CLI 주요 명령어
 
-패키지를 설치하고 초기화하더라도, 일부 AI 에이전트(Cursor, Gemini 등)가 최초 세션에서 시스템 규칙 파일(`AGENTS.md`)을 능동적으로 읽어들이지 않는 경우가 종종 발생합니다. **새로운 챗봇 세션을 시작할 때마다 아래의 프롬프트를 복사하여 AI에게 첫 지시로 내려주면, 환각이나 룰 이탈을 완벽하게 예방할 수 있습니다.**
+자연어 프롬프트를 통해 AI 에이전트에게 직접 시키세요!
 
-### 1. 전역 시스템 룰 숙지 강제 (필수)
-> *"본격적인 작업을 시작하기 전에 워크스페이스 Root에 있는 `AGENTS.md` (DeukAgentRules) 문서를 끝까지 읽어줘. 현재 프로젝트의 핵심 룰, Identity, 그리고 티켓 워크플로우에 대해 완벽히 숙지해야 해. 숙지를 마쳤다면 내용을 요약하지 말고 '규칙 확인 완료'라고 짧게 대답한 뒤 첫 지시를 대기해."*
-
-### 2. 티켓 기반 타깃 작업 시작 (권장)
-> *"방금 설치/발급된 `.deuk-agent-ticket/TICKET-XXX.md` 티켓을 열고, 현재 저장소(Target Submodule) 경로 내에서만 파일 탐색 및 작업을 진행해. 다른 서브모듈로 벗어나거나 임의의 파일을 건드리지 마."*
-
----
-
-## ⚙️ 부가 옵션 및 CLI 레퍼런스
-
-업무 자동화 및 타깃 제어를 위한 상세 옵션입니다.
-
-> [!NOTE]
-> **패키지 메인테이너(기여자) 전용 - 로컬 개발 환경 권한 주의사항**: 
-> 일반 사용자는 해당되지 않습니다. `DeukAgentRules` 저장소 내부 소스코드를 직접 수정하며 로컬 패치를 즉시 테스트하려는 메인테이너의 경우, 글로벌 캐시된 `npx deuk-agent-rule` 대신 `node ./scripts/cli.mjs`를 직접 호출해야 합니다.
-> - **Linux/macOS**: 로컬 심링크(`npm link`) 생성 시 `sudo` 권한이 필요할 수 있으며, 스크립트를 직접 실행(`./scripts/cli.mjs`)할 경우 실행 권한(`chmod +x`) 이슈가 발생할 수 있으므로 `node` 명령어를 통한 명시적 호출이 가장 안전합니다.
-> - **Windows**: `npm link` 사용 시 관리자 권한(또는 개발자 모드)이 필요하며, PowerShell 스크립트 실행 정책(Execution Policy)에 의해 래퍼 스크립트가 차단될 수 있으므로 권한 제약이 없는 `node ./scripts/cli.mjs` 호출 방식을 권장합니다.
-
-### Ticket 기반 명령
-아래 CLI 명령어들은 터미널에 직접 입력하는 대신, **AI 챗봇에게 자연어 프롬프트로 지시**하여 실행을 위임할 수 있습니다.
-
-| 커맨드 | 설명 / 자연어 프롬프트 지시 예시 |
+| 명령어 | 설명 / 프롬프트 예시 |
 |--------|------|
-| `deuk-agent-rule ticket create ...` | 신규 티켓 문서 생성 (`--group`, `--project`, `--submodule`, `--chain` 지정 가능) <br>💬 *"새 티켓 만들어 (주제: refactor, 타겟: sub1)"* |
-| `deuk-agent-rule ticket list` | 활성 티켓의 현재 상태 및 리스트업 (`--archived`, `--all`, `--json` 지원) <br>💬 *"티켓 리스트"* |
-| `deuk-agent-rule ticket use --latest ...` | 빌드 파이프라인 연동을 위해 최근 티켓의 파일 경로만 반환 <br>💬 *"최근 티켓 경로"* |
-| `deuk-agent-rule ticket close ...` | 파일을 물리적으로 이동시키지 않고 상태만 완료로 잠금(Soft-close) <br>💬 *"현재 티켓 상태 닫아 (완료)"* |
-| `deuk-agent-rule ticket upgrade` | 과거 티켓 구조를 V2(YAML FM)로 마이그레이션 및 서브모듈 분산(DEFRAG) 실행 <br>💬 *"티켓 V2 업그레이드"* |
-| `deuk-agent-rule ticket archive ...` | 완료된 티켓을 안전하게 보관소(`archive/`)로 이동 및 갱신 <br>💬 *"현재 티켓 아카이브해 (보고서 첨부)"* |
-| `deuk-agent-rule ticket reports` | 영구 보관된 에이전트 작업 보고서(`reports/`) 목록 조회 <br>💬 *"완료된 티켓 보고서 목록"* |
+| \`deuk-agent-rule init\` | 규칙 허브와 스포크 포인터를 동기화합니다. <br>💬 *"프로젝트 규칙 초기화해줘"* |
+| \`deuk-agent-rule ticket create\` | 새로운 실행 계약(티켓)을 발행합니다. `--summary`와 `--plan-body`를 함께 넣어 1회 생성으로 Phase 1을 끝내는 것을 권장합니다. <br>💬 *"refactor-ui 티켓을 APC까지 채워서 만들어줘"* |
+| \`deuk-agent-rule ticket list\` | 활성화된 작업 지시서를 표시합니다. <br>💬 *"활성 티켓 목록 보여줘"* |
+| \`deuk-agent-rule ticket archive\` | 완료된 작업을 안전하게 보관합니다. <br>💬 *"068번 티켓 아카이브해줘"* |
+| \`deuk-agent-rule skill list\` | `safe-refactor`, `generated-file-guard`, `context-recall` 같은 first-party 얇은 skill을 보여줍니다. |
+| \`deuk-agent-rule skill add --skill safe-refactor\` | TDW/APC 권한 모델을 바꾸지 않고 로컬 skill registry에 skill을 설치합니다. |
+| \`deuk-agent-rule skill expose --platform claude\` | 설치된 skill을 플랫폼별 얇은 wrapper로 노출합니다. MVP 지원 플랫폼은 `claude`, `cursor`입니다. |
+| \`deuk-agent-rule skill lint\` | skill 파일이 중복 workflow 계약이나 generated 파일 직접 수정 지침을 담지 않았는지 검사합니다. |
 
-### Init 고급 옵션
-| 플래그 | 기본값 | 설명 |
-|--------|--------|------|
-| `--non-interactive` | 끔 | CI/스크립트용. 대화형 인터페이스를 끄고 기존 설정(`.config.json`)을 채택 |
-| `--interactive` | 끔 | 이미 생성된 설정값이 있어도 무시하고 강제로 다시 묻기 설정 시작 |
-| `--clean` | 끔 | 기존 템플릿과 설정 파일을 강제로 삭제한 뒤 초기화 진행 |
-| `--cwd <path>` | 현재 디렉터리 | 타깃이 되는 프로젝트의 워크스페이스 Root 절대/상대경로 지정 |
-| `--dry-run` | 끔 | 실제 파일을 생성/변조하지 않고 콘솔에 동작 결과 텍스트만 출력 |
-| `--backup` | 끔 | `AGENTS.md`나 룰 파일 덮어쓰기 전 원본을 `*.bak`으로 안전 보관 |
+### 티켓 파일 깃 관리 원칙
 
-## 📦 릴리즈 및 체인지로그 (Changelog) 정책
+- `.deuk-agent/tickets/**/*.md`와 `INDEX*.json`은 CLI가 바꾼 결과만 반영합니다.
+- 티켓 본문만 커밋하고 index를 빼먹지 마세요. 다음 작업에서 상태가 맞지 않을 수 있습니다.
+- 생성이 실패한 뒤 티켓 파일을 손으로 만들거나 frontmatter로 상태를 바로 바꾸지 마세요.
+- `telemetry.jsonl`은 보통 실행 로그이므로 일반 코드 커밋에는 넣지 않는 편이 낫습니다.
+- 작업을 마쳤다면 가능하면 `ticket archive`까지 끝낸 뒤 커밋해 active/archive 흐름이 함께 남도록 하세요.
 
-본 패키지(`DeukAgentRules`)의 시스템 템플릿 추가 및 기능 변경을 배포하기 전에 반드시 다음 절차를 따라 릴리즈 프로세스를 진행해야 합니다:
-
-1. **변경사항 커밋**: 문서 및 룰 스크립트 수정 완료 후 `git add` & `git commit` (Conventional Commits 형식 권장, ex: `feat: ...`, `fix: ...`)
-2. **버전 펌핑 및 체인지로그 자동 생성**:
-   * Patch (버그 수정): `npm run bump:patch`
-   * Minor (기능 추가): `npm run bump:minor`
-   * Major (룰/템플릿 대격변): `npm run bump:major`
-   
-   위 명령어를 실행하면 내부적으로 `commit-and-tag-version` 툴이 작동되어 `package.json` 버전 상향, `CHANGELOG.md` 자동 갱신 요약, 릴리즈 커밋, 그리고 태깅 작업까지 한번에 즉시 처리됩니다.
-3. **분산 배포 보정 (OSS Sync)**: 에이전트를 통해 `npm run sync:oss`를 실행하면 자동화 스크립트가 릴리즈 에셋을 스캔하여 OSS 미러 저장소(`DeukAgentRulesOSS`)로 최종적인 퍼블리시 버전을 복제 및 반영합니다.
+자세한 사용 예시는 [docs/usage-guide.ko.md](docs/usage-guide.ko.md)를 참고하세요.
 
 ---
 
-### 🏷️ Keywords for NPM & GitHub Search
-`#cursorrules` `#copilot-instructions` `#ai-agents` `#deuk-agent` `#mcp` `#rag` `#windsurf` `#cline` `#llm-workflow` `#productivity` `#prompt-engineering` `#developer-tools`
+## 관련 아이디어와 영감
+
+DeukAgentRules는 [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)처럼
+AI 코딩 에이전트가 잘못 가정하고, 과하게 구현하고, 요청 밖 코드를 수정하는 문제의식과 맞닿아 있습니다.
+
+다만 DeukAgentRules는 프롬프트 수준의 지침 파일을 넘어 티켓, Phase Gate,
+스코프 계약, 검증, 아카이브 가능한 엔지니어링 메모리까지 제공하는 레포 단위 워크플로우 계층입니다.
+
+first-party skill MVP는 이 경계를 명확히 유지합니다. skill은 반복 실패 패턴을 다루는 짧은
+`SKILL.md` playbook이고, workflow 권한의 단일 기준은 계속 `core-rules/AGENTS.md`입니다.
+`skill add`와 `skill expose`로 Claude/Cursor에 playbook을 노출하되, 전체 rule contract를 복사하지 않습니다.
+
+\`\`\`bash
+npx deuk-agent-rule init
+npx deuk-agent-rule skill list
+npx deuk-agent-rule skill add --skill safe-refactor
+npx deuk-agent-rule skill expose --platform claude
+\`\`\`
+
+---
+
+### 🏷️ 검색 태그
+\`#AI-Orchestration\` \`#Agentic-Workflow\` \`#DeukFamily\` \`#Engineering-Intelligence\` \`#Zero-Legacy\` \`#High-Signal-Coding\` \`#AI-Protocol\` \`#CursorRules\` \`#CopilotInstructions\` \`#ClaudeCode\` \`#ClaudeMD\` \`#AgentsMD\` \`#AgentSkills\` \`#CodingAgent\` \`#AI-Guardrails\` \`#LLM-Control-Plane\`

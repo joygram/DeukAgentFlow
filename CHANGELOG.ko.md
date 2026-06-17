@@ -6,6 +6,80 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [3.3.2] - 2026-05-06
+
+### 포지셔닝 (Positioning)
+
+- npm/GitHub에서 보이는 정체성을 **모든 레포를 위한 AI 코딩 에이전트 가드레일**로 재정리했습니다.
+- `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, 에이전트 실행기, 일반 LLM/MCP 가드레일과 비교해 DeukAgentRules가 더하는 티켓 생명주기, 범위 계약, 검증, 아카이브 가능한 기억을 README에 드러냈습니다.
+- 다음 개선 방향으로 첫 실행 점검, CLI/RAG 재각인 신호, active ticket/phase/open ticket count/DeukAgentContext memory status를 보여주는 companion 표면을 명시했습니다.
+
+## [3.3.0] - 2026-05-02
+
+### 추가됨 (Added)
+
+- **docs:** VS Code, Open VSX, GitHub, skill 기반 발견 루프를 포함한 AI 코딩 에이전트 가드레일 포지셔닝, 비전, 오가닉 유입 리서치 문서를 추가했습니다.
+- **docs:** Karpathy식 skill, DeukAgentRules, DeukAgentContext 심층 비교 문서를 추가했습니다. Skill은 행동 playbook, DeukAgentRules는 workflow/permission control, DeukAgentContext는 ticketed engineering memory로 포지셔닝했습니다.
+- **seo:** `andrej-karpathy-skills` 관련 아이디어 링크와 Claude Code, AGENTS.md, Cursor rules, agent skills, AI guardrails 검색 유입 키워드를 보강했습니다.
+
+### 변경됨 (Changed)
+
+- **ticket:** 열린 티켓이 설정된 한도를 넘을 때 자동 정리 대신 사용자가 목록을 보고 결정할 수 있는 cleanup flow를 강화했습니다.
+- **ticket:** 닫힌 티켓은 자동 아카이브할 수 있게 하고, 아카이브된 티켓은 년월/일 단위로 정리되도록 했습니다.
+- **docs:** README 문서 목록과 GitHub topic 가이드를 agent guardrail, instruction hub, skill registry, project memory 포지셔닝에 맞게 갱신했습니다.
+
+### 수정됨 (Fixed)
+
+- **ticket:** 새 작업 진입 전에 정리 결정을 노출하여 열린 티켓 수가 의도한 운영 한도를 조용히 넘는 문제를 방지했습니다.
+
+## [3.2.0] - 2026-04-29
+
+### 추가됨 (Added)
+- **agent:** 플랫폼 공존(Platform Coexistence) 및 모드 인지형(Mode-aware) 워크플로우 구현. (Plan Mode에서 TDW Phase 자동 매핑, `platform-coexistence.md` 규칙 추가, 수정 제어 및 `PROJECT_RULE.md` 포인터 연동 등)
+
+### 변경됨 (Changed)
+- **agents:** Co-existence Protocol 및 Workflow Gate 기능 도입 (T-120).
+- v3.1.0 아키텍처 원칙 및 사용법 문서 개선.
+
+## [3.1.0] - 2026-04-28
+
+### 추가됨 (Added)
+- **arch:** 제로카피(Zero-Copy) 포인터 아키텍처 도입 (`PROJECT_RULE.md` 연동) 및 구조 간소화
+- **cli:** 엄격한 Phase 기반 티켓 워크플로우 및 APC(Agent Permission Contract) 검증 기능 추가
+- **cli:** `--plan-body` 옵션을 통한 채워진 Phase 1 티켓 본문 입력 기능 추가
+- **ticket:** 티켓 아카이브 시 불필요한 토큰 낭비를 막는 Zero-Token 지식 증류(Knowledge Distillation) 구현
+- **telemetry:** 로컬 환경에 최적화된 Telemetry CLI 추가
+- **rules:** `PROJECT_RULE.md` 템플릿 추가 (AI 에이전트 폴백 가이드 포함) 및 이중 언어(한/영) 지원
+
+### 수정됨 (Fixed)
+- **rules:** `PROJECT_RULE.md` 내 중복된 코어 룰 링크 제거 및 Frontmatter 렌더링 복구
+- **telemetry:** 모델 및 설정에서 클라이언트 도구를 자동으로 감지하도록 수정
+- **agent:** 티켓 탐색 중 에이전트 무한 루프 문제 해결
+
+### 변경됨 (Changed)
+- **agent:** TDD 용어를 TDW (Ticket-Driven Workflow)로 변경 및 전역 `AGENTS.md`에서 낡은 규칙 제거
+- **cli:** 상태 기반(State-driven) 경로 탐색 로직으로 구조 개편 및 상세한 사용 가이드 추가
+
+## [3.0.0] - 2026-04-25
+
+### 🚀 대규모 업데이트: Hub-Spoke 아키텍처
+- **Canonical Rule Hub**: 모든 AI 에이전트의 단일 진실 공급원(SSOT)으로 `AGENTS.md` 도입.
+- **Thin Spoke Pointers**: IDE별 룰(Cursor, Copilot 등)을 중앙 Hub를 가리키는 가벼운 포인터로 변경하여 중복 및 동기화 오류 제거.
+- **Global CLI Proxy**: 로컬 워크스페이스 소스를 자동 감지하여 실행을 위임하는 프록시 도입으로 지연 없는(Zero-latency) 개발 환경 구축.
+
+### 🧹 제로 레거시 & 환경 정리
+- **Auto-Purge**: `init` 실행 시 더 이상 사용되지 않는 레거시 `.cursorrules` 파일을 무조건 삭제.
+- **Smart Backups**: 사용자 정의 규칙을 감지하여 삭제 대신 `.bak` 파일로 백업하는 로직 추가.
+- **Submodule Scrubbing**: 비어 있는 서브모듈 디렉터리 스텁 및 `.gitmodules` 자동 정리 기능.
+
+### 🏗️ 리브랜딩 & 인프라스텍
+- **Identity Overhaul**: "Zero-Latency, High-Signal AI Orchestration Protocol"로 리브랜딩.
+- **Documentation v3**: 고품질 3D 인포그래픽 및 구조, 원리, 작동 방식 등 개념 가이드 전면 개편.
+- **Domain Agnostic**: 도메인별 하드코딩을 제거하고 모든 기술 스택을 지원하도록 `bundle/AGENTS.md` 일반화.
+
+### ⚙️ CLI 개선 사항
+- **Proxy Routing**: `bin/deuk-agent-rule.js`가 디렉터리를 탐색하여 로컬 스크립트를 찾아 실행하도록 수정.
+- **Synchronized IO**: CLI의 안정성을 높이기 위해 핵심 로직을 동기적 파일 시스템 연산으로 리팩터링.
 ## [2.4.6] - 2026-04-19
 
 ### 수정됨 (Fixed)

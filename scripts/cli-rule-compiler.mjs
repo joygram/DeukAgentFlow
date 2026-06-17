@@ -8,8 +8,8 @@ import YAML from "yaml";
  * and compiles a single rule string for injection.
  */
 export function compileDynamicRules(cwd, bundleRoot, targetFileName) {
-  const bundleRulesDir = join(bundleRoot, "rules.d");
-  const localRulesDir = join(cwd, AGENT_ROOT_DIR, "domain-rules");
+  const bundleRulesDir = join(bundleRoot, "templates", "rules.d");
+  const localRulesDir = join(cwd, AGENT_ROOT_DIR, "project-rules");
   
   const allRuleFiles = [];
   
@@ -60,20 +60,25 @@ export function compileDynamicRules(cwd, bundleRoot, targetFileName) {
 }
 
 /**
- * Attempts to locate and parse the DeukRag config.yaml from the workspace root.
+ * Attempts to locate and parse the DeukContext config.yaml from the workspace root.
  */
-function resolveDeukRagConfig(cwd) {
-  // Go up directories until we find a sibling DeukRag folder, or hit root
+function resolveDeukContextConfig(cwd) {
+  // Go up directories until we find a sibling DeukAgentContext folder, or hit root
   let current = resolve(cwd);
   while (current && current !== "/") {
-    const candidatePath = join(current, "DeukRag", ".local", "config.yaml");
-    if (existsSync(candidatePath)) {
-      try {
-        const raw = readFileSync(candidatePath, "utf8");
-        return YAML.parse(raw);
-      } catch (e) {
-        console.error("Failed to parse DeukRag config.yaml:", e);
-        return null;
+    const candidates = [
+      join(current, "DeukAgentContext", ".local", "config.yaml"),
+      join(current, "DeukContext", ".local", "config.yaml") // Legacy fallback
+    ];
+    for (const candidatePath of candidates) {
+      if (existsSync(candidatePath)) {
+        try {
+          const raw = readFileSync(candidatePath, "utf8");
+          return YAML.parse(raw);
+        } catch (e) {
+          console.error("Failed to parse DeukContext config.yaml:", e);
+          return null;
+        }
       }
     }
     const parent = dirname(current);
@@ -89,12 +94,12 @@ function resolveDeukRagConfig(cwd) {
 function evaluateCondition(condition, cwd) {
   if (!condition) return true;
 
-  // Example: condition: { mcp: "deukrag" }
-  if (condition.mcp === "deukrag") {
-    const ragConfig = resolveDeukRagConfig(cwd);
+  // Example: condition: { mcp: "deuk-agent-context" }
+  if (condition.mcp === "deuk-agent-context" || condition.mcp === "deuk_agent_context") {
+    const ragConfig = resolveDeukContextConfig(cwd);
     if (!ragConfig || !ragConfig.projects) return false;
 
-    // Check if the current cwd is managed by DeukRag
+    // Check if the current cwd is managed by DeukContext
     const isManaged = ragConfig.projects.some(p => {
       // If the project path is a prefix of cwd, it's managed
       return cwd.startsWith(p.path);

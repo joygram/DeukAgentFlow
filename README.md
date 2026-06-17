@@ -1,209 +1,177 @@
 <div align="center">
   <br />
-  <h1>DeukAgentRules</h1>
+  <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentRules Architecture" />
+  <br />
+  <h1>DeukAgentRules v3.3.2</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg" alt="npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dt/deuk-agent-rule.svg" alt="npm downloads" /></a>
   </p>
-  <p><b>High-Signal Encoding & Rule Standardization Engine</b></p>
+  <p><b>AI coding agent guardrails for every repo</b></p>
+  <p><i>Ticketed scope, verification, and memory for Codex, Copilot, Claude Code, Cursor, and more</i></p>
   <p>Part of the <a href="https://deukpack.app">Deuk Family</a> ecosystem.</p>
 </div>
 
-> A core module of the **Deuk Family**. Maximizes collaboration efficiency of AI agents through structured rules.
+---
 
-**npm package:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
+**DeukAgentRules** gives AI coding agents a shared way to work through tickets, scope contracts, verification, and durable project memory.
 
-**Korean:** [README.ko.md](https://github.com/joygram/DeukAgentRules/blob/master/README.ko.md)
+It is more than a prompt pack. It is a repository-level workflow layer that standardizes collaboration through the **Hub-Spoke Architecture** and a **Ticket-Driven Execution Model** while keeping `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, and related agent surfaces aligned.
 
-A **submodule-isolated collaborative framework** designed to be used alongside various coding agents such as Cursor, GitHub Copilot, Gemini / Antigravity, Claude, Windsurf, and JetBrains AI Assistant.
-It standardizes project rules (`AGENTS.md`, `.cursor/rules`) and strongly prevents wasteful prompt token consumption and AI context hallucination through a **ticket-based workflow**.
+Ticket management lives under `.deuk-agent/`, with active work tracked in `.deuk-agent/tickets/` and related docs, plans, and archive data kept alongside it.
 
-> **🚀 Core Value:**
-> Compresses the mandatory loaded context of approx. 1,500~2,000 tokens per session down to a mere 200~300 tokens. By isolating the AI to a specific **"Target Submodule"** using exact tickets (work orders), it prevents the AI from wandering through an entire monolithic repository.
+> **Current readiness:**
+> v3.3.2 is deployment-ready for agent-driven repositories. It is currently most reliable in **OpenAI Codex** and **GitHub Copilot** workflows. Cursor, Windsurf, Claude Code, and MCP remain supported through pointer-style integration, but they should be validated per workspace before rollout. MCP server registration is separate from `init`.
 
-### 📢 What's New in v2.4
-In the latest v2.4 release, the **Dynamic Rule Assembly Engine** has been introduced. The script automatically detects your project environment (e.g., DeukRag MCP integration) and injects only the necessary context-aware rules into `AGENTS.md`.
-The CLI ticketing system has also been upgraded: running `deuk-agent-rule ticket create` now automatically scaffolds design Plan documents and links them to the ticket, heavily reinforcing the Phase-based issue tracking workflow.
+> **Architecture foundation:**
+> We have officially deprecated monolithic `.cursorrules`. v3.0 introduces the **Hub-Spoke model** where `AGENTS.md` is the single source of truth, and IDE-specific rules act as thin entry-point pointers.
 
-> **💡 RAG Engine Integration Guide (Coming Soon)**
-> We are currently preparing an advanced integration manual and feature update. This will perfectly integrate these agent rules with our internal knowledge search engine **DeukRag (MCP)**, allowing your AI agent to automatically search past tickets and internal conventions to maximize its contextual awareness and problem-solving effectiveness!
+### 🗺️ Main Features & Architecture
+
+DeukAgentRules brings four core capabilities to day-to-day AI engineering:
+
+1. **Zero-Copy Hub-Spoke Architecture**
+   - **Hub**: `AGENTS.md` acts as the global single source of truth.
+   - **Spoke**: IDE-specific rules (like `.cursorrules`) or `PROJECT_RULE.md` act as thin pointers.
+   - **Benefit**: Eliminates rule duplication, preventing conflicting instructions and context hallucination across different IDEs (Cursor, Copilot, Windsurf).
+
+2. **Ticket-Driven Workflow (TDW)**
+   - Guides work through a clear lifecycle: Plan → Execute → Verify → Archive.
+   - Keeps changes connected to an active ticket in `.deuk-agent/tickets/`, so scope and progress stay visible.
+
+3. **Platform Co-existence & Mode-Aware Workflow Gate**
+   - Uses strong Agent Permission Contracts (APC) through a **Mode-Aware** workflow.
+   - In **Plan Mode**, agents focus on analysis and planning artifacts before moving into approved execution.
+   - Integrates with MCP Soft Gates to keep code changes aligned with the current ticket context.
+
+4. **Zero-Token Knowledge Distillation**
+   - When a ticket is archived, it is distilled into a zero-token summary and moved to `reports/`.
+   - These reports are vectorized into DeukAgentContext, building a permanent Engineering Memory Engine without cluttering the agent's active context window.
+
+### Why Not Just Instructions?
+
+The agent tooling space already has useful building blocks: `AGENTS.md`, GitHub Copilot instructions, Cursor rules, Claude skills, agent launchers, and general LLM guardrail frameworks. DeukAgentRules is positioned one layer above plain instruction sync: it turns those surfaces into a ticketed repository workflow.
+
+| Similar approach | What it helps with | DeukAgentRules adds |
+|---|---|---|
+| `AGENTS.md` open format | A predictable instruction file for coding agents | Ticket lifecycle, phase gates, verification, and archiveable memory |
+| Copilot instructions / Cursor rules / Claude memory | Tool-specific guidance | One repo-owned workflow shared across agent clients |
+| Claude or Copilot custom agents and skills | Reusable task playbooks | Skills route into scoped, ticketed execution instead of replacing the workflow |
+| Agent launchers and harnesses | Running many coding agents from one place | Lifecycle control inside the repository, independent of the chosen agent |
+| General LLM/MCP guardrails | Runtime policy checks for AI systems | Developer-facing work orders, scope contracts, Git-visible history, and closeout evidence |
+
+Use DeukAgentRules when you want AI coding work to stay coordinated, reviewable, and easy to carry forward across sessions and teammates.
+
+### Better Together With Karpathy-Style Skills
+
+Karpathy-style skills are great at improving how an agent behaves inside a task. DeukAgentRules is great at making that task ticketed, scoped, verified, and remembered at the repository level.
+
+Used together, skills can improve the quality of the move, while DeukAgentRules keeps the move connected to team workflow. The result is a better session and a better project record: behavior playbooks on the front end, ticket lifecycle and DeukAgentContext memory on the back end.
+
+### What's Next
+
+The next step is to make this workflow even easier to see and adopt: clearer first-run checks, compact CLI/RAG reminders for agents, stronger README/npm positioning, and companion surfaces that show active ticket, phase, open-ticket count, and DeukAgentContext memory status without asking teams to switch coding agents.
+
+### 📚 Detailed Documentation
+| Doc | Purpose |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | High-level system structure and visual infographics |
+| [docs/how-it-works.md](docs/how-it-works.md) | Detailed CLI mechanics, initialization lifecycle, and file roles |
+| [docs/principles.md](docs/principles.md) | Design philosophy: Hub-Spoke, Zero-Legacy, and Source Sovereignty |
+| [docs/product-positioning-research.ko.md](docs/product-positioning-research.ko.md) | Product positioning research for AI coding agent guardrails |
+| [docs/karpathy-skills-vs-deukagent-positioning.ko.md](docs/karpathy-skills-vs-deukagent-positioning.ko.md) | Deep comparison of Karpathy-style skills, DeukAgentRules, and DeukAgentContext |
+| [docs/vision-agent-guardrails.ko.md](docs/vision-agent-guardrails.ko.md) | Vision document for the multi-agent guardrail hub |
+| [docs/organic-growth-plan.ko.md](docs/organic-growth-plan.ko.md) | Organic growth plan for VS Code, Open VSX, GitHub, and skill loops |
+| **Korean Docs** | [README.ko.md](README.ko.md) · [docs/architecture.ko.md](docs/architecture.ko.md) |
 
 ---
 
-## 🛠️ Getting Started (Workspace Initialization)
+## 🛠️ Installation & Setup
 
-Since this CLI tool is used frequently across multiple repositories and submodules, a **global installation is highly recommended**.
+### 1. Global Installation (Standard User)
+To prevent `npx` cache issues and "Local Traps", a global installation is strictly required.
 
 ```bash
 npm install -g deuk-agent-rule
 deuk-agent-rule init
 ```
 
-> [!NOTE]
-> **Global Install Permission Troubleshooting**:
-> - **Linux/macOS**: Running `npm install -g` may result in `EACCES` permission errors. It is highly recommended to use a Node version manager (`nvm`, `fnm`, etc.) to bypass these constraints. If using the system Node installation, you may unavoidably need to use `sudo npm install -g deuk-agent-rule`.
-> - **Windows**: If Node.js is installed in a system directory like `Program Files`, you must run your terminal (PowerShell/CMD) as an **Administrator** for the global installation to complete successfully.
+### 2. Local Source Development (Maintainer/Power User)
+v3.0 introduces a **Global CLI Proxy**. If you are developing inside the `DeukAgentRules` workspace, the global command will automatically delegate execution to your local source.
 
-### 💡 Why Global Installation?
-
-> [!WARNING]
-> **Submodule Local Installation STRICTLY FORBIDDEN**: Never install `deuk-agent-rule` locally (e.g., `npm install deuk-agent-rule`) inside your target consumer submodules. Doing so creates a "Local Trap" where `npx` prioritizes the outdated local `node_modules` over the globally installed latest version, leading to severe ticket formatting errors and logic mismatches.
-
-1. **Preventing `npx` Cache & Local Trap Issues**: Running `npx deuk-agent-rule` relies on the local npm cache and `node_modules` resolution. If a stale version is present locally, it will silently hijack the execution. This has been proven to cause severe agent hallucinations or ticket formatting errors (e.g., missing hostname sequence IDs).
-2. **Execution Speed**: The chatbot agent receives instant CLI responses without the overhead of `npx` checking for temporary package downloads.
-3. **Cross-Repository Consistency**: It allows you to reliably apply the exact same version of the agent rules across various submodules and independent microservices in the Deuk Family ecosystem.
-
-Upon initialization, interactive questions will ask for the project's **tech stack** and **agent tools in use**. Based on your selections, optimized markdown templates and rule files (`.cursor/rules/*`) will be automatically generated and synchronized.
-- If you don't need to change the tech stack later, simply run `deuk-agent-rule init` to refresh the rules. (If not installed globally, you can fallback to `npx deuk-agent-rule init`).
-- Suppress interactive prompts in CI or script environments by appending the `--non-interactive` flag.
-
-### 🔄 Updating the Rules Package
-When a new version of the agent rules or templates is released, you can sync the latest instructions to your project by updating the package and re-running `init`.
-Since your previous configurations are saved (`.deuk-agent-rule.config.json`), using the `--non-interactive` flag will quietly and cleanly overwrite the obsolete rules with the latest ones without asking any questions.
 ```bash
-npm install deuk-agent-rule@latest
-deuk-agent-rule init --non-interactive
+cd ~/workspace/DeukAgentRules
+sudo npm link
+deuk-agent-rule init  # Routes to local scripts/cli.mjs automatically
 ```
 
-> [!TIP]
-> **💡 Troubleshooting: Legacy Version Migration Failures**
-> If you are migrating from a very old version and `init` repeatedly fails due to corrupted configurations or heavily modified template structures, the fastest fix is to perform a clean initialization using the `--clean` flag. **(This will not affect your existing tickets.)**
-> ```bash
-> deuk-agent-rule init --clean --interactive
-> ```
+If you primarily work in Codex or Copilot, this is the recommended day-to-day setup. Those clients currently have the smoothest behavior with the hub-spoke and ticket-driven workflow.
 
 ---
 
-## 🎯 The Ticket Workflow
+## 🎯 The Protocol Workflow
 
-Running `deuk-agent-rule init` deploys a **zero-touch scaffolding sandbox** at your workspace root, spawning two essential directories:
+The workflow is governed by a **Ticket-Driven Execution Contract**.
 
-1. **`.deuk-agent-templates/` (Agent Templates)**: Houses the official blueprint (`TICKET_TEMPLATE.md`) dictating how AIs must process and report tasks. Committed alongside your source code to serve as the team's rulebook.
-2. **`.deuk-agent-ticket/` (Ticket Execution Space)**: The covert space where volatile instructions (`TICKET-XXX.md`) are exchanged between agents and workers. (Automatically hidden by `.gitignore` to prevent security leaks and repository bloat).
-
-### 💡 Workflow Overview
-```mermaid
-%%{init: {"flowchart": {"htmlLabels": false}, "themeCSS": ".node text { fill: #ffffff !important; stroke: none !important; }"} }%%
-graph TD
-    classDef action fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#ffffff;
-    classDef phase fill:#475569,stroke:#334155,stroke-width:2px,color:#ffffff;
-    classDef decision fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff;
-    classDef highlight fill:#dc2626,stroke:#b91c1c,stroke-width:2px,color:#ffffff;
-
-    A(Step 1: Ticket Creation):::action --> B(Step 2: Agent Execution):::phase
-    B --> C(Step 3: Verification & Closure):::phase
-    
-    C --> D{Issues Found?}:::decision
-    
-    D -->|Yes| E(MANDATORY Follow-up Chaining):::highlight
-    E --> F(Step 4: Archiving):::action
-    D -->|No| F
-```
-
-The optimal **4-Step AI Coding Sequence** utilizing these sandbox folders is as follows.
-
-### [Step 1] Ticket Creation & Submodule Isolation
-Do not issue scattered, unbounded commands to your AI. Narrowing the **context** via a clear ticket is strictly required to prevent astronomical costs and accidental code corruption.
-
-```bash
-deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI
-```
-This command instantly creates a templated `TICKET-ui-refactoring.md` file within the `.deuk-agent-ticket/` directory.
-
-> [!IMPORTANT]
-> **Filling the Ticket (CRITICAL)**: The newly created ticket already contains **YAML Front Matter** (`--- id: ... ---`). **DO NOT** overwrite the entire file when adding your plan. ALWAYS append your content below the header or use partial file editing to preserve the existing YAML metadata. Erasing the Front Matter corrupts the ticketing system.
-
-The developer must simply specify the exact isolated directory path (e.g., `src/client`) inside the `[Target Submodule]` attribute at the top of the generated file.
-
-### [Step 2] Agent Execution & Handoff (Ticket Session)
-Provide a single line of instruction to your AI chatbot (Cursor, Gemini, etc.):
-> *"Open the recently issued `.deuk-agent-ticket/TICKET-ui-refactoring.md` ticket and strictly follow the checklist within the specified target submodule."*
-
-The AI will faithfully read the defined Phases in the ticket and write optimized code while **completely blocking out unnecessary computations for unrelated server logic or sibling modules**. (This mechanism drastically reduces token costs).
-
-### [Step 3] Status Review & Closure
-As the AI writes the code, it will simultaneously update the markup checkboxes (`[x]`) inside the ticket. If the agent's session memory limit is approaching, simply leave the ticket file saved, turn off the chat window, open a fresh session, and issue [Step 2] again. The handoff (session transfer) is seamlessly completed.
-Once all steps are accomplished, promote the Phase status to `[Phase Complete]`. Instead of manually typing terminal commands, **you can simply tell your AI chatbot via natural language prompt: "Show me the list of active tickets" or "Archive the completed tickets with reports"**, and the AI will autonomously invoke the CLI to manage them for you.
-```bash
-deuk-agent-rule ticket list
-```
-```text
-#  STATUS   SUBMODULE   GROUP       PROJECT     CREATED                  TITLE
-1  [ ]      DeukPack    sub         global      2026-04-18T13:34:32.484Z naming-consistency
-```
-
-### [Step 4] Ticket Verification (Self-Correction)
-After all phases are marked as `[x]`, you should issue a final command to the AI:
-> *"Proceed with **Ticket Verification** for this task."*
-
-The AI, following the strictly defined **[TICKET VERIFICATION RULE]** in `AGENTS.md`, will then autonomously perform a 3-stage audit:
-1. **Side Effect Analysis**: Detecting potential build warnings or broken dependencies.
-2. **Convention Audit**: Re-verifying if filenames and classes perfectly match project architecture documents.
-3. **Potential Issue Reporting**: Listing breaking changes or unverified edge cases (e.g., native build constraints).
-
-This final step ensures that the agent's output is not just "functional" but "production-grade" and architecturally sound.
+1. **Scaffolding**: `init` deploys `.deuk-agent/templates/` and `AGENTS.md` (or local pointers like `PROJECT_RULE.md`).
+2. **Ticketing (Plan Phase)**: `ticket create --topic feature-x` generates a bounded work order in `.deuk-agent/tickets/`. During this phase, agents operate in **Plan Mode** and are restricted from mutating files.
+3. **Execution (Execute Phase)**: Once authorized, the AI agent reads the ticket, locks onto the **Target Submodule**, and executes code changes. MCP Soft Gates ensure that unauthorized modifications are blocked.
+4. **Verification**: The agent performs a side-effect audit and convention (e.g., DC-DUP) check before closure.
+5. **Archiving (Archive Phase)**: Completed tickets undergo Zero-Token Knowledge Distillation and move to `reports/` to build the **Engineering Memory Engine** via DeukAgentContext.
 
 ---
 
-## 🤖 AI Agent Prompting Guide
+## ⚙️ CLI Reference
 
-Even after installing and initializing the package, some AI agents (Cursor, Gemini, etc.) might not actively read the rule file (`AGENTS.md`) in a fresh session. **Whenever you start a new chat session, copy and paste the following prompts to force the AI to align with the rules. This effectively eliminates hallucination and accidental scope-creep.**
+Delegate these to your AI agent via natural language prompts!
 
-### 1. Force Rule Familiarization (Mandatory)
-> *"Before starting any work, please read the `AGENTS.md` (DeukAgentRules) file at the workspace root from top to bottom. Make sure you fully understand your Identity, the core project rules, and the ticket workflow. Once you have read and understood them, do NOT summarize them; simply reply 'Rules Acknowledged' and await my first instruction."*
-
-### 2. Ticket Execution (Recommended)
-> *"Open the recently issued `.deuk-agent-ticket/TICKET-XXX.md` ticket. Restrict all your file exploration, analysis, and modifications STRICTLY to the target submodule path explicitly specified in the ticket. Do not wander into other submodules or accidentally modify unrelated files."*
-
----
-
-## ⚙️ CLI Reference & Advanced Options
-
-Advanced commands for workflow automation and target control.
-
-> [!NOTE]
-> **For Package Maintainers/Contributors Only - Local Development**:
-> This does not apply to general users. If you are modifying the `DeukAgentRules` source code and need to immediately test local patches bypassing the globally cached `npx deuk-agent-rule`, explicitly invoke `node ./scripts/cli.mjs`.
-> - **Linux/macOS**: Creating symlinks (`npm link`) may require `sudo` privileges. Direct script execution (`./scripts/cli.mjs`) may trigger `chmod +x` permission issues, making explicit `node` invocation the safest workaround.
-> - **Windows**: `npm link` requires Administrator rights (or Developer Mode) to create symlinks, and PowerShell execution policies may block `.cmd` wrapper scripts. Explicitly calling `node ./scripts/cli.mjs` safely bypasses these OS-level restrictions.
-
-### Ticket-based Commands
-Instead of manually typing the CLI commands below into the terminal, you can **delegate their execution to your AI chatbot by giving natural language prompt instructions**.
-
-| Command | Description / Natural Language Prompt Example |
+| Command | Description / Example Prompt |
 |--------|------|
-| `deuk-agent-rule ticket create ...` | Generates a new ticket document (accepts `--group`, `--project`, `--submodule`, `--chain`) <br>💬 *"Create new ticket (topic: refactor)"* |
-| `deuk-agent-rule ticket list` | Lists and displays active tickets (`--archived`, `--all`, `--json` supported) <br>💬 *"Ticket list"* |
-| `deuk-agent-rule ticket use --latest ...` | Returns only the file path of the most recent ticket <br>💬 *"Recent ticket path"* |
-| `deuk-agent-rule ticket close ...` | Soft-closes a target ticket by locking its status to completed without moving the file <br>💬 *"Close this ticket"* |
-| `deuk-agent-rule ticket upgrade` | Migrates legacy ticket structures to V2 (YAML FM) and triggers submodule DEFRAG <br>💬 *"Upgrade tickets to v2"* |
-| `deuk-agent-rule ticket archive ...` | Securely moves completed tickets to `archive/` and updates INDEX <br>💬 *"Archive this ticket (attach report)"* |
-| `deuk-agent-rule ticket reports` | Lists structurally preserved agent work reports (`reports/`) <br>💬 *"List archived reports"* |
+| `deuk-agent-rule init` | Synchronizes the rule Hub and Spoke pointers. <br>💬 *"Initialize project rules"* |
+| `deuk-agent-rule ticket create` | Issues a new execution contract. Use `--summary` plus `--plan-body` for a one-pass Phase 1 ticket. <br>💬 *"Create ticket: refactor-ui with filled APC"* |
+| `deuk-agent-rule ticket list` | Displays active work orders. <br>💬 *"Show active tickets"* |
+| `deuk-agent-rule ticket archive` | Securely stores completed work. <br>💬 *"Archive ticket 068"* |
+| `deuk-agent-rule skill list` | Shows first-party thin skills such as `safe-refactor`, `generated-file-guard`, and `context-recall`. |
+| `deuk-agent-rule skill add --skill safe-refactor` | Installs a skill into the local registry without changing the TDW/APC authority model. |
+| `deuk-agent-rule skill expose --platform claude` | Exposes installed skills as platform-specific thin wrappers. Supported MVP platforms: `claude`, `cursor`. |
+| `deuk-agent-rule skill lint` | Audits skill files for duplicate workflow contracts and unsafe generated-file guidance. |
 
-### Advanced Init Options
-| Flag | Default | Description |
-|--------|--------|------|
-| `--non-interactive` | Off | For CI/Scripts. Disables interactive UI and adopts existing `.config.json` |
-| `--interactive` | Off | Forces the interactive setup to reappear even if config already exists |
-| `--clean` | Off | Deletes legacy templates and configs before initializing |
-| `--cwd <path>` | Current dir | Adjust target workspace root (absolute/relative path) |
-| `--dry-run` | Off | Simulates the execution text in the console without generating/altering files |
-| `--backup` | Off | Safely creates `*.bak` copies of `AGENTS.md` and rule files before overwriting |
+### Ticket File Git Hygiene
 
-## 📦 Release & Changelog Policy
+- Treat `.deuk-agent/tickets/**/*.md` and `INDEX*.json` as CLI-managed lifecycle artifacts.
+- Do not commit a ticket body without the related index updates. The next session can restore the wrong active/archive state.
+- After `ticket create` fails, do not create or repair ticket files manually.
+- Do not flip ticket status by editing frontmatter directly. Use `ticket move`, `ticket close`, or `ticket archive`.
+- `telemetry.jsonl` is usually operational log noise, so it is better left out of normal code commits unless your repo intentionally tracks it.
+- When possible, commit completed work after `ticket archive` so the active/archive transition lands in one history step.
 
-Before pushing any core updates, system templates, or feature changes to this package (`DeukAgentRules`), you must strictly follow this procedure to bump the version safely:
-
-1. **Apply Changes**: Complete documentation and rule script updates, then `git add` and `git commit` (Conventional Commits format recommended, e.g., `feat: ...`, `fix: ...`).
-2. **Version Bump & Automated Changelog**:
-   * Patch (Bug fixes): `npm run bump:patch`
-   * Minor (New features): `npm run bump:minor`
-   * Major (Core/Breaking changes): `npm run bump:major`
-   
-   Executing the bump command will trigger the `commit-and-tag-version` pipeline: it bumps the version in `package.json`, auto-generates the `CHANGELOG.md` log, creates a release commit, and applies the release tag.
-3. **Synchronize & Mirror (OSS Sync)**: As a final step, ask your agent to run `npm run sync:oss`. The automation script will clean the release assets and push the bundled versions to the mirror repository (`DeukAgentRulesOSS`).
+For more day-to-day examples, see [docs/how-it-works.md](docs/how-it-works.md).
 
 ---
 
-### 🏷️ Keywords for NPM & GitHub Search
-`#cursorrules` `#copilot-instructions` `#ai-agents` `#deuk-agent` `#mcp` `#rag` `#windsurf` `#cline` `#llm-workflow` `#productivity` `#prompt-engineering` `#developer-tools`
+## Related Ideas & Inspiration
+
+DeukAgentRules shares the same concern as guideline-first projects like
+[andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills):
+AI coding agents often over-assume, over-engineer, and edit outside the requested scope.
+
+Where prompt-level guideline files improve agent behavior inside one client,
+DeukAgentRules adds a repository-level workflow layer: tickets, phase gates,
+scoped permissions, verification, and archiveable engineering memory.
+
+The first-party skill MVP keeps that boundary explicit: skills are short
+`SKILL.md` playbooks for recurring failure patterns, while `core-rules/AGENTS.md`
+remains the workflow authority. Use `skill add` and `skill expose` to make those
+playbooks visible to Claude or Cursor without copying the full rule contract.
+
+```bash
+npx deuk-agent-rule init
+npx deuk-agent-rule skill list
+npx deuk-agent-rule skill add --skill safe-refactor
+npx deuk-agent-rule skill expose --platform claude
+```
+
+---
+
+### 🏷️ Keywords
+`#AI-Orchestration` `#Agentic-Workflow` `#DeukFamily` `#Engineering-Intelligence` `#Zero-Legacy` `#High-Signal-Coding` `#AI-Protocol` `#CursorRules` `#CopilotInstructions` `#ClaudeCode` `#ClaudeMD` `#AgentsMD` `#AgentSkills` `#CodingAgent` `#AI-Guardrails` `#LLM-Control-Plane`

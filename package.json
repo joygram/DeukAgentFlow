@@ -1,7 +1,7 @@
 {
   "name": "deuk-agent-rule",
-  "version": "2.5.15",
-  "description": "DeukAgentRules: generic AGENTS.md + .cursor rule templates with init/merge CLI (npm name: deuk-agent-rule).",
+  "version": "3.3.2",
+  "description": "AI coding agent guardrails for every repo: ticketed scope, verification, and shared AGENTS.md workflows.",
   "keywords": [
     "agents-md",
     "cursor-rules",
@@ -11,6 +11,8 @@
     "windsurf",
     "jetbrains",
     "ticket",
+    "ai-guardrails",
+    "agent-guardrails",
     "deuk-family",
     "deukpack-ecosystem"
   ],
@@ -33,13 +35,16 @@
     "CHANGELOG.ko.md"
   ],
   "scripts": {
-    "sync": "node scripts/sync-bundle.mjs",
-    "prepack": "node scripts/sync-bundle.mjs"
+    "lint:md": "node scripts/lint-md.mjs",
+    "test": "node --test scripts/tests/*.test.mjs"
   },
   "engines": {
     "node": ">=18"
   },
-  "bin": {},
+  "bin": {
+    "deuk-agent-rule": "./bin/deuk-agent-rule.js",
+    "deukagentrule": "./bin/deuk-agent-rule.js"
+  },
   "dependencies": {
     "ejs": "^5.0.2",
     "yaml": "^2.8.3"
