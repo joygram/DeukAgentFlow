@@ -1,5 +1,7 @@
 # DeukAgentRules (득에이전트룰스)
 
+> **Deuk Family**의 핵심 모듈 가운데 하나입니다. 구조화된 규칙으로 AI 에이전트의 협업과 응답을 다듬습니다.
+
 **npm 패키지:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
 
 **English:** [README.md](https://github.com/joygram/DeukAgentRules/blob/master/README.md)
@@ -41,6 +43,7 @@ DeukAgentRules init — let's configure your workspace.
 
 AGENTS.md: injected (inject)
 rule copied: .cursor/rules/deuk-agent-rule-multi-ai-workflow.mdc
+rule copied: .cursor/rules/deuk-agent-rule-delivery-and-parallel-work.mdc
 rule copied: .cursor/rules/deuk-agent-rule-git-commit.mdc
 ```
 
@@ -74,6 +77,7 @@ npx deuk-agent-rule init --non-interactive
 ### 번들 규칙
 
 - **`multi-ai-workflow.mdc`** — `alwaysApply: true`
+- **`delivery-and-parallel-work.mdc`** — `alwaysApply: true` (세로 슬라이스·포트폴리오 우선·병렬 소유·리팩터 범위 축소)
 - **`git-commit.mdc`** — `alwaysApply: false`
 
 ### `merge` (엄격)

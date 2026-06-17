@@ -1,5 +1,7 @@
 # DeukAgentRules
 
+> **Part of the Deuk Family** — Empowering AI Agents with structured rules.
+
 **npm package:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
 
 **한국어:** [README.ko.md](https://github.com/joygram/DeukAgentRules/blob/master/README.ko.md)
@@ -41,6 +43,7 @@ DeukAgentRules init — let's configure your workspace.
 
 AGENTS.md: injected (inject)
 rule copied: .cursor/rules/deuk-agent-rule-multi-ai-workflow.mdc
+rule copied: .cursor/rules/deuk-agent-rule-delivery-and-parallel-work.mdc
 rule copied: .cursor/rules/deuk-agent-rule-git-commit.mdc
 ```
 
@@ -74,6 +77,7 @@ Only the **marker region** in `AGENTS.md` is replaced; your text outside stays.
 ### Bundled rules
 
 - **`multi-ai-workflow.mdc`** — `alwaysApply: true`
+- **`delivery-and-parallel-work.mdc`** — `alwaysApply: true` (vertical slices, portfolio priority, parallel ownership, scoped refactors)
 - **`git-commit.mdc`** — `alwaysApply: false`
 
 ### `merge` (stricter)
