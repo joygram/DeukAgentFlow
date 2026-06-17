@@ -1,6 +1,8 @@
 bundle/
 node_modules/
 scripts/out/
+vscode-extension/out/
+vscode-extension/node_modules/
 *.tgz
 .DS_Store
 
