@@ -19,6 +19,7 @@ export function parseTicketArgs(argv) {
     else if (a === "--all") out.all = true;
     else if (a === "--status") out.status = argv[++i];
     else if (a === "--archived") out.archived = true;
+    else if (a === "--priority") out.priority = argv[++i];
     else if (a === "--report") out.report = argv[++i];
     else if (a === "--json") out.json = true;
     else if (a === "--remote") out.remote = argv[++i];

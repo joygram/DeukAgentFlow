@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, unlinkSync, copyFileSync } from "fs";
 import { basename, dirname, join, relative } from "path";
 import { createHash } from "crypto";
+import { hostname as osHostname } from "os";
 import { toPosixPath, toRepoRelativePath, toSlug, formatTimestampForFile, makeEntryId, detectProjectFromBody, deriveTopicFromBaseName, parseFrontMatter, stringifyFrontMatter, loadInitConfig } from "./cli-utils.mjs";
 
 export const TICKET_DIR_NAME = ".deuk-agent-ticket";
@@ -82,10 +83,10 @@ export function renderTicketListMarkdown(cwd, entries) {
   const activeRows = sorted.filter(e => e.status !== "archived").map((e, i) => renderLine(e, i, ticketDir, cwd));
   const archivedRows = sorted.filter(e => e.status === "archived").slice(0, 50).map((e, i) => renderLine(e, i, ticketDir, cwd));
 
-  let combinedRows = "### 🚀 Active Tickets\n\n| # | Status | Title | Group | Project | Created | Path |\n|---|---|---|---|---|---|---|\n" + 
-                     (activeRows.join("\n") || "| - | - | No active tickets | - | - | - | - |") + 
-                     "\n\n### 📦 Archived Tickets\n\n| # | Status | Title | Group | Project | Created | Path |\n|---|---|---|---|---|---|---|\n" + 
-                     (archivedRows.join("\n") || "| - | - | No archived tickets | - | - | - | - |");
+  let combinedRows = "### 🚀 Active Tickets\n\n| # | Status | Pri | Title | Group | Project | Created | Path |\n|---|---|---|---|---|---|---|---|\n" + 
+                     (activeRows.join("\n") || "| - | - | - | No active tickets | - | - | - | - |") + 
+                     "\n\n### 📦 Archived Tickets\n\n| # | Status | Pri | Title | Group | Project | Created | Path |\n|---|---|---|---|---|---|---|---|\n" + 
+                     (archivedRows.join("\n") || "| - | - | - | No archived tickets | - | - | - | - |");
 
   return template
     .replaceAll("{{SOURCE_INDEX}}", `${TICKET_DIR_NAME}/${TICKET_INDEX_FILENAME}`)
@@ -99,7 +100,8 @@ function renderLine(e, i, ticketDir, cwd) {
   const relPath = toPosixPath(relative(ticketDir, join(cwd, e.path)));
   const statusIcon = e.status === "active" ? "🔥 " : (e.status === "archived" ? "📦 " : "[ ] ");
   const safeTitle = String(e.title || "").replace(/\|/g, '&#124;').replace(/(\n|\\n)+/g, ' ');
-  return `| ${i + 1} | ${statusIcon}${e.status} | ${safeTitle} | ${e.group} | ${e.project} | ${e.createdAt.split('T')[0]} | [open](${relPath}) |`;
+  const prio = e.priority || "P2";
+  return `| ${i + 1} | ${statusIcon}${e.status} | ${prio} | ${safeTitle} | ${e.group} | ${e.project} | ${e.createdAt.split('T')[0]} | [open](${relPath}) |`;
 }
 
 export function writeTicketListFile(cwd, entries, opts = {}) {
@@ -471,9 +473,60 @@ export function syncActiveTicketPointer(cwd) {
 
 
 /**
- * Deterministic or Hash-based ID to prevent collisions in multi-device sync
+ * Returns the machine hostname slug (lowercase, alphanumeric + hyphen only).
  */
-export function generateTicketId(title) {
+export function getHostnameSlug() {
+  try {
+    return osHostname().toLowerCase().replace(/[^a-z0-9\-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'local';
+  } catch {
+    return 'local';
+  }
+}
+
+/**
+ * Computes next sequential 3-digit ticket number by scanning all entries
+ * in the current INDEX.json for IDs matching `ticket_NNN_*`.
+ * Safe to call cross-device: each hostname produces an independent sequence,
+ * but the number is always calculated from the current local INDEX state.
+ *
+ * @param {object[]} existingEntries - entries array from INDEX.json
+ * @returns {{ num: number, hostname: string }}
+ */
+export function computeNextTicketNumber(existingEntries) {
+  const hostname = getHostnameSlug();
+  // Match both old format `ticket_NNN_hostname_*` and new `ticket_NNN_*`
+  const numRe = /^ticket_(\d{3,})_/;
+  let max = 0;
+  for (const e of (existingEntries || [])) {
+    const m = String(e.id || '').match(numRe);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > max) max = n;
+    }
+  }
+  return { num: max + 1, hostname };
+}
+
+/**
+ * Sequential hostname-aware ticket ID.
+ * Format: ticket_NNN_<hostname>_<topic-slug>
+ * NNN starts at 001 and increments per local INDEX.json state.
+ *
+ * @param {string} topicSlug
+ * @param {object[]} existingEntries - entries array from INDEX.json (may be empty)
+ */
+export function generateTicketId(topicSlug, existingEntries) {
+  const { num, hostname } = computeNextTicketNumber(existingEntries);
+  const numStr = String(num).padStart(3, '0');
+  const slug = toSlug(topicSlug || 'ticket').slice(0, 32);
+  return `ticket_${numStr}_${hostname}_${slug}`;
+}
+
+/**
+ * @deprecated Use generateTicketId(topicSlug, existingEntries)
+ * Kept for backwards compatibility.
+ */
+export function generateTicketIdLegacy(title) {
   const seed = `${title}-${Date.now()}-${Math.random()}`;
   try {
     return "ticket_" + createHash("md5").update(seed).digest("hex").slice(0, 12);

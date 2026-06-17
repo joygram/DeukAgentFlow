@@ -11,12 +11,26 @@ function syncTemplates(cwd, bundleRoot, dryRun) {
   if (!existsSync(tplSrcDir)) return;
   if (!dryRun) mkdirSync(tplDestDir, { recursive: true });
 
-  for (const name of readdirSync(tplSrcDir)) {
-    if (!name.endsWith(".md")) continue;
+  const srcFiles = readdirSync(tplSrcDir).filter(n => n.endsWith(".md"));
+  const destFiles = existsSync(tplDestDir) ? readdirSync(tplDestDir).filter(n => n.endsWith(".md")) : [];
+
+  // 1. Copy/Update new templates
+  for (const name of srcFiles) {
     const src = join(tplSrcDir, name);
     const dest = join(tplDestDir, name);
     if (!dryRun) copyFileSync(src, dest);
     console.log(`template synced: ${dest}`);
+  }
+
+  // 2. Cleanup obsolete templates (Migration)
+  for (const name of destFiles) {
+    if (!srcFiles.includes(name)) {
+      const obsolete = join(tplDestDir, name);
+      if (!dryRun) {
+        import("fs").then(fs => fs.unlinkSync(obsolete));
+      }
+      console.log(`template removed (obsolete): ${obsolete}`);
+    }
   }
 }
 

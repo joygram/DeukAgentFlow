@@ -44,6 +44,18 @@ for (const name of readdirSync(publishRulesDir)) {
   copyFileSync(join(publishRulesDir, name), join(rulesDest, name));
 }
 
+const templatesSrc = join(publishDir, "templates");
+const templatesDest = join(pkgRoot, "bundle", "templates");
+if (existsSync(templatesSrc)) {
+  if (existsSync(templatesDest)) {
+    rmSync(templatesDest, { recursive: true });
+  }
+  mkdirSync(templatesDest, { recursive: true });
+  for (const name of readdirSync(templatesSrc)) {
+    copyFileSync(join(templatesSrc, name), join(templatesDest, name));
+  }
+}
+
 const agentsBody = readFileSync(agentsSrc, "utf8");
 writeFileSync(agentsDest, agentsBody, "utf8");
 copyFileSync(cursorrulesSrc, cursorrulesDest);

@@ -2,9 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
-**한글:** [CHANGELOG.ko.md](CHANGELOG.ko.md)
-
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.4.0] - 2026-04-18
+
+
+### Added
+
+- **init:** add obsolete template cleanup for cleaner migration
+- **rules:** add TICKET VERIFICATION RULE to original agents.md
+- **ticket:** add priority property to tickets
+- **ticket:** add sequential hostname-aware ticket naming (NNN-hostname-topic)
+- **ticket:** auto-sequence numbering and hostname-based naming (limit 8 chars)
+
+
+### Fixed
+
+- **rules:** force use of local latest deuk-agent-rule to avoid npx cache issues
+- **scripts:** correct log output for OSS repository url example
+
+
+### Changed
+
+-  add Step 4 (Ticket Verification) to README files
+-  clarify global installation and OS-specific permissions
+-  enforce ticket reference in implementation artifacts
 
 ## [2.3.2] - 2026-04-17
 

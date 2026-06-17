@@ -25,15 +25,20 @@ It standardizes project rules (`AGENTS.md`, `.cursor/rules`) and strongly preven
 
 ## 🛠️ Getting Started (Workspace Initialization)
 
-Install and initialize the package once at the project root.
+Since this CLI tool is used frequently across multiple repositories and submodules, a **global installation is highly recommended**.
 
 ```bash
-npm install deuk-agent-rule
-npx deuk-agent-rule init
+npm install -g deuk-agent-rule
+deuk-agent-rule init
 ```
 
+> [!NOTE]
+> **Global Install Permission Troubleshooting**:
+> - **Linux/macOS**: Running `npm install -g` may result in `EACCES` permission errors. It is highly recommended to use a Node version manager (`nvm`, `fnm`, etc.) to bypass these constraints. If using the system Node installation, you may unavoidably need to use `sudo npm install -g deuk-agent-rule`.
+> - **Windows**: If Node.js is installed in a system directory like `Program Files`, you must run your terminal (PowerShell/CMD) as an **Administrator** for the global installation to complete successfully.
+
 Upon initialization, interactive questions will ask for the project's **tech stack** and **agent tools in use**. Based on your selections, optimized markdown templates and rule files (`.cursor/rules/*`) will be automatically generated and synchronized.
-- If you don't need to change the tech stack later, simply run `npx deuk-agent-rule init` to refresh the rules.
+- If you don't need to change the tech stack later, simply run `deuk-agent-rule init` to refresh the rules. (If not installed globally, you can fallback to `npx deuk-agent-rule init`).
 - Suppress interactive prompts in CI or script environments by appending the `--non-interactive` flag.
 
 ### 🔄 Updating the Rules Package
@@ -53,7 +58,7 @@ Running `npx deuk-agent-rule init` deploys a **zero-touch scaffolding sandbox** 
 1. **`.deuk-agent-templates/` (Agent Templates)**: Houses the official blueprint (`TICKET_TEMPLATE.md`) dictating how AIs must process and report tasks. Committed alongside your source code to serve as the team's rulebook.
 2. **`.deuk-agent-ticket/` (Ticket Execution Space)**: The covert space where volatile instructions (`TICKET-XXX.md`) are exchanged between agents and workers. (Automatically hidden by `.gitignore` to prevent security leaks and repository bloat).
 
-The optimal **3-Step AI Coding Sequence** utilizing these sandbox folders is as follows.
+The optimal **4-Step AI Coding Sequence** utilizing these sandbox folders is as follows.
 
 ### [Step 1] Ticket Creation & Submodule Isolation
 Do not issue scattered, unbounded commands to your AI. Narrowing the **context** via a clear ticket is strictly required to prevent astronomical costs and accidental code corruption.
@@ -77,22 +82,24 @@ The AI will faithfully read the defined Phases in the ticket and write optimized
 ### [Step 3] Status Review & Closure
 As the AI writes the code, it will simultaneously update the markup checkboxes (`[x]`) inside the ticket. If the agent's session memory limit is approaching, simply leave the ticket file saved, turn off the chat window, open a fresh session, and issue [Step 2] again. The handoff (session transfer) is seamlessly completed.
 Once all steps are accomplished, promote the Phase status to `[Phase Complete]`. Instead of manually typing terminal commands, **you can simply tell your AI chatbot via natural language prompt: "Show me the list of active tickets" or "Archive the completed tickets with reports"**, and the AI will autonomously invoke the CLI to manage them for you.
-To track tickets manually from the terminal, run:
-
 ```bash
 npx deuk-agent-rule ticket list
 ```
 ```text
-📦 Agent Tickets (Direct System Scan):
-  ✅ [TICKET-DEUKUI-Button.md]
-     Title: Add Button Component
-     Target: DeukUI
-     Status: [Complete]
-  🔨 [TICKET-ui-refactoring.md]
-     Title: Plugin UI Refactoring
-     Target: DeukUI
-     Status: [In Progress]
+#  STATUS   SUBMODULE   GROUP       PROJECT     CREATED                  TITLE
+1  [ ]      DeukPack    sub         global      2026-04-18T13:34:32.484Z naming-consistency
 ```
+
+### [Step 4] Ticket Verification (Self-Correction)
+After all phases are marked as `[x]`, you should issue a final command to the AI:
+> *"Proceed with **Ticket Verification** for this task."*
+
+The AI, following the strictly defined **[TICKET VERIFICATION RULE]** in `AGENTS.md`, will then autonomously perform a 3-stage audit:
+1. **Side Effect Analysis**: Detecting potential build warnings or broken dependencies.
+2. **Convention Audit**: Re-verifying if filenames and classes perfectly match project architecture documents.
+3. **Potential Issue Reporting**: Listing breaking changes or unverified edge cases (e.g., native build constraints).
+
+This final step ensures that the agent's output is not just "functional" but "production-grade" and architecturally sound.
 
 ---
 
@@ -111,6 +118,12 @@ Even after installing and initializing the package, some AI agents (Cursor, Gemi
 ## ⚙️ CLI Reference & Advanced Options
 
 Advanced commands for workflow automation and target control.
+
+> [!NOTE]
+> **For Package Maintainers/Contributors Only - Local Development**:
+> This does not apply to general users. If you are modifying the `DeukAgentRules` source code and need to immediately test local patches bypassing the globally cached `npx deuk-agent-rule`, explicitly invoke `node ./scripts/cli.mjs`.
+> - **Linux/macOS**: Creating symlinks (`npm link`) may require `sudo` privileges. Direct script execution (`./scripts/cli.mjs`) may trigger `chmod +x` permission issues, making explicit `node` invocation the safest workaround.
+> - **Windows**: `npm link` requires Administrator rights (or Developer Mode) to create symlinks, and PowerShell execution policies may block `.cmd` wrapper scripts. Explicitly calling `node ./scripts/cli.mjs` safely bypasses these OS-level restrictions.
 
 ### Ticket-based Commands
 Instead of manually typing the CLI commands below into the terminal, you can **delegate their execution to your AI chatbot by giving natural language prompt instructions**.
