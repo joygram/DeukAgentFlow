@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **release:** make public package publish scripts skip source-only tests while still running the npm smoke check.
 - **release:** require public commit subjects to describe the released feature, fix, docs, or release change instead of using `sync` as the main label.
 - **release:** print the same public commit-message guidance from the export script so public history records product changes rather than transport mechanics.
 

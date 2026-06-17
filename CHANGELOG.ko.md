@@ -16,6 +16,7 @@
 
 ### 수정됨 (Fixed)
 
+- **release:** 공개 패키지의 publish 스크립트가 소스 전용 테스트는 건너뛰고 npm smoke 검증은 유지하도록 수정했습니다.
 - **release:** 공개 커밋 제목이 `sync` 같은 전달 단계가 아니라 공개되는 feature/fix/docs/release 변경 자체를 설명하도록 명확히 했습니다.
 - **release:** 공개 export 실행 시에도 같은 public commit message 가이드를 출력해 공개 기록이 제품 변경 중심으로 남도록 했습니다.
 
