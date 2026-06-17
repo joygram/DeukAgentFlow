@@ -1,5 +1,6 @@
 bundle/
 node_modules/
+scripts/out/
 *.tgz
 .DS_Store
 

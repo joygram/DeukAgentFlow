@@ -42,7 +42,6 @@
     "docs/usage-guide.ko.md",
     "docs/assets/**/*",
     "bundled/**/*",
-    "scripts/out/**/*",
     "templates/**/*",
     "scripts/cli.ts",
     "scripts/cli-args.ts",
