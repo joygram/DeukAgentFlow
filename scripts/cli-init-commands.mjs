@@ -1,8 +1,25 @@
 import { join } from "path";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync } from "fs";
 import { resolveMarkers, resolveCursorrulesMarkers, applyAgents, applyRules, applyCursorrules, readBundleAgents } from "./merge-logic.mjs";
 import { ensureTicketDirAndGitignore } from "./cli-init-logic.mjs";
-import { loadInitConfig, writeInitConfig } from "./cli-prompts.mjs";
+import { loadInitConfig, writeInitConfig } from "./cli-utils.mjs";
+import { runInteractive } from "./cli-prompts.mjs";
+
+function syncTemplates(cwd, bundleRoot, dryRun) {
+  const tplSrcDir = join(bundleRoot, "templates");
+  const tplDestDir = join(cwd, ".deuk-agent-templates");
+  if (!existsSync(tplSrcDir)) return;
+  if (!dryRun) mkdirSync(tplDestDir, { recursive: true });
+
+  for (const name of readdirSync(tplSrcDir)) {
+    if (!name.endsWith(".md")) continue;
+    const src = join(tplSrcDir, name);
+    const dest = join(tplDestDir, name);
+    if (!dryRun) copyFileSync(src, dest);
+    console.log(`template synced: ${dest}`);
+  }
+}
+
 
 export async function runInit(opts, bundleRoot) {
   const markers = resolveMarkers(opts);
@@ -33,6 +50,12 @@ export async function runInit(opts, bundleRoot) {
   console.log(`.cursorrules: ${crResult.action} (${crResult.mode || ""})`);
 
   ensureTicketDirAndGitignore(opts);
+  syncTemplates(opts.cwd, bundleRoot, opts.dryRun);
+
+  // If no config exists, save the derived/default config to ensure persistency
+  if (!loadInitConfig(opts.cwd)) {
+    writeInitConfig(opts.cwd, opts);
+  }
 }
 
 export function runMerge(opts, bundleRoot) {
@@ -62,4 +85,6 @@ export function runMerge(opts, bundleRoot) {
     dryRun: opts.dryRun, backup: opts.backup
   });
   console.log(`.cursorrules: ${crResult.action} (${crResult.mode || ""})`);
+
+  syncTemplates(opts.cwd, bundleRoot, opts.dryRun);
 }

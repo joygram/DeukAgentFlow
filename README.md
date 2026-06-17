@@ -59,9 +59,13 @@ The optimal **3-Step AI Coding Sequence** utilizing these sandbox folders is as 
 Do not issue scattered, unbounded commands to your AI. Narrowing the **context** via a clear ticket is strictly required to prevent astronomical costs and accidental code corruption.
 
 ```bash
-npx deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI --content "## Task: Plugin UI Refactoring"
+npx deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI
 ```
 This command instantly creates a templated `TICKET-ui-refactoring.md` file within the `.deuk-agent-ticket/` directory.
+
+> [!IMPORTANT]
+> **Filling the Ticket (CRITICAL)**: The newly created ticket already contains **YAML Front Matter** (`--- id: ... ---`). **DO NOT** overwrite the entire file when adding your plan. ALWAYS append your content below the header or use partial file editing to preserve the existing YAML metadata. Erasing the Front Matter corrupts the ticketing system.
+
 The developer must simply specify the exact isolated directory path (e.g., `src/client`) inside the `[Target Submodule]` attribute at the top of the generated file.
 
 ### [Step 2] Agent Execution & Handoff (Ticket Session)
@@ -113,13 +117,13 @@ Instead of manually typing the CLI commands below into the terminal, you can **d
 
 | Command | Description / Natural Language Prompt Example |
 |--------|------|
-| `npx deuk-agent-rule ticket create ...` | Generates a new ticket document (accepts `--group`, `--project`) <br>💬 *"Create new ticket (topic: refactor)"* |
-| `npx deuk-agent-rule ticket list` | Lists and displays active tickets (`--archived`, `--all` supported) <br>💬 *"Ticket list"* |
+| `npx deuk-agent-rule ticket create ...` | Generates a new ticket document (accepts `--group`, `--project`, `--submodule`) <br>💬 *"Create new ticket (topic: refactor)"* |
+| `npx deuk-agent-rule ticket list` | Lists and displays active tickets (`--archived`, `--all`, `--json` supported) <br>💬 *"Ticket list"* |
 | `npx deuk-agent-rule ticket use --latest ...` | Returns only the file path of the most recent ticket <br>💬 *"Recent ticket path"* |
 | `npx deuk-agent-rule ticket close ...` | Soft-closes a target ticket by locking its status to completed without moving the file <br>💬 *"Close this ticket"* |
+| `npx deuk-agent-rule ticket upgrade` | Migrates legacy ticket structures to V2 (YAML FM) and triggers submodule DEFRAG <br>💬 *"Upgrade tickets to v2"* |
 | `npx deuk-agent-rule ticket archive ...` | Securely moves completed tickets to `archive/` and updates INDEX <br>💬 *"Archive this ticket (attach report)"* |
 | `npx deuk-agent-rule ticket reports` | Lists structurally preserved agent work reports (`reports/`) <br>💬 *"List archived reports"* |
-| `npx deuk-agent-rule ticket migrate` | Migrates legacy LATEST.md structures into indexed module architecture <br>💬 *"Migrate legacy tickets"* |
 
 ### Advanced Init Options
 | Flag | Default | Description |

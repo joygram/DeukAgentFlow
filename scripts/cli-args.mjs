@@ -12,6 +12,7 @@ export function parseTicketArgs(argv) {
     else if (a === "--from") out.from = argv[++i];
     else if (a === "--ref") out.ref = argv[++i];
     else if (a === "--limit") out.limit = Number(argv[++i]);
+    else if (a === "--submodule") out.submodule = argv[++i];
     else if (a === "--latest") out.latest = true;
     else if (a === "--path-only") out.pathOnly = true;
     else if (a === "--print-content") out.printContent = true;
@@ -19,6 +20,10 @@ export function parseTicketArgs(argv) {
     else if (a === "--status") out.status = argv[++i];
     else if (a === "--archived") out.archived = true;
     else if (a === "--report") out.report = argv[++i];
+    else if (a === "--json") out.json = true;
+    else if (a === "--remote") out.remote = argv[++i];
+    else if (a === "--sync") out.sync = true;
+    else if (a === "--no-sync") out.sync = false;
   }
   return out;
 }
@@ -39,6 +44,10 @@ export function parseArgs(argv) {
     else if (a === "--rules") out.rules = argv[++i];
     else if (a === "--cursorrules") out.cursorrules = argv[++i];
     else if (a === "--append-if-no-markers") out.appendIfNoMarkers = true;
+    else if (a === "--json") out.json = true;
+    else if (a === "--remote") out.remote = argv[++i];
+    else if (a === "--sync") out.sync = true;
+    else if (a === "--no-sync") out.sync = false;
     else if (a === "-h" || a === "--help") out.help = true;
   }
   return out;

@@ -40,5 +40,8 @@
   },
   "bin": {
     "deuk-agent-rule": "./scripts/cli.mjs"
+  },
+  "dependencies": {
+    "ejs": "^5.0.2"
   }
 }

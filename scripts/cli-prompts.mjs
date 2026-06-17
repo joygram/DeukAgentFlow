@@ -1,9 +1,7 @@
 import { createInterface } from "readline";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-
-const INIT_CONFIG_FILENAME = ".deuk-agent-rule.config.json";
-const INIT_CONFIG_VERSION = 1;
+import { loadInitConfig, writeInitConfig, STACKS, AGENT_TOOLS } from "./cli-utils.mjs";
 
 export async function ask(rl, question) {
   return new Promise((resolve) => rl.question(question, resolve));
@@ -41,48 +39,7 @@ export async function selectMany(rl, prompt, choices) {
   }
 }
 
-export function loadInitConfig(cwd) {
-  const p = join(cwd, INIT_CONFIG_FILENAME);
-  if (!existsSync(p)) return null;
-  try {
-    const j = JSON.parse(readFileSync(p, "utf8"));
-    if (j.version !== INIT_CONFIG_VERSION) return null;
-    return j;
-  } catch {
-    return null;
-  }
-}
 
-export function writeInitConfig(cwd, opts) {
-  const p = join(cwd, INIT_CONFIG_FILENAME);
-  const body = {
-    version: INIT_CONFIG_VERSION,
-    stack: opts.stack,
-    agentTools: opts.agentTools,
-    agentsMode: opts.agents ?? "inject",
-    updatedAt: new Date().toISOString(),
-  };
-  writeFileSync(p, JSON.stringify(body, null, 2) + "\n", "utf8");
-}
-
-export const STACKS = [
-  { label: "Unity / C#", value: "unity" },
-  { label: "Next.js + C#", value: "nextjs-dotnet" },
-  { label: "Web (React / Vue / general)", value: "web" },
-  { label: "Java / Spring Boot", value: "java" },
-  { label: "Other / skip", value: "other" },
-];
-
-export const AGENT_TOOLS = [
-  { label: "Cursor", value: "cursor" },
-  { label: "GitHub Copilot", value: "copilot" },
-  { label: "Gemini / Antigravity", value: "gemini" },
-  { label: "Claude (Cursor / Claude Code)", value: "claude" },
-  { label: "Windsurf", value: "windsurf" },
-  { label: "JetBrains AI Assistant", value: "jetbrains" },
-  { label: "All of the above", value: "all" },
-  { label: "Other / skip", value: "other" },
-];
 
 export async function runInteractive(opts) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -91,6 +48,7 @@ export async function runInteractive(opts) {
 
     const stack = await selectOne(rl, "What is your primary tech stack?", STACKS);
     const tools = await selectMany(rl, "Which agent tools do you use?", AGENT_TOOLS);
+    const shareTickets = await askYesNo("Do you want to share (git-track) tickets for this repository?", false);
 
     const targetAgents = join(opts.cwd, "AGENTS.md");
     let agentsDefault = "inject";
@@ -110,12 +68,26 @@ export async function runInteractive(opts) {
       }
     }
 
+    const remoteSync = opts.remoteSync !== undefined ? opts.remoteSync : (await askYesNo("Enable AI Pipeline remote synchronization? (Advanced)", false));
+    let pipelineUrl = opts.pipelineUrl || "";
+    if (remoteSync && !pipelineUrl) {
+      pipelineUrl = (await ask(rl, "Enter AI Pipeline Endpoint URL: ")).trim();
+    }
+
     opts.agents = opts.agents ?? agentsDefault;
     opts.stack = stack;
     opts.agentTools = tools;
+    opts.shareTickets = shareTickets;
+    opts.remoteSync = remoteSync;
+    opts.pipelineUrl = pipelineUrl;
+
+    writeInitConfig(opts.cwd, opts);
 
     console.log("\n  Stack : " + stack);
     console.log("  Tools : " + (tools.join(", ") || "none"));
+    console.log("  Share Tickets: " + (opts.shareTickets ? "Yes (Shared)" : "No (Private)"));
+    console.log("  Remote Sync:   " + (opts.remoteSync ? "Enabled" : "Disabled"));
+    if (opts.remoteSync) console.log("  Pipeline URL:  " + opts.pipelineUrl);
     console.log("  AGENTS: " + opts.agents + "\n");
   } finally {
     rl.close();

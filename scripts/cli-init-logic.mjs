@@ -12,6 +12,10 @@ export function ensureTicketDirAndGitignore(opts) {
   if (opts.dryRun) return;
 
   mkdirSync(ticketPath, { recursive: true });
+  if (opts.shareTickets) {
+    console.log(`[INIT] Ticket sharing enabled. Skipping .gitignore entry for ${TICKET_DIR_NAME}/`);
+    return;
+  }
 
   let gi = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf8") : "";
   if (!gi.includes(ignoreLine)) {

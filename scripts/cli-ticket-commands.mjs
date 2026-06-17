@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, copyFileSync, readdirSync, rmSync, statSync } from "fs";
 import { basename, join, dirname, relative, resolve } from "path";
-import { toSlug, toRepoRelativePath, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath } from "./cli-utils.mjs";
-import { TICKET_DIR_NAME, appendTicketEntry, rebuildTicketIndexFromTopicFilesIfNeeded, detectConsumerTicketDir, readTicketIndexJson, writeTicketIndexJson, writeTicketListFile } from "./cli-ticket-logic.mjs";
+import { toSlug, toRepoRelativePath, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath, stringifyFrontMatter } from "./cli-utils.mjs";
+import { TICKET_DIR_NAME, appendTicketEntry, rebuildTicketIndexFromTopicFilesIfNeeded, detectConsumerTicketDir, readTicketIndexJson, writeTicketIndexJson, writeTicketListFile, syncActiveTicketPointer, generateTicketId, syncToPipeline } from "./cli-ticket-logic.mjs";
+import { loadInitConfig } from "./cli-utils.mjs";
+import ejs from "ejs";
 
 import { createInterface } from "readline";
 import { selectOne } from "./cli-prompts.mjs";
@@ -19,21 +21,60 @@ export async function runTicketCreate(opts) {
     path = resolveReferencedTicketPath(opts);
     source = "ticket-reference";
   } else {
-    let body = opts.content ? String(opts.content).replace(/\\n/g, '\n') : "";
-    if (!body && opts.from) body = readFileSync(join(opts.cwd, opts.from), "utf8");
-    const abs = join(opts.cwd, TICKET_DIR_NAME, group, `${topic}-${Date.now()}.md`);
-    mkdirSync(join(opts.cwd, TICKET_DIR_NAME, group), { recursive: true });
+    let tplText = "";
+    const consumerTplPath = join(opts.cwd, ".deuk-agent-templates", "TICKET_TEMPLATE.md");
+    const bundleTplPath = join(new URL('.', import.meta.url).pathname, "..", "bundle", "templates", "TICKET_TEMPLATE.md");
+    
+    if (existsSync(consumerTplPath)) tplText = readFileSync(consumerTplPath, "utf8");
+    else if (existsSync(bundleTplPath)) tplText = readFileSync(bundleTplPath, "utf8");
+    else throw new Error("ticket create: Template not found. Refusing to create an empty ticket.");
+
+    // Find nearest or create in CWD if missing
+    const ticketDir = detectConsumerTicketDir(opts.cwd, { createIfMissing: true });
+    const abs = join(ticketDir, group, `${topic}-${Date.now()}.md`);
+    mkdirSync(join(ticketDir, group), { recursive: true });
     path = toRepoRelativePath(opts.cwd, abs);
-    const marker = `\n\n<!-- Ticket (repo-relative): ${path} -->\n`;
-    writeFileSync(abs, body.trimEnd() + marker, "utf8");
+
+    const ticketId = generateTicketId(title);
+    const meta = {
+      id: ticketId,
+      title,
+      topic,
+      status: "open",
+      submodule: opts.submodule || "",
+      project: opts.project || "global",
+      createdAt: new Date().toISOString(),
+    };
+
+    const ejsFrontMatter = `---
+id: <%= meta.id %>
+title: "<%- meta.title.replace(/"/g, '\\"') %>"
+topic: <%= meta.topic %>
+status: open
+submodule: <%= meta.submodule %>
+project: <%= meta.project %>
+createdAt: <%= meta.createdAt %>
+---
+
+`;
+    const finalContent = ejs.render(ejsFrontMatter + tplText, { meta });
+    writeFileSync(abs, finalContent, "utf8");
     source = "ticket-create";
+    
+    // Remote Sync Hook
+    const config = loadInitConfig(opts.cwd);
+    if (config && config.remoteSync && config.pipelineUrl) {
+      syncToPipeline(config.pipelineUrl, { action: "create", ticket: meta });
+    }
+
+    appendTicketEntry(opts.cwd, {
+      id: ticketId,
+      title, topic, group, project: opts.project || "global",
+      createdAt: new Date().toISOString(), path, source
+    }, opts);
   }
 
-  appendTicketEntry(opts.cwd, {
-    id: `ticket_${Date.now()}`,
-    title, topic, group, project: opts.project || "global",
-    createdAt: new Date().toISOString(), path, source
-  }, opts);
+  syncActiveTicketPointer(opts.cwd);
 }
 
 export async function runTicketList(opts) {
@@ -42,22 +83,62 @@ export async function runTicketList(opts) {
     throw new Error("No ticket system found. Please run 'npx deuk-agent-rule init' first.");
   }
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, opts);
+  syncActiveTicketPointer(opts.cwd);
   let rows = index.entries;
+
   
-  if (!opts.all) {
-    const targetStatus = opts.status || "open";
-    rows = rows.filter(e => e.status === targetStatus);
+  if (opts.active) {
+    rows = rows.filter(e => e.status === "active" || e.status === "open");
+  } else if (opts.archived) {
+    rows = rows.filter(e => e.status === "archived");
+  } else if (!opts.all) {
+    // Default: major/active list (open or active)
+    rows = rows.filter(e => e.status === "open" || e.status === "active");
   }
   
   if (opts.group) rows = rows.filter(e => e.group === opts.group);
   if (opts.project) rows = rows.filter(e => e.project === opts.project);
+  if (opts.submodule) rows = rows.filter(e => e.submodule === opts.submodule);
   
-  console.log("#  STATUS  GROUP       PROJECT     CREATED                  TITLE");
+  if (opts.json) {
+    console.log(JSON.stringify(rows, null, 2));
+    return;
+  }
+
+  console.log("#  STATUS   SUBMODULE   GROUP       PROJECT     CREATED                  TITLE");
   rows.slice(0, opts.limit).forEach((e, idx) => {
     const stat = (e.status === "closed" ? "[x]" : "[ ]").padEnd(7);
+    const sub = (e.submodule || "-").padEnd(11);
     const safeTitle = String(e.title || e.topic || "").replace(/(\n|\\n)+/g, " ").slice(0, 50);
-    console.log(`${String(idx+1).padEnd(2)} ${stat} ${e.group.padEnd(10)} ${e.project.padEnd(11)} ${e.createdAt.padEnd(24)} ${safeTitle}`);
+    console.log(`${String(idx+1).padEnd(2)} ${stat} ${sub} ${String(e.group||"").padEnd(10)} ${String(e.project||"").padEnd(11)} ${String(e.createdAt||"").padEnd(24)} ${safeTitle}`);
   });
+}
+
+export async function runTicketMeta(opts) {
+  const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, opts);
+  const found = pickTicketEntry(opts, index);
+  if (!found) throw new Error("ticket meta: no matching ticket found");
+
+  if (opts.json) {
+    console.log(JSON.stringify(found, null, 2));
+  } else {
+    console.log(`Ticket Meta [${found.topic}]`);
+    Object.entries(found).forEach(([k, v]) => console.log(`  ${k}: ${v}`));
+  }
+}
+
+export async function runTicketConnect(opts) {
+  const config = loadInitConfig(opts.cwd);
+  const url = opts.remote || config?.pipelineUrl;
+  if (!url) throw new Error("ticket connect: no pipeline URL configured or provided via --remote");
+
+  console.log(`Connecting to AI Pipeline at ${url} ...`);
+  const success = await syncToPipeline(url, { action: "ping", timestamp: new Date().toISOString() });
+  if (success) {
+    console.log("SUCCESS: Pipeline is reachable.");
+  } else {
+    console.error("FAILED: Could not connect to pipeline or returned non-OK status.");
+  }
 }
 
 import { updateTicketEntryStatus } from "./cli-ticket-logic.mjs";
@@ -85,6 +166,7 @@ export async function runTicketClose(opts) {
   }
   opts.status = "closed";
   const entry = updateTicketEntryStatus(opts.cwd, opts);
+  syncActiveTicketPointer(opts.cwd);
   console.log(`ticket: closed -> ${entry.topic} (${entry.path})`);
 }
 
@@ -117,45 +199,7 @@ export async function runTicketUse(opts) {
   }
 }
 
-import { getLegacyMigrationCandidate, parseLegacyTicketMeta } from "./cli-ticket-logic.mjs";
 
-export async function runTicketMigrate(opts) {
-  const candidate = getLegacyMigrationCandidate(opts.cwd);
-  if (!candidate) {
-    console.log("ticket: no legacy LATEST.md migration candidate found");
-    return;
-  }
-
-  const { title, group, project } = parseLegacyTicketMeta(candidate.body);
-  const topic = toSlug(title);
-  const stamp = Date.now();
-  const relPath = join(TICKET_DIR_NAME, group, `${topic}-${stamp}.md`);
-  const absPath = join(opts.cwd, relPath);
-
-  if (opts.dryRun) {
-    console.log("ticket: would migrate -> " + relPath);
-  } else {
-    mkdirSync(dirname(absPath), { recursive: true });
-    const marker = `\n\n<!-- Ticket (repo-relative): ${relPath} -->\n`;
-    writeFileSync(absPath, candidate.body.trimEnd() + marker, "utf8");
-    console.log("ticket: migrated body -> " + relPath);
-
-    appendTicketEntry(opts.cwd, {
-      id: `ticket_migrated_${stamp}`,
-      title,
-      topic,
-      group,
-      project,
-      createdAt: new Date().toISOString(),
-      path: relPath,
-      source: "ticket-migrate",
-    }, opts);
-    if (existsSync(candidate.latestPath)) {
-      unlinkSync(candidate.latestPath);
-      console.log("ticket: deleted legacy LATEST.md");
-    }
-  }
-}
 
 export function pickTicketEntry(opts, indexJson) {
   const rows = [...indexJson.entries].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));

@@ -4,8 +4,9 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parseArgs, parseTicketArgs } from "./cli-args.mjs";
 import { runInit, runMerge } from "./cli-init-commands.mjs";
-import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports } from "./cli-ticket-commands.mjs";
-import { loadInitConfig, writeInitConfig } from "./cli-prompts.mjs";
+import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports, runTicketMeta, runTicketConnect } from "./cli-ticket-commands.mjs";
+import { performUpgradeMigration } from "./cli-ticket-logic.mjs";
+import { loadInitConfig, writeInitConfig } from "./cli-utils.mjs";
 import { runInteractive } from "./cli-prompts.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,7 +31,12 @@ async function main() {
     else if (action === "close") await runTicketClose(opts);
     else if (action === "archive") await runTicketArchive(opts);
     else if (action === "reports") await runTicketReports(opts);
-    else if (action === "migrate") await runTicketMigrate(opts);
+    else if (action === "meta") await runTicketMeta(opts);
+    else if (action === "connect") await runTicketConnect(opts);
+    else if (action === "upgrade" || action === "migrate") {
+      const count = performUpgradeMigration(opts.cwd, opts);
+      console.log(`Migration complete: ${count} tickets upgraded.`);
+    }
     else {
       console.error("Unknown ticket action: " + action);
       printHelp();
@@ -66,7 +72,7 @@ async function main() {
   printHelp();
 }
 
-import { runTicketMigrate } from "./cli-ticket-commands.mjs";
+// Removed legacy migration runTicketMigrate
 
 async function handleInit(opts) {
   if (!opts.interactive && !opts.nonInteractive && !loadInitConfig(opts.cwd)) {
@@ -86,7 +92,7 @@ function printHelp() {
 Usage:
   npx deuk-agent-rule init   [options]
   npx deuk-agent-rule merge  [options]
-  npx deuk-agent-rule ticket <create|list|use|close|archive|reports|migrate> [options]
+  npx deuk-agent-rule ticket <create|list|use|close|archive|reports|migrate|upgrade|meta|connect> [options]
 
 Options:
   --cwd <path>          Target repo root
@@ -96,13 +102,19 @@ Options:
   --agents <mode>       inject | skip | overwrite
   --rules <mode>        prefix | skip | overwrite
   --cursorrules <mode>  inject | skip | overwrite
+  --json                Output result in JSON format
+  --remote <url>        Temporary pipeline URL
+  --sync                Force enable remote sync
+  --no-sync             Force disable remote sync
 
 Ticket Options:
   --topic <name>        Ticket topic slug
   --group <name>        Ticket group (sub|main|discussion)
   --project <name>      Project filter (DeukUI|DeukAgentRules)
-  --latest              Use most recent ticket
+  --submodule <name>    Submodule filter (DeukPack|DeukUI)
+  --latest              Use most recent ticket (default if no topic)
   --path-only           Print only the file path
+  --json                Output result in JSON format
 `);
 }
 

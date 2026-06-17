@@ -1,5 +1,51 @@
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, join, relative } from "path";
+import YAML from "../node_modules/yaml/dist/index.js";
+
+export const INIT_CONFIG_FILENAME = ".deuk-agent-rule.config.json";
+export const INIT_CONFIG_VERSION = 1;
+
+export const STACKS = [
+  { label: "Unity / C#", value: "unity" },
+  { label: "Unity + WebApp + C++ Server (Hybrid)", value: "unity-webapp-cpp" },
+  { label: "Next.js + C#", value: "nextjs-dotnet" },
+  { label: "Web (React / Vue / general)", value: "web" },
+  { label: "Java / Spring Boot", value: "java" },
+  { label: "Other / skip", value: "other" },
+];
+
+export const AGENT_TOOLS = [
+  { label: "Cursor (Rule System)", value: "cursor" },
+  { label: "Gemini / Antigravity", value: "gemini" },
+  { label: "Claude / Dev", value: "claude" },
+];
+
+export function loadInitConfig(cwd) {
+  const p = join(cwd, INIT_CONFIG_FILENAME);
+  if (!existsSync(p)) return null;
+  try {
+    const j = JSON.parse(readFileSync(p, "utf8"));
+    if (j.version !== INIT_CONFIG_VERSION) return null;
+    return j;
+  } catch {
+    return null;
+  }
+}
+
+export function writeInitConfig(cwd, opts) {
+  const p = join(cwd, INIT_CONFIG_FILENAME);
+  const data = {
+    version: INIT_CONFIG_VERSION,
+    agentsMode: opts.agents || "inject",
+    stack: opts.stack,
+    agentTools: opts.agentTools,
+    shareTickets: !!opts.shareTickets,
+    remoteSync: !!opts.remoteSync,
+    pipelineUrl: opts.pipelineUrl,
+    updatedAt: new Date().toISOString(),
+  };
+  writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+}
 
 export function toPosixPath(p) {
   return p.replace(/\\/g, "/");
@@ -79,4 +125,21 @@ export function inferRefTitleAndTopic(opts) {
     title: String(title || base).trim(),
     topic,
   };
+}
+
+export function parseFrontMatter(content) {
+  const match = content.match(/^---\r?\n([\s\S]+?)\r?\n---\r?\n?([\s\S]*)$/);
+  if (!match) return { meta: {}, content };
+  try {
+    const meta = YAML.parse(match[1]);
+    return { meta: meta || {}, content: match[2] };
+  } catch (e) {
+    console.error("YAML Parse Error:", e);
+    return { meta: {}, content };
+  }
+}
+
+export function stringifyFrontMatter(meta, content) {
+  const yamlStr = YAML.stringify(meta).trim();
+  return `---\n${yamlStr}\n---\n\n${content.trim()}\n`;
 }
