@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **init/ticket:** restore the intended month-only archive policy by normalizing legacy `archive/sub/YYYY-MM/DD/...` tickets into `archive/sub/YYYY-MM/...`, rebuilding archive shard indexes without `archiveDay`, and preventing new day-depth imports during `init`.
+
 ## [3.3.3] - 2026-05-06
 
 ### Fixed
@@ -16,14 +22,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Positioning
 
 - Reframed the npm/GitHub identity around **AI coding agent guardrails for every repo**, with ticketed scope, verification, and shared `AGENTS.md` workflows visible in package metadata.
-- Added README comparison against `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, agent harnesses, and general guardrail frameworks to show where DeukAgentRules sits in the ecosystem.
+- Added README comparison against `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, agent harnesses, and general guardrail frameworks to show where DeukAgentFlow sits in the ecosystem.
 - Added a short "What's Next" section to set expectations for clearer first-run checks, compact CLI/RAG reminders, and visible companion surfaces for active ticket, phase, open-ticket count, and DeukAgentContext memory status.
 
 
 ### Added
 
 -  AGENTS.md v12 + summary mandatory guard + PROJECT_RULE optimization
-- **cli:** add 'ticket next' command for instant task discovery (T[#295](https://github.com/joygram/DeukAgentRules/issues/295))
+- **cli:** add 'ticket next' command for instant task discovery (T[#295](https://github.com/joygram/DeukAgentFlow/issues/295))
 - **cli:** enforce required frontmatter keys in lint:md (T-118)
 -  harden ticket paths and add DeukPack RAG schemas
 - **migration:** add summary/planLink/caution auto-enrichment for legacy tickets
@@ -92,7 +98,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - **docs:** add AI coding agent guardrail positioning, vision, and organic growth research for VS Code, Open VSX, GitHub, and skill-driven discovery.
-- **docs:** add a deep comparison of Karpathy-style skills, DeukAgentRules, and DeukAgentContext, positioning skills as behavior playbooks, DeukAgentRules as workflow/permission control, and DeukAgentContext as ticketed engineering memory.
+- **docs:** add a deep comparison of Karpathy-style skills, DeukAgentFlow, and DeukAgentContext, positioning skills as behavior playbooks, DeukAgentFlow as workflow/permission control, and DeukAgentContext as ticketed engineering memory.
 - **seo:** add related-project positioning for `andrej-karpathy-skills` plus discovery keywords for Claude Code, AGENTS.md, Cursor rules, agent skills, and AI guardrails.
 
 ### Changed

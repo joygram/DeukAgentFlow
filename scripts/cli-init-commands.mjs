@@ -4,7 +4,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, readd
 
 import { ensureTicketDirAndGitignore } from "./cli-init-logic.mjs";
 import { normalizeTicketPaths } from "./cli-ticket-migration.mjs";
-import { readTicketIndexJson } from "./cli-ticket-index.mjs";
+import { rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.mjs";
+import { readTicketIndexJson, writeTicketIndexJson } from "./cli-ticket-index.mjs";
 
 import { runInteractive } from "./cli-prompts.mjs";
 import { AGENT_ROOT_DIR, TICKET_SUBDIR, TEMPLATE_SUBDIR, TICKET_INDEX_FILENAME, TICKET_LIST_FILENAME, discoverAllWorkspaces, isMcpActive, toRepoRelativePath, toPosixPath, resolveWorkflowMode, pruneRuleModules, loadInitConfig, writeInitConfig, isWorkflowExecute, normalizeWorkflowMode, SPOKE_REGISTRY, parseFrontMatter, stringifyFrontMatter, LEGACY_TEMPLATE_DIR, LEGACY_TICKET_DIR, LEGACY_TICKET_DIR_PLURAL, LEGACY_TICKET_DIR_ROOT, LEGACY_CONFIG_FILE, normalizeTicketGroup } from "./cli-utils.mjs";
@@ -131,12 +132,9 @@ function parseDay(value) {
 
 function inferPartitionFromFile(statSource, entry, fallbackDate = new Date()) {
   const yearMonth = parseYearMonth(entry?.archiveYearMonth) || parseYearMonth(entry?.createdAt) || parseYearMonth(entry?.updatedAt);
-  const day = parseDay(entry?.archiveDay) || parseDay(entry?.createdAt) || parseDay(entry?.updatedAt) || String(statSource.getDate ? statSource.getDate() : fallbackDate.getDate()).padStart(2, "0");
-  const referenceDate = statSource instanceof Date ? statSource : (statSource?.mtime || fallbackDate);
 
   return {
     yearMonth: yearMonth || `${String(fallbackDate.getFullYear())}-${String(fallbackDate.getMonth() + 1).padStart(2, "0")}`,
-    day: day || String(referenceDate.getDate()).padStart(2, "0"),
   };
 }
 
@@ -395,8 +393,7 @@ function migrateLegacyRootTicketDir(cwd, dryRun) {
 
   const now = new Date();
   const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const day = String(now.getDate()).padStart(2, "0");
-  const importRoot = join(cwd, AGENT_ROOT_DIR, TICKET_SUBDIR, "archive", "sub", yearMonth, day);
+  const importRoot = join(cwd, AGENT_ROOT_DIR, TICKET_SUBDIR, "archive", "sub", yearMonth);
   let index = 0;
   let targetDir = join(importRoot, "ticket-import");
   while (existsSync(targetDir)) {
@@ -621,7 +618,7 @@ function routeMisplacedTicketFile(cwd, sourceAbs, dryRun) {
   const partition = inferPartitionFromFile(statSync(sourceAbs), meta);
   const targetAbs = isActiveTicketStatus(status)
     ? join(ticketDir, "sub", fileName)
-    : join(ticketDir, "archive", "sub", partition.yearMonth, partition.day, fileName);
+    : join(ticketDir, "archive", "sub", partition.yearMonth, fileName);
   moveOrMergeFile(sourceAbs, targetAbs, cwd, dryRun, "misplaced ticket cleanup");
 }
 
@@ -697,7 +694,7 @@ function canonicalizeAgentTicketsLayout(cwd, dryRun) {
 function canonicalizeAgentRootLayout(cwd, dryRun) {
   const agentRoot = join(cwd, AGENT_ROOT_DIR);
   if (!existsSync(agentRoot)) return;
-  const allowedDirs = new Set(["docs", "knowledge", "tickets"]);
+  const allowedDirs = new Set(["docs", "knowledge", "tickets", "templates", "skill-templates", "skills"]);
   const allowedFiles = new Set(["config.json", "telemetry.jsonl"]);
 
   for (const entry of sortedDirEntries(agentRoot, { withFileTypes: true })) {
@@ -774,7 +771,7 @@ function canonicalizeTicketArchivePath(cwd, dryRun) {
     const shouldBeOpen = isActiveTicketStatus(status);
     const targetAbs = shouldBeOpen
       ? join(ticketDir, group, fileName)
-      : join(archiveRoot, group, partition.yearMonth, partition.day, fileName);
+      : join(archiveRoot, group, partition.yearMonth, fileName);
     if (sourceAbs === targetAbs) continue;
 
     const moved = moveOrMergeFile(sourceAbs, targetAbs, cwd, dryRun, "ticket archive cleanup");
@@ -782,6 +779,8 @@ function canonicalizeTicketArchivePath(cwd, dryRun) {
       console.log(`[CLEANUP] ticket archive normalized: ${toRepoRelativePath(cwd, sourceAbs)} -> ${toRepoRelativePath(cwd, targetAbs)}`);
     }
   }
+
+  removeEmptyDirsBottomUp(archiveRoot, cwd, dryRun);
 }
 
 function rewritePlanLinkReferences(cwd, sourceAbs, targetAbs, dryRun) {
@@ -1097,8 +1096,8 @@ function migrateHtmlMarkersToHeadings(cwd, dryRun) {
   if (userContent) newContent += userContent + "\n\n";
   if (afterContent) newContent += afterContent + "\n\n";
   newContent += "---\n\n";
-  newContent += "## DeukAgentRules\n\n";
-  newContent += "> Managed by DeukAgentRules. Remove this section if not installed.\n\n";
+  newContent += "## DeukAgentFlow\n\n";
+  newContent += "> Managed by DeukAgentFlow. Remove this section if not installed.\n\n";
   newContent += managedContent + "\n";
   
   if (!dryRun) {
@@ -1225,11 +1224,11 @@ function migrateMissingFrontmatter(cwd, dryRun) {
 export function buildGlobalCodexInstructions() {
   return `---
 
-## DeukAgentRules
+## DeukAgentFlow
 
-> Managed by DeukAgentRules. Remove this section if not installed.
+> Managed by DeukAgentFlow. Remove this section if not installed.
 
-# Global DeukAgentRules Locator
+# Global DeukAgentFlow Locator
 
 This file is a locator, not a behavior contract.
 
@@ -1255,7 +1254,7 @@ function syncGlobalCodexInstructions(dryRun) {
 export function generateSpokeContent(spoke, bundleRoot) {
   const globalRulesPath = join(bundleRoot, "core-rules", "AGENTS.md");
 
-  const content = `# Deuk Agent Rules
+  const content = `# Deuk Agent Flow
 
 **[MANDATORY — TOOL CALL REQUIRED]** Core rules are at: [AGENTS.md](file://${globalRulesPath})
 
@@ -1263,20 +1262,20 @@ This pointer is a thin bootstrap, not a second workflow contract.
 
 1. FIRST tool call: read the core rules file above and internally note its frontmatter version.
 2. Then read local \`PROJECT_RULE.md\` and internally identify applicable DC-* rules.
-3. After the core hub is loaded, \`core-rules/AGENTS.md\` is the DeukAgentRules SSoT for TDW, RAG, silence, scope, and verification.
+3. After the core hub is loaded, \`core-rules/AGENTS.md\` is the DeukAgentFlow SSoT for TDW, RAG, silence, scope, and verification.
 
 Do not print pointer/core metadata, version, DC-* lists, progress commentary, or interim summaries. Only the single required ticket-start line may appear before the final answer unless the user explicitly asks for live narration or a blocker/user decision must be surfaced.
 `;
 
   if (spoke.format === "mdc") {
     return `---
-description: "Deuk Agent Rules - Project conventions and ticket workflow"
+description: "Deuk Agent Flow - Project conventions and ticket workflow"
 globs: ["**/*"]
 alwaysApply: true
 ---
 ${content}`;
   }
-  return `---\n\n## DeukAgentRules\n\n> Managed by DeukAgentRules. Remove this section if not installed.\n\n${content}\n`;
+  return `---\n\n## DeukAgentFlow\n\n> Managed by DeukAgentFlow. Remove this section if not installed.\n\n${content}\n`;
 }
 
 export function mergeManagedRuleContent(existingContent, managedContent) {
@@ -1291,7 +1290,7 @@ function hasCustomUserRules(filePath) {
       .replace(/<!-- deuk-agent-rule:begin -->[\s\S]*?<!-- deuk-agent-rule:end -->/g, "");
     if (!withoutLegacyHtmlMarkers.trim()) return false;
 
-    const idx = content.indexOf("## DeukAgentRules");
+    const idx = content.indexOf("## DeukAgentFlow");
     let stripped = content;
     if (idx !== -1) {
       // Find the preceding horizontal rule
@@ -1430,6 +1429,10 @@ async function initSingleWorkspace(subCwd, opts, bundleRoot, selectedTools) {
   canonicalizeDocsArchiveBuckets(subCwd, opts.dryRun);
   enforceCanonicalAgentLayout(subCwd, opts.dryRun);
   mergeSeparatedDocsIntoTickets(subCwd, opts.dryRun);
+  if (!opts.dryRun) {
+    const rebuiltIndex = rebuildTicketIndexFromTopicFilesIfNeeded(subCwd, { force: true });
+    writeTicketIndexJson(subCwd, rebuiltIndex, { force: true });
+  }
 
   // 3. Spoke Pointers (e.g. .cursor/rules/deuk-agent.mdc)
   removeDuplicateRuleCopies(subCwd, opts.dryRun);

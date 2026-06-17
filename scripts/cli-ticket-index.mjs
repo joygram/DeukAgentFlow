@@ -31,20 +31,18 @@ function resolveArchivePartition(entry, now = new Date()) {
   const fromEntry = parseArchiveMonth(entry?.archiveYearMonth);
   if (fromEntry) {
     return {
-      yearMonth: fromEntry.yearMonth,
-      day: String(entry.archiveDay || "").match(/^\d{2}$/)?.[0] || String(now.getUTCDate()).padStart(2, "0")
+      yearMonth: fromEntry.yearMonth
     };
   }
 
   const source = String(entry?.createdAt || entry?.updatedAt || "");
   const match = source.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) {
-    return { yearMonth: `${match[1]}-${match[2]}`, day: match[3] };
+    return { yearMonth: `${match[1]}-${match[2]}` };
   }
 
   return {
-    yearMonth: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`,
-    day: String(now.getUTCDate()).padStart(2, "0")
+    yearMonth: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`
   };
 }
 
@@ -175,7 +173,7 @@ export function writeTicketIndexJson(cwd, indexJson, opts = {}) {
   const entries = Array.isArray(out.entries) ? out.entries : [];
   const { activeEntries, archiveEntries } = splitEntriesForStorage(entries);
   out.entries = activeEntries.map(e => {
-    const { path, ...clean } = e;
+    const { path, archiveDay, ...clean } = e;
     return clean;
   });
   out.activeTicketId = out.activeTicketId || activeEntries.find(e => e.status === "active")?.id || activeEntries.find(e => e.status === "open")?.id || null;
@@ -188,7 +186,7 @@ export function writeTicketIndexJson(cwd, indexJson, opts = {}) {
   for (const entry of retainedArchiveEntries.retained) {
     const partition = resolveArchivePartition(entry);
     const bucket = archiveBuckets.get(partition.yearMonth) || [];
-    bucket.push({ ...entry, archiveYearMonth: partition.yearMonth, archiveDay: partition.day });
+    bucket.push({ ...entry, archiveYearMonth: partition.yearMonth });
     archiveBuckets.set(partition.yearMonth, bucket);
   }
 
@@ -199,7 +197,7 @@ export function writeTicketIndexJson(cwd, indexJson, opts = {}) {
       updatedAt: out.updatedAt || new Date().toISOString(),
       activeTicketId: null,
       entries: bucket.map(e => {
-        const { path, ...clean } = e;
+        const { path, archiveDay, ...clean } = e;
         return clean;
       })
     };

@@ -4,7 +4,7 @@ import {
 } from "fs";
 import { join } from "path";
 
-export const DEFAULT_TAG = "DeukAgentRules";
+export const DEFAULT_TAG = "DeukAgentFlow";
 
 export function readBundleAgents(bundleRoot) {
   const p = join(bundleRoot, "core-rules", "AGENTS.md");

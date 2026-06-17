@@ -74,7 +74,7 @@ test("generated agent spoke is a thin bootstrap with clear precedence", () => {
   assert.match(content, /thin bootstrap, not a second workflow contract/);
   assert.match(content, /internally note its frontmatter version/);
   assert.doesNotMatch(content, /confirming its version number/);
-  assert.match(content, /core-rules\/AGENTS\.md` is the DeukAgentRules SSoT/);
+  assert.match(content, /core-rules\/AGENTS\.md` is the DeukAgentFlow SSoT/);
   assert.match(content, /Do not print pointer\/core metadata/);
   assert.match(content, /Only the single required ticket-start line may appear before the final answer/);
 });
@@ -82,7 +82,7 @@ test("generated agent spoke is a thin bootstrap with clear precedence", () => {
 test("global codex instructions stay locator-only", () => {
   const content = buildGlobalCodexInstructions();
 
-  assert.match(content, /Global DeukAgentRules Locator/);
+  assert.match(content, /Global DeukAgentFlow Locator/);
   assert.match(content, /locator, not a behavior contract/);
   assert.match(content, /load the local `AGENTS\.md` or `\.deuk-agent\/` pointer first/);
   assert.match(content, /core hub owns TDW, RAG, silence, scope, and verification policy/);
@@ -94,7 +94,7 @@ test("global codex instructions stay locator-only", () => {
 test("managed rule content appends without deleting existing prose", () => {
   const merged = mergeManagedRuleContent(
     "# Notes\n\nKeep this line.\n",
-    "# Deuk Agent Rules\n\nManaged block.\n"
+    "# Deuk Agent Flow\n\nManaged block.\n"
   );
 
   assert.match(merged, /# Notes/);
@@ -208,8 +208,10 @@ test("init migration skips empty legacy docs instead of creating placeholder tic
     await runInit({
       cwd,
       dryRun: false,
-      nonInteractive: true
-    }, "/home/joy/workspace/DeukAgentRules");
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved"
+    }, "/home/joy/workspace/DeukAgentFlow");
 
     const emptyTicketPath = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "legacy-docs", "123.md");
     const nonEmptyTicketPath = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "legacy-docs", "124.md");
@@ -243,6 +245,49 @@ test("init migration archives root .agent workflows and removes .agent", () => {
     ];
     assert.ok(archivedFiles.some((p) => existsSync(p)), "legacy workflow should move into docs archive");
     assert.ok(!existsSync(join(cwd, ".agent")), "empty .agent container should be removed");
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("runInit canonicalizes legacy day-depth archive tickets into year-month buckets", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-init-archive-month-only-"));
+  try {
+    const archiveDayDir = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "2026-05", "07");
+    mkdirSync(archiveDayDir, { recursive: true });
+
+    const legacyTicketPath = join(archiveDayDir, "301-legacy-archive-depth-host.md");
+    writeFileSync(legacyTicketPath, [
+      "---",
+      "id: 301-legacy-archive-depth-host",
+      "title: legacy archive depth",
+      "phase: 4",
+      "status: archived",
+      "summary: legacy archive depth ticket",
+      "priority: P2",
+      "tags: [test]",
+      "---",
+      "# legacy archive depth",
+      ""
+    ].join("\n"), "utf8");
+
+    await runInit({
+      cwd,
+      dryRun: false,
+      nonInteractive: true,
+      workflow: "execute",
+      approval: "approved"
+    }, "/home/joy/workspace/DeukAgentFlow");
+
+    const normalizedPath = join(cwd, ".deuk-agent", "tickets", "archive", "sub", "2026-05", "301-legacy-archive-depth-host.md");
+    assert.ok(existsSync(normalizedPath), "legacy day-depth archive ticket should move to year-month bucket");
+    assert.ok(!existsSync(legacyTicketPath), "legacy day-depth archive ticket should be removed from day bucket");
+
+    const archiveIndex = JSON.parse(readFileSync(join(cwd, ".deuk-agent", "tickets", "INDEX.archive.2026-05.json"), "utf8"));
+    const entry = archiveIndex.entries.find(item => item.id === "301-legacy-archive-depth-host");
+    assert.ok(entry, "archive index should include normalized ticket");
+    assert.strictEqual(entry.archiveYearMonth, "2026-05");
+    assert.ok(!Object.prototype.hasOwnProperty.call(entry, "archiveDay"), "archive index should drop archiveDay metadata");
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
@@ -309,6 +354,9 @@ test("init enforces canonical docs knowledge tickets layout", () => {
     mkdirSync(join(cwd, ".deuk-agent", "docs", "random"), { recursive: true });
     mkdirSync(join(cwd, ".deuk-agent", "legacy"), { recursive: true });
     mkdirSync(join(cwd, ".deuk-agent", "notes"), { recursive: true });
+    mkdirSync(join(cwd, ".deuk-agent", "skills", "safe-refactor"), { recursive: true });
+    mkdirSync(join(cwd, ".deuk-agent", "skill-templates", "context-recall"), { recursive: true });
+    mkdirSync(join(cwd, ".deuk-agent", "templates"), { recursive: true });
     mkdirSync(join(cwd, ".deuk-agent", "tmp-data"), { recursive: true });
     mkdirSync(join(cwd, ".deuk-agent", "tickets", "core"), { recursive: true });
     mkdirSync(join(cwd, ".deuk-agent", "tickets", "archive", "main"), { recursive: true });
@@ -337,6 +385,9 @@ test("init enforces canonical docs knowledge tickets layout", () => {
     }, null, 2), "utf8");
     writeFileSync(join(cwd, ".deuk-agent", "legacy", "junk.md"), "# Junk\n", "utf8");
     writeFileSync(join(cwd, ".deuk-agent", "extra.txt"), "extra\n", "utf8");
+    writeFileSync(join(cwd, ".deuk-agent", "skills", "safe-refactor", "SKILL.md"), "# Safe Refactor\n", "utf8");
+    writeFileSync(join(cwd, ".deuk-agent", "skill-templates", "context-recall", "SKILL.md"), "# Context Recall\n", "utf8");
+    writeFileSync(join(cwd, ".deuk-agent", "templates", "PROJECT_RULE.md"), "# Project Rule Template\n", "utf8");
     writeFileSync(join(cwd, ".deuk-agent", "docs", "random", "misplaced-report.md"), "# Report\n", "utf8");
     writeFileSync(join(cwd, ".deuk-agent", "tickets", "core", "200-old.md"), [
       "---",
@@ -366,8 +417,11 @@ test("init enforces canonical docs knowledge tickets layout", () => {
     assert.ok(existsSync(join(cwd, ".deuk-agent", "docs", "plan", "junk.md")));
     assert.ok(existsSync(join(cwd, ".deuk-agent", "docs", "plan", "extra.txt")));
     assert.ok(existsSync(join(cwd, ".deuk-agent", "docs", "plan", "misplaced-report.md")));
-    assert.ok(existsSync(join(cwd, ".deuk-agent", "tickets", "archive", "sub", "2026-05", "01", "200-old.md")));
+    assert.ok(existsSync(join(cwd, ".deuk-agent", "tickets", "archive", "sub", "2026-05", "200-old.md")));
     assert.ok(existsSync(join(cwd, ".deuk-agent", "tickets", "sub", "201-open.md")));
+    assert.ok(existsSync(join(cwd, ".deuk-agent", "skills", "safe-refactor", "SKILL.md")));
+    assert.ok(existsSync(join(cwd, ".deuk-agent", "skill-templates", "context-recall", "SKILL.md")));
+    assert.ok(existsSync(join(cwd, ".deuk-agent", "templates", "PROJECT_RULE.md")));
     assert.ok(existsSync(join(cwd, ".deuk-agent", "knowledge", "legacy-distilled.json")), "legacy distilled knowledge should remain knowledge");
     assert.ok(!existsSync(join(cwd, ".deuk-agent", "legacy")));
     assert.ok(!existsSync(join(cwd, ".deuk-agent", "notes")));

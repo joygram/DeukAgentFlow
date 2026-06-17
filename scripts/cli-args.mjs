@@ -88,6 +88,44 @@ export function parseSkillArgs(argv) {
   }
   return out;
 }
+
+export function parseUsageArgs(argv) {
+  const out = {
+    cwd: process.cwd(),
+    json: false,
+    platform: "",
+    client: "",
+    agentId: "",
+    weeklyRemaining: null,
+    fiveHourRemaining: null,
+    weeklyReset: "",
+    fiveHourReset: "",
+    taskGrade: "",
+    taskLabel: "",
+    turnCount: 0,
+    linkedTicketCount: 0,
+    crossWorkspace: false
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--cwd") out.cwd = argv[++i];
+    else if (a === "--platform") out.platform = argv[++i];
+    else if (a === "--client") out.client = argv[++i];
+    else if (a === "--agent" || a === "--agent-id") out.agentId = argv[++i];
+    else if (a === "--weekly-remaining") out.weeklyRemaining = Number(argv[++i]);
+    else if (a === "--five-hour-remaining") out.fiveHourRemaining = Number(argv[++i]);
+    else if (a === "--weekly-reset") out.weeklyReset = argv[++i];
+    else if (a === "--five-hour-reset") out.fiveHourReset = argv[++i];
+    else if (a === "--task-grade") out.taskGrade = argv[++i];
+    else if (a === "--task" || a === "--task-label") out.taskLabel = argv[++i];
+    else if (a === "--turns" || a === "--turn-count") out.turnCount = Number(argv[++i]);
+    else if (a === "--linked-tickets" || a === "--linked-ticket-count") out.linkedTicketCount = Number(argv[++i]);
+    else if (a === "--cross-workspace") out.crossWorkspace = true;
+    else if (a === "--json") out.json = true;
+  }
+  return out;
+}
+
 export function parseTelemetryArgs(argv) {
   const out = {
     cwd: process.cwd(),
@@ -95,6 +133,7 @@ export function parseTelemetryArgs(argv) {
     tdw: 0,
     model: "",
     client: "",
+    agentId: "",
     ticket: "",
     action: "",
     file: "",
@@ -110,6 +149,13 @@ export function parseTelemetryArgs(argv) {
     knowledgeAction: "",
     tokenQuality: "",
     savedTokens: 0,
+    sessionMode: "",
+    retryCount: 0,
+    turnCount: 0,
+    failureCount: 0,
+    phaseTransitionCount: 0,
+    outcome: "",
+    qualityScore: 0,
     json: false
   };
   for (let i = 0; i < argv.length; i++) {
@@ -119,6 +165,7 @@ export function parseTelemetryArgs(argv) {
     else if (a === "--tdw") out.tdw = Number(argv[++i]);
     else if (a === "--model") out.model = argv[++i];
     else if (a === "--client") out.client = argv[++i];
+    else if (a === "--agent" || a === "--agent-id") out.agentId = argv[++i];
     else if (a === "--ticket") out.ticket = argv[++i];
     else if (a === "--action") out.action = argv[++i];
     else if (a === "--file") out.file = argv[++i];
@@ -134,6 +181,13 @@ export function parseTelemetryArgs(argv) {
     else if (a === "--knowledge-action") out.knowledgeAction = argv[++i];
     else if (a === "--token-quality") out.tokenQuality = argv[++i];
     else if (a === "--saved-tokens") out.savedTokens = Number(argv[++i]);
+    else if (a === "--session-mode") out.sessionMode = argv[++i];
+    else if (a === "--retries") out.retryCount = Number(argv[++i]);
+    else if (a === "--turns") out.turnCount = Number(argv[++i]);
+    else if (a === "--failures") out.failureCount = Number(argv[++i]);
+    else if (a === "--phase-transitions") out.phaseTransitionCount = Number(argv[++i]);
+    else if (a === "--outcome") out.outcome = argv[++i];
+    else if (a === "--quality-score") out.qualityScore = Number(argv[++i]);
     else if (a === "--json") out.json = true;
   }
   return out;

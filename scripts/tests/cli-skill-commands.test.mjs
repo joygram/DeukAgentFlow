@@ -17,6 +17,7 @@ test("skill lint accepts first-party skills and enforces authority line", () => 
   assert.ok(result.paths.some(path => path.includes("safe-refactor")));
   assert.ok(result.paths.some(path => path.includes("generated-file-guard")));
   assert.ok(result.paths.some(path => path.includes("context-recall")));
+  assert.ok(result.paths.some(path => path.includes("project-pilot")));
 });
 
 test("skill add/expose writes repo registry and thin platform wrappers", () => {
@@ -43,6 +44,31 @@ test("skill add/expose writes repo registry and thin platform wrappers", () => {
 
     const claudeSkill = readFileSync(join(targetCwd, ".claude", "skills", "safe-refactor", "SKILL.md"), "utf8");
     assert.match(claudeSkill, /Authority: follow `core-rules\/AGENTS\.md`/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("project-pilot is a first-party installable skill", () => {
+  const cwd = process.cwd();
+  const rows = listSkills(cwd);
+  assert.ok(rows.some(row => row.id === "project-pilot"));
+
+  const result = addSkill({ cwd, skill: "project-pilot", dryRun: true });
+  assert.match(result.target, /\.deuk-agent\/skills\/project-pilot\/SKILL\.md$/);
+});
+
+test("skill add can install package-provided skills from a consumer repo", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "deuk-skill-consumer-"));
+  try {
+    const result = addSkill({ cwd, skill: "project-pilot", dryRun: false });
+    assert.match(result.target, /\.deuk-agent\/skills\/project-pilot\/SKILL\.md$/);
+
+    const installed = readFileSync(join(cwd, ".deuk-agent", "skills", "project-pilot", "SKILL.md"), "utf8");
+    assert.match(installed, /# ProjectPilot/);
+
+    const rows = listSkills(cwd);
+    assert.strictEqual(rows.find(row => row.id === "project-pilot")?.installed, true);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

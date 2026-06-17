@@ -1,11 +1,14 @@
 {
-  "name": "deuk-agent-rule",
-  "version": "3.3.3",
-  "description": "AI coding agent guardrails for every repo: ticketed scope, verification, and shared AGENTS.md workflows.",
+  "name": "deuk-agent-flow",
+  "version": "4.0.0",
+  "description": "Keep AI coding work from vanishing between chats: repo-owned tickets, scope, verification, and memory for AGENTS.md-powered agents.",
   "keywords": [
     "agents-md",
     "cursor-rules",
     "copilot",
+    "agent-config",
+    "agent-workflow",
+    "ai-coding-agent",
     "gemini",
     "claude",
     "windsurf",
@@ -19,12 +22,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joygram/DeukAgentRules.git"
+    "url": "git+https://github.com/joygram/DeukAgentFlow.git"
   },
   "bugs": {
-    "url": "https://github.com/joygram/DeukAgentRules/issues"
+    "url": "https://github.com/joygram/DeukAgentFlow/issues"
   },
-  "homepage": "https://github.com/joygram/DeukAgentRules#readme",
+  "homepage": "https://github.com/joygram/DeukAgentFlow#readme",
   "files": [
     "LICENSE",
     "bin/**/*",
@@ -39,6 +42,7 @@
     "templates/**/*",
     "scripts/cli.mjs",
     "scripts/cli-args.mjs",
+    "scripts/cli-usage-commands.mjs",
     "scripts/cli-init-commands.mjs",
     "scripts/cli-init-logic.mjs",
     "scripts/cli-prompts.mjs",
@@ -54,6 +58,9 @@
     "scripts/lint-rules.mjs",
     "scripts/merge-logic.mjs",
     "scripts/plan-parser.mjs",
+    "scripts/publish-dual-npm.mjs",
+    "scripts/smoke-npm-docker.mjs",
+    "scripts/update-download-badge.mjs",
     "README.md",
     "README.ko.md",
     "CHANGELOG.md",
@@ -61,12 +68,20 @@
   ],
   "scripts": {
     "lint:md": "node scripts/lint-md.mjs",
-    "test": "node --test scripts/tests/*.test.mjs"
+    "test": "node --test scripts/tests/*.test.mjs",
+    "publish": "node scripts/publish-dual-npm.mjs",
+    "publish:dry": "node scripts/publish-dual-npm.mjs --dry-run",
+    "smoke:npm:docker": "node scripts/smoke-npm-docker.mjs",
+    "publish:bootstrap": "node scripts/publish-dual-npm.mjs --alias-only",
+    "publish:bootstrap:dry": "node scripts/publish-dual-npm.mjs --alias-only --dry-run",
+    "badge:downloads": "node scripts/update-download-badge.mjs"
   },
   "engines": {
     "node": ">=18"
   },
   "bin": {
+    "deuk-agent-flow": "./bin/deuk-agent-flow.js",
+    "deukagentflow": "./bin/deuk-agent-flow.js",
     "deuk-agent-rule": "./bin/deuk-agent-rule.js",
     "deukagentrule": "./bin/deuk-agent-rule.js"
   },

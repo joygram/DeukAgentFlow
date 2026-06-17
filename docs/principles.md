@@ -1,6 +1,6 @@
 # Principles
 
-These principles define the philosophy behind **DeukAgentRules** as an AI Engineering Orchestration Protocol.
+These principles define the philosophy behind **DeukAgentFlow** as an AI Engineering Orchestration Protocol.
 
 ## 1. Zero-Copy Hub-Spoke Architecture (SSoT)
 

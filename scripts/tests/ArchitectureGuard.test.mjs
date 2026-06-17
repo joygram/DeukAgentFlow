@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..");
 
 /**
- * Architecture Guard Tests — DeukAgentRules
+ * Architecture Guard Tests — DeukAgentFlow
  *
  * These tests run via `node --test` and enforce structural invariants
  * for the CLI tool framework. Since agents ALWAYS run tests, these

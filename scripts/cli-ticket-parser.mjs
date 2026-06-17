@@ -86,7 +86,6 @@ function processTicketFile(abs, cwd, indexJson, opts) {
       ...existing,
       group,
       archiveYearMonth: storage.archiveYearMonth || existing.archiveYearMonth,
-      archiveDay: storage.archiveDay || existing.archiveDay,
       status: isAlreadyInArchive ? "archived" : (existing.status === "archived" ? "open" : existing.status),
       updatedAt: statSync(abs).mtime.toISOString()
     };
@@ -119,7 +118,6 @@ function processTicketFile(abs, cwd, indexJson, opts) {
     source: "ticket-sync",
     status: isAlreadyInArchive ? "archived" : (meta.status || "open"),
     archiveYearMonth: storage.archiveYearMonth,
-    archiveDay: storage.archiveDay,
   };
 }
 
@@ -136,6 +134,10 @@ function parseTicketStorage(rel, isArchived, abs) {
 
   if (ARCHIVE_YEAR_MONTH_RE.test(String(maybeYearMonth || "")) && ARCHIVE_DAY_RE.test(String(maybeDay || ""))) {
     return { group: normalizeTicketGroup(group), archiveYearMonth: maybeYearMonth, archiveDay: maybeDay };
+  }
+
+  if (ARCHIVE_YEAR_MONTH_RE.test(String(maybeYearMonth || ""))) {
+    return { group: normalizeTicketGroup(group), archiveYearMonth: maybeYearMonth };
   }
 
   return { group: normalizeTicketGroup(group) };

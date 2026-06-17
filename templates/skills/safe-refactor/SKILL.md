@@ -1,6 +1,6 @@
 ---
 name: safe-refactor
-summary: Keep refactors small, scoped, and test-backed inside DeukAgentRules TDW.
+summary: Keep refactors small, scoped, and test-backed inside DeukAgentFlow TDW.
 ---
 
 # Safe Refactor

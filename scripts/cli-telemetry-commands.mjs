@@ -6,6 +6,8 @@ const TELEMETRY_FILE = `${AGENT_ROOT_DIR}/telemetry.jsonl`;
 const RAG_RESULTS = new Set(["hit", "weak-hit", "miss", "stale"]);
 const KNOWLEDGE_ACTIONS = new Set(["none", "add_knowledge", "refresh_document"]);
 const TOKEN_QUALITIES = new Set(["useful", "waste", "rework", "saved"]);
+const SESSION_MODES = new Set(["guided", "unguided", "mixed"]);
+const OUTCOMES = new Set(["success", "failure", "partial", "blocked"]);
 const INTERNAL_SOURCE = "internal";
 const WORKFLOW_EVENT_KIND = "workflow_event";
 
@@ -23,7 +25,7 @@ export async function runTelemetry(opts) {
     await migrateAction(opts);
   } else {
     console.error("Unknown telemetry action: " + action);
-    console.log("Usage: npx deuk-agent-rule telemetry <log|sync|summary|migrate> [options]");
+    console.log("Usage: npx deuk-agent-flow telemetry <log|sync|summary|migrate> [options]");
   }
 }
 
@@ -66,6 +68,7 @@ async function logAction(opts) {
     tdw: Number(opts.tdw || 0),
     model: opts.model || "UNKNOWN",
     client: resolvedClient,
+    agentId: opts.agentId || "",
     ticket: opts.ticket || "",
     action: opts.action || "work",
     file: opts.file || "",
@@ -74,6 +77,13 @@ async function logAction(opts) {
     knowledgeAction: normalizeEnum(opts.knowledgeAction, KNOWLEDGE_ACTIONS) || "none",
     tokenQuality: normalizeEnum(opts.tokenQuality, TOKEN_QUALITIES),
     savedTokens: Number(opts.savedTokens || 0),
+    sessionMode: normalizeEnum(opts.sessionMode, SESSION_MODES),
+    retryCount: Number(opts.retryCount || 0),
+    turnCount: Number(opts.turnCount || 0),
+    failureCount: Number(opts.failureCount || 0),
+    phaseTransitionCount: Number(opts.phaseTransitionCount || 0),
+    outcome: normalizeEnum(opts.outcome, OUTCOMES),
+    qualityScore: normalizeQualityScore(opts.qualityScore),
     occurredAt: opts.occurredAt || ""
   });
 
@@ -150,6 +160,18 @@ async function summaryAction(opts) {
     acc[l.model] = (acc[l.model] || 0) + l.tokens;
     return acc;
   }, {});
+  const byClient = workLogs.reduce((acc, l) => {
+    const key = String(l.client || "").trim();
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + l.tokens;
+    return acc;
+  }, {});
+  const byAgent = workLogs.reduce((acc, l) => {
+    const key = String(l.agentId || l.client || "").trim();
+    if (!key) return acc;
+    acc[key] = (acc[key] || 0) + l.tokens;
+    return acc;
+  }, {});
   const tdwEntryCount = workLogs.filter(l => Number(l.tdw || 0) > 0).length;
   const tdwAverageTokensPerEntry = tdwEntryCount > 0 ? totalTdwTokens / tdwEntryCount : 0;
   const byRagResult = countBy(workLogs, "ragResult");
@@ -165,6 +187,7 @@ async function summaryAction(opts) {
   const ragMisses = byRagResult.miss || 0;
   const staleKnowledge = byRagResult.stale || 0;
   const workflowSummary = summarizeWorkflowEvents(workflowEvents);
+  const sessionModeComparison = summarizeSessionModes(workLogs);
 
   if (opts.json) {
     console.log(JSON.stringify({
@@ -177,6 +200,8 @@ async function summaryAction(opts) {
       missingEventCount,
       eventCoverageRate,
       byModel,
+      byClient,
+      byAgent,
       tdwEntryCount,
       tdwCoverageRate: rate(tdwEntryCount, workLogs.length),
       tdwTokenShare: rate(totalTdwTokens, totalTokens),
@@ -193,6 +218,7 @@ async function summaryAction(opts) {
       byKnowledgeIngestionCategory,
       byKnowledgeCorpus,
       byKnowledgeOriginTool,
+      sessionModeComparison,
       workflowEvents: workflowSummary
     }, null, 2));
     return;
@@ -211,6 +237,8 @@ async function summaryAction(opts) {
   Object.entries(byModel).forEach(([m, t]) => {
     console.log(`  - ${m}: ${t}`);
   });
+  printCounts("By Client", byClient);
+  printCounts("By Agent", byAgent);
   console.log(`TDW:`);
   console.log(`  - Entries: ${tdwEntryCount}`);
   console.log(`  - Coverage Rate: ${formatRate(tdwEntryCount, workLogs.length)}`);
@@ -229,6 +257,7 @@ async function summaryAction(opts) {
   printCounts("By Knowledge Ingestion Category", byKnowledgeIngestionCategory);
   printCounts("By Knowledge Corpus", byKnowledgeCorpus);
   printCounts("By Knowledge Origin Tool", byKnowledgeOriginTool);
+  printSessionModeComparison(sessionModeComparison);
   console.log(`Internal Workflow Events:`);
   console.log(`  - Events: ${workflowSummary.eventCount}`);
   console.log(`  - Tickets: ${workflowSummary.ticketCount}`);
@@ -276,6 +305,7 @@ export function appendTelemetryRecord(cwd, entry = {}) {
     tdw: Number(entry.tdw || 0),
     model: entry.model || "UNKNOWN",
     client: entry.client || "",
+    agentId: entry.agentId || "",
     ticket: entry.ticket || "",
     action: entry.action || "work",
     file: entry.file || "",
@@ -291,6 +321,13 @@ export function appendTelemetryRecord(cwd, entry = {}) {
     knowledgeFreshness: normalizeText(entry.knowledgeFreshness),
     tokenQuality: normalizeEnum(entry.tokenQuality, TOKEN_QUALITIES),
     savedTokens: Number(entry.savedTokens || 0),
+    sessionMode: normalizeEnum(entry.sessionMode, SESSION_MODES),
+    retryCount: Number(entry.retryCount || 0),
+    turnCount: Number(entry.turnCount || 0),
+    failureCount: Number(entry.failureCount || 0),
+    phaseTransitionCount: Number(entry.phaseTransitionCount || 0),
+    outcome: normalizeEnum(entry.outcome, OUTCOMES),
+    qualityScore: normalizeQualityScore(entry.qualityScore),
     synced: false
   };
   appendFileSync(telemetryPath, JSON.stringify(payload) + "\n", "utf8");
@@ -303,7 +340,7 @@ export function appendInternalWorkflowEvent(cwd, event = {}) {
     source: INTERNAL_SOURCE,
     kind: WORKFLOW_EVENT_KIND,
     model: event.model || "workflow",
-    client: event.client || "DeukAgentRules",
+    client: event.client || "DeukAgentFlow",
     tokens: 0,
     tdw: 0,
     action: event.action || event.event || "workflow-event"
@@ -341,6 +378,13 @@ function normalizeEnum(value, allowed) {
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function normalizeQualityScore(value) {
+  const score = Number(value || 0);
+  if (!Number.isFinite(score) || score <= 0) return 0;
+  if (score > 5) return 5;
+  return score;
 }
 
 function normalizeSyncedState(value) {
@@ -393,6 +437,83 @@ function summarizeWorkflowEvents(events) {
   };
 }
 
+function summarizeSessionModes(logs) {
+  const grouped = {};
+  for (const log of logs) {
+    const mode = normalizeEnum(log.sessionMode, SESSION_MODES);
+    if (!mode) continue;
+    const row = grouped[mode] || {
+      entries: 0,
+      tokens: 0,
+      tdwTokens: 0,
+      savedTokens: 0,
+      retries: 0,
+      turns: 0,
+      failures: 0,
+      phaseTransitions: 0,
+      successCount: 0,
+      outcomeFailureCount: 0,
+      blockedCount: 0,
+      qualityScoreTotal: 0,
+      qualityScoreEntries: 0,
+      byOutcome: {},
+      byTokenQuality: {}
+    };
+
+    row.entries += 1;
+    row.tokens += Number(log.tokens || 0);
+    row.tdwTokens += Number(log.tdw || 0);
+    row.savedTokens += Number(log.savedTokens || 0);
+    row.retries += Number(log.retryCount || 0);
+    row.turns += Number(log.turnCount || 0);
+    row.failures += Number(log.failureCount || 0);
+    row.phaseTransitions += Number(log.phaseTransitionCount || 0);
+
+    const outcome = normalizeEnum(log.outcome, OUTCOMES);
+    if (outcome) {
+      row.byOutcome[outcome] = (row.byOutcome[outcome] || 0) + 1;
+      if (outcome === "success") row.successCount += 1;
+      if (outcome === "failure") row.outcomeFailureCount += 1;
+      if (outcome === "blocked") row.blockedCount += 1;
+    }
+
+    const tokenQuality = normalizeEnum(log.tokenQuality, TOKEN_QUALITIES);
+    if (tokenQuality) row.byTokenQuality[tokenQuality] = (row.byTokenQuality[tokenQuality] || 0) + 1;
+
+    const qualityScore = normalizeQualityScore(log.qualityScore);
+    if (qualityScore > 0) {
+      row.qualityScoreTotal += qualityScore;
+      row.qualityScoreEntries += 1;
+    }
+
+    grouped[mode] = row;
+  }
+
+  return Object.fromEntries(Object.entries(grouped).map(([mode, row]) => [mode, {
+    entries: row.entries,
+    tokens: row.tokens,
+    tdwTokens: row.tdwTokens,
+    savedTokens: row.savedTokens,
+    retries: row.retries,
+    turns: row.turns,
+    failures: row.failures,
+    phaseTransitions: row.phaseTransitions,
+    successCount: row.successCount,
+    outcomeFailureCount: row.outcomeFailureCount,
+    blockedCount: row.blockedCount,
+    successRate: rate(row.successCount, row.entries),
+    outcomeFailureRate: rate(row.outcomeFailureCount, row.entries),
+    averageRetriesPerEntry: rate(row.retries, row.entries),
+    averageFailuresPerEntry: rate(row.failures, row.entries),
+    averageTokensPerEntry: rate(row.tokens, row.entries),
+    averageTurnsPerEntry: rate(row.turns, row.entries),
+    averagePhaseTransitionsPerEntry: rate(row.phaseTransitions, row.entries),
+    averageQualityScore: rate(row.qualityScoreTotal, row.qualityScoreEntries),
+    byOutcome: row.byOutcome,
+    byTokenQuality: row.byTokenQuality
+  }]));
+}
+
 function eventTime(event) {
   const fromOccurredAt = Date.parse(event?.occurredAt || "");
   if (Number.isFinite(fromOccurredAt)) return fromOccurredAt;
@@ -426,4 +547,13 @@ function printCounts(label, counts) {
   entries.forEach(([name, count]) => {
     console.log(`  - ${name}: ${count}`);
   });
+}
+
+function printSessionModeComparison(summary) {
+  const entries = Object.entries(summary);
+  if (entries.length === 0) return;
+  console.log(`Session Mode Comparison:`);
+  for (const [mode, row] of entries) {
+    console.log(`  - ${mode}: entries=${row.entries}, tokens=${row.tokens}, retries=${row.retries}, turns=${row.turns}, failures=${row.failures}, success=${formatRate(row.successCount, row.entries)}, quality=${row.averageQualityScore.toFixed(1)}`);
+  }
 }

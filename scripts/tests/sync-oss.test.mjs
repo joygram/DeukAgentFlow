@@ -19,12 +19,12 @@ test("OSS mirror package payload stays public-only and excludes telemetry intern
     }
   };
 
-  const outPkg = buildOssPackageJson(srcPkg, "https://github.com/joygram/DeukAgentRules", "git+https://github.com/joygram/DeukAgentRules.git");
+  const outPkg = buildOssPackageJson(srcPkg, "https://github.com/joygram/DeukAgentFlow", "git+https://github.com/joygram/DeukAgentFlow.git");
 
   assert.strictEqual(outPkg.license, "Apache-2.0");
-  assert.strictEqual(outPkg.repository.url, "git+https://github.com/joygram/DeukAgentRules.git");
-  assert.strictEqual(outPkg.bugs.url, "https://github.com/joygram/DeukAgentRules/issues");
-  assert.strictEqual(outPkg.homepage, "https://github.com/joygram/DeukAgentRules#readme");
+  assert.strictEqual(outPkg.repository.url, "git+https://github.com/joygram/DeukAgentFlow.git");
+  assert.strictEqual(outPkg.bugs.url, "https://github.com/joygram/DeukAgentFlow/issues");
+  assert.strictEqual(outPkg.homepage, "https://github.com/joygram/DeukAgentFlow#readme");
   assert.ok(!Object.prototype.hasOwnProperty.call(outPkg, "private"));
   assert.ok(!Object.prototype.hasOwnProperty.call(outPkg, "devDependencies"));
   assert.deepStrictEqual(outPkg.scripts, {
@@ -44,6 +44,7 @@ test("OSS mirror package payload stays public-only and excludes telemetry intern
     "templates/**/*",
     "scripts/cli.mjs",
     "scripts/cli-args.mjs",
+    "scripts/cli-usage-commands.mjs",
     "scripts/cli-init-commands.mjs",
     "scripts/cli-init-logic.mjs",
     "scripts/cli-prompts.mjs",
@@ -59,6 +60,9 @@ test("OSS mirror package payload stays public-only and excludes telemetry intern
     "scripts/lint-rules.mjs",
     "scripts/merge-logic.mjs",
     "scripts/plan-parser.mjs",
+    "scripts/publish-dual-npm.mjs",
+    "scripts/smoke-npm-docker.mjs",
+    "scripts/update-download-badge.mjs",
     "README.md",
     "README.ko.md",
     "CHANGELOG.md",

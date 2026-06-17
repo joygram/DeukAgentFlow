@@ -1,6 +1,6 @@
 # 원칙 (Principles)
 
-이 원칙들은 **DeukAgentRules**가 추구하는 "AI 엔지니어링 오케스트레이션 프로토콜"의 설계를 규정합니다.
+이 원칙들은 **DeukAgentFlow**가 추구하는 "AI 엔지니어링 오케스트레이션 프로토콜"의 설계를 규정합니다.
 
 ## 1. Zero-Copy Hub-Spoke 아키텍처 (SSoT)
 

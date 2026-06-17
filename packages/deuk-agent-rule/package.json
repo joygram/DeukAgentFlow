@@ -1,0 +1,36 @@
+{
+  "name": "deuk-agent-rule",
+  "version": "4.0.0",
+  "description": "Compatibility wrapper for legacy deuk-agent-rule installs.",
+  "keywords": [
+    "agents-md",
+    "agent-flow",
+    "agent-workflow",
+    "ai-guardrails",
+    "agent-guardrails",
+    "deuk-family"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joygram/DeukAgentFlow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joygram/DeukAgentFlow/issues"
+  },
+  "homepage": "https://github.com/joygram/DeukAgentFlow#readme",
+  "files": [
+    "bin/**/*",
+    "README.md"
+  ],
+  "bin": {
+    "deuk-agent-rule": "./bin/deuk-agent-rule.js",
+    "deukagentrule": "./bin/deuk-agent-rule.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "deuk-agent-flow": "4.0.0"
+  }
+}

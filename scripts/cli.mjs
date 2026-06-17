@@ -2,10 +2,11 @@
 import { existsSync, rmSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { parseArgs, parseTicketArgs, parseSkillArgs, parseTelemetryArgs } from "./cli-args.mjs";
+import { parseArgs, parseTicketArgs, parseSkillArgs, parseTelemetryArgs, parseUsageArgs } from "./cli-args.mjs";
 import { runInit, runMerge } from "./cli-init-commands.mjs";
 import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports, runTicketMeta, runTicketConnect, runTicketRebuild, runTicketReportAttach, runTicketMove, runTicketNext, runTicketHotfix, runTicketStatus, runTicketHandoff, runTicketEvidenceCheck, runTicketEvidenceReport } from "./cli-ticket-commands.mjs";
 import { runTelemetry } from "./cli-telemetry-commands.mjs";
+import { runUsage } from "./cli-usage-commands.mjs";
 import { performUpgradeMigration } from "./cli-ticket-migration.mjs";
 import { loadInitConfig, writeInitConfig, checkUpdateNotifier, normalizeWorkflowMode, WORKFLOW_MODE_EXECUTE, AGENT_ROOT_DIR, resolveWorkflowMode, LEGACY_TEMPLATE_DIR, LEGACY_CONFIG_FILE } from "./cli-utils.mjs";
 import { runInteractive } from "./cli-prompts.mjs";
@@ -67,6 +68,13 @@ async function main() {
   if (sub === "telemetry") {
     const opts = parseTelemetryArgs(rest);
     await runTelemetry(opts);
+    return;
+  }
+
+  if (sub === "usage") {
+    const action = rest[0];
+    const opts = parseUsageArgs(rest.slice(1));
+    await runUsage(action, opts);
     return;
   }
 
@@ -155,16 +163,17 @@ async function handleInit(opts, saved) {
 }
 
 function printHelp() {
-  console.log(`DeukAgentRules CLI - Generalization Rules & Ticket Management
+  console.log(`DeukAgentFlow CLI - Generalization Rules & Ticket Management
 
 Usage:
-  npx deuk-agent-rule init   [options]
-  npx deuk-agent-rule merge  [options]
-  npx deuk-agent-rule lint:md [--cwd <path>] [files...]
-  npx deuk-agent-rule rules audit [--compact|--json]
-  npx deuk-agent-rule skill <list|add|expose|lint> [options]
-  npx deuk-agent-rule ticket <create|evidence|list|status|handoff|continue|use|close|archive|reports|migrate|upgrade|meta|connect|move> [options]
-  npx deuk-agent-rule telemetry <log|sync|summary|migrate> [options]
+  npx deuk-agent-flow init   [options]
+  npx deuk-agent-flow merge  [options]
+  npx deuk-agent-flow lint:md [--cwd <path>] [files...]
+  npx deuk-agent-flow rules audit [--compact|--json]
+  npx deuk-agent-flow skill <list|add|expose|lint> [options]
+  npx deuk-agent-flow ticket <create|evidence|list|status|handoff|continue|use|close|archive|reports|migrate|upgrade|meta|connect|move> [options]
+  npx deuk-agent-flow telemetry <log|sync|summary|migrate> [options]
+  npx deuk-agent-flow usage <set|status|advise> [options]
 
 Options:
   --cwd <path>          Target repo root
@@ -182,13 +191,13 @@ Options:
   --no-sync             Force disable remote sync
 
 Skill Options:
-  --skill, --id <name>  Skill ID (safe-refactor|generated-file-guard|context-recall)
+  --skill, --id <name>  Skill ID (safe-refactor|generated-file-guard|context-recall|project-pilot)
   --platform <name>     Exposure target (claude|cursor)
 
 Ticket Options:
   --topic, --id <name>  Ticket topic slug or ID
   --group <name>        Ticket group (sub|main|discussion)
-  --project <name>      Project filter (DeukUI|DeukAgentRules)
+  --project <name>      Project filter (DeukUI|DeukAgentFlow)
   --submodule <name>    Submodule filter (DeukPack|DeukUI)
   --docs-language <lang> auto | ko | en
   --evidence <text>     Provide Phase 0 RAG evidence summary
@@ -205,6 +214,20 @@ Ticket Options:
   --latest, -l          Use most recent ticket (default if no topic)
   --path-only           Print only the file path
   --json                Output result in JSON format
+
+Usage Options:
+  --platform <name>           Platform name (Codex/Copilot supported)
+  --client <name>             Client label for usage state/output
+  --agent-id <id>             Agent identifier for per-agent tracking
+  --weekly-remaining <pct>   Remaining weekly percentage (0-100)
+  --five-hour-remaining <pct> Remaining 5-hour percentage (0-100)
+  --weekly-reset <text>      Weekly reset time label
+  --five-hour-reset <text>   5-hour reset time label
+  --task-grade <grade>       Task grade (S|A|B|C)
+  --task <label>             Optional task label for advice output
+  --turn-count <n>           Conversation turn count for split advice
+  --linked-ticket-count <n>  Linked ticket count for split advice
+  --cross-workspace          Mark the conversation as cross-workspace
 `);
 }
 

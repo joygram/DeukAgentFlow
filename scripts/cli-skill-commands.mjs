@@ -1,11 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { AGENT_ROOT_DIR } from "./cli-utils.mjs";
 
-const SKILL_IDS = ["safe-refactor", "generated-file-guard", "context-recall"];
+const SKILL_IDS = ["safe-refactor", "generated-file-guard", "context-recall", "project-pilot"];
 const SKILL_ROOT = "templates/skills";
 const CONFIG_FILE = `${AGENT_ROOT_DIR}/skills.json`;
 const REPO_SKILL_TEMPLATE_ROOT = `${AGENT_ROOT_DIR}/skill-templates`;
+const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function repoSkillPath(cwd, id) {
   return join(cwd, AGENT_ROOT_DIR, "skills", id, "SKILL.md");
@@ -14,7 +16,9 @@ function repoSkillPath(cwd, id) {
 function sourceSkillPath(cwd, id) {
   const localTemplate = join(cwd, REPO_SKILL_TEMPLATE_ROOT, id, "SKILL.md");
   if (existsSync(localTemplate)) return localTemplate;
-  return join(cwd, SKILL_ROOT, id, "SKILL.md");
+  const repoTemplate = join(cwd, SKILL_ROOT, id, "SKILL.md");
+  if (existsSync(repoTemplate)) return repoTemplate;
+  return join(PACKAGE_ROOT, SKILL_ROOT, id, "SKILL.md");
 }
 
 function loadSkillSource(cwd, id) {
@@ -84,11 +88,11 @@ function exposeCursor(cwd, ids, dryRun) {
   const target = join(cwd, ".cursor", "rules", "deuk-agent-skills.mdc");
   const body = [
     "---",
-    "description: \"DeukAgentRules skill pointers\"",
+    "description: \"DeukAgentFlow skill pointers\"",
     "globs: [\"**/*\"]",
     "alwaysApply: false",
     "---",
-    "# DeukAgentRules Skills",
+    "# DeukAgentFlow Skills",
     "",
     "These are thin behavior playbooks. They do not override `core-rules/AGENTS.md`, TDW, APC, Phase Gate, or PROJECT_RULE.md.",
     "",

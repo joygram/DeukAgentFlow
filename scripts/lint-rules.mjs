@@ -27,7 +27,7 @@ const RULE_CHECKS = [
     code: "DR-PRIORITY-01",
     message: "Rules must define pointer/core/project instruction precedence.",
     test: (rules) => /## 0\. Priority/i.test(rules)
-      && /Global DeukAgentRules pointer/i.test(rules)
+      && /Global DeukAgentFlow pointer/i.test(rules)
       && /Local generated pointer\/spoke/i.test(rules)
       && /core-rules\/AGENTS\.md/i.test(rules)
       && /PROJECT_RULE\.md/i.test(rules)

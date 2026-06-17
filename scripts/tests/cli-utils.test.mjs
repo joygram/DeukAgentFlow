@@ -11,7 +11,7 @@ import {
   normalizeDocsLanguage, inferDocsLanguageFromText, resolveDocsLanguage, AGENT_ROOT_DIR, TICKET_SUBDIR, isMcpActive
 } from "../cli-utils.mjs";
 import { generateTicketId, computeNextTicketNumber } from "../cli-ticket-index.mjs";
-import { parseArgs, parseSkillArgs, parseTelemetryArgs, parseTicketArgs } from "../cli-args.mjs";
+import { parseArgs, parseSkillArgs, parseTelemetryArgs, parseTicketArgs, parseUsageArgs } from "../cli-args.mjs";
 
 test("cli-utils.mjs - normalizeWorkflowMode", (t) => {
   assert.strictEqual(normalizeWorkflowMode(undefined), WORKFLOW_MODE_PLAN, "default is plan");
@@ -117,7 +117,7 @@ test("cli-utils.mjs - computeTicketPath", (t) => {
     archiveYearMonth: "2026-05",
     archiveDay: "01"
   };
-  assert.strictEqual(computeTicketPath(groupedArchivedEntry), ".deuk-agent/tickets/archive/main/2026-05/01/081-old-host.md");
+  assert.strictEqual(computeTicketPath(groupedArchivedEntry), ".deuk-agent/tickets/archive/main/2026-05/081-old-host.md");
 
   const defaultGroup = { id: "100-no-group-host", status: "open" };
   assert.strictEqual(computeTicketPath(defaultGroup), ".deuk-agent/tickets/sub/100-no-group-host.md");
@@ -245,7 +245,14 @@ test("cli-args.mjs - parseTelemetryArgs supports remote sync target", () => {
     "--event", "ticket_created",
     "--occurred-at", "2026-05-02T00:00:00.000Z",
     "--phase", "1",
-    "--status", "open"
+    "--status", "open",
+    "--session-mode", "guided",
+    "--retries", "2",
+    "--turns", "5",
+    "--failures", "1",
+    "--phase-transitions", "3",
+    "--outcome", "success",
+    "--quality-score", "4"
   ]);
   assert.strictEqual(opts.cwd, "/tmp/work");
   assert.strictEqual(opts.tokens, 42);
@@ -261,6 +268,13 @@ test("cli-args.mjs - parseTelemetryArgs supports remote sync target", () => {
   assert.strictEqual(opts.occurredAt, "2026-05-02T00:00:00.000Z");
   assert.strictEqual(opts.phase, 1);
   assert.strictEqual(opts.status, "open");
+  assert.strictEqual(opts.sessionMode, "guided");
+  assert.strictEqual(opts.retryCount, 2);
+  assert.strictEqual(opts.turnCount, 5);
+  assert.strictEqual(opts.failureCount, 1);
+  assert.strictEqual(opts.phaseTransitionCount, 3);
+  assert.strictEqual(opts.outcome, "success");
+  assert.strictEqual(opts.qualityScore, 4);
 });
 
 test("cli-args.mjs - parseTicketArgs supports strict/guard flags", () => {
@@ -292,6 +306,39 @@ test("cli-args.mjs - parseArgs supports compact rule audit output", () => {
   const opts = parseArgs(["--cwd", "/tmp/demo", "--compact"]);
   assert.strictEqual(opts.cwd, "/tmp/demo");
   assert.strictEqual(opts.compact, true);
+});
+
+test("cli-args.mjs - parseUsageArgs supports usage inputs", () => {
+  const opts = parseUsageArgs([
+    "--cwd", "/tmp/demo",
+    "--platform", "codex",
+    "--client", "Codex",
+    "--agent-id", "codex-main",
+    "--weekly-remaining", "76",
+    "--five-hour-remaining", "42",
+    "--weekly-reset", "2026-05-12 07:30",
+    "--five-hour-reset", "2026-05-07 12:30",
+    "--task-grade", "A",
+    "--task", "refactor",
+    "--turn-count", "28",
+    "--linked-ticket-count", "3",
+    "--cross-workspace",
+    "--json"
+  ]);
+  assert.strictEqual(opts.cwd, "/tmp/demo");
+  assert.strictEqual(opts.platform, "codex");
+  assert.strictEqual(opts.client, "Codex");
+  assert.strictEqual(opts.agentId, "codex-main");
+  assert.strictEqual(opts.weeklyRemaining, 76);
+  assert.strictEqual(opts.fiveHourRemaining, 42);
+  assert.strictEqual(opts.weeklyReset, "2026-05-12 07:30");
+  assert.strictEqual(opts.fiveHourReset, "2026-05-07 12:30");
+  assert.strictEqual(opts.taskGrade, "A");
+  assert.strictEqual(opts.taskLabel, "refactor");
+  assert.strictEqual(opts.turnCount, 28);
+  assert.strictEqual(opts.linkedTicketCount, 3);
+  assert.strictEqual(opts.crossWorkspace, true);
+  assert.strictEqual(opts.json, true);
 });
 
 test("cli-args.mjs - parseSkillArgs supports registry and expose flags", () => {

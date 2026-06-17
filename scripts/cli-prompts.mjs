@@ -44,7 +44,7 @@ export async function selectMany(rl, prompt, choices) {
 export async function runInteractive(opts) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    console.log("\nDeukAgentRules init — let's configure your workspace.\n");
+    console.log("\nDeukAgentFlow init — let's configure your workspace.\n");
 
     const stack = await selectOne(rl, "What is your primary tech stack?", STACKS);
     const tools = await selectMany(rl, "Which agent tools do you use?", AGENT_TOOLS);
@@ -64,7 +64,7 @@ export async function runInteractive(opts) {
       console.log("\n  No AGENTS.md found — will create with markers.");
     } else {
       const content = readFileSync(targetAgents, "utf8");
-      const hasMarkers = content.includes("deuk-agent-rule:begin") || content.includes("## DeukAgentRules");
+      const hasMarkers = content.includes("deuk-agent-rule:begin") || content.includes("## DeukAgentFlow");
       if (!hasMarkers) {
         const choice = await selectOne(rl, "AGENTS.md exists but has no markers. How to apply?", [
           { label: "Append managed block at the end (safe)", value: "inject" },

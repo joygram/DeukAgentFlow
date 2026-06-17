@@ -11,6 +11,7 @@ import { appendTicketEntry, rebuildTicketIndexFromTopicFilesIfNeeded, updateTick
 import { appendInternalWorkflowEvent } from "./cli-telemetry-commands.mjs";
 import { parsePlan } from "./plan-parser.mjs";
 import { collectChangedFiles, collectChangedMarkdownFiles, lintMarkdownPaths } from "./lint-md.mjs";
+import { getUsageReminderLine } from "./cli-usage-commands.mjs";
 import ejs from "ejs";
 import YAML from "yaml";
 
@@ -65,7 +66,7 @@ function resolveTicketTemplate(cwd, docsLanguageInput, promptText = "") {
   ];
   const ticketTemplatePath = ticketTemplateCandidates.find(p => existsSync(p));
   if (!ticketTemplatePath) {
-    throw new Error("ticket create: Template not found. Please run 'npx deuk-agent-rule init' to deploy templates.");
+    throw new Error("ticket create: Template not found. Please run 'npx deuk-agent-flow init' to deploy templates.");
   }
   return { tplText: readFileSync(ticketTemplatePath, "utf8"), docsLanguage };
 }
@@ -414,6 +415,13 @@ function isCompactTicketOutput(opts = {}) {
   return Boolean(opts.compact || opts.nonInteractive);
 }
 
+function printUsageReminder(cwd) {
+  const reminder = getUsageReminderLine(cwd);
+  if (reminder) {
+    console.log(reminder);
+  }
+}
+
 function getHandoffSummary(out) {
   const next = out.nextTicket ? `${out.nextTicket.id}:${out.nextTicket.status}` : "none";
   const blockers = out.reasons?.length ? out.reasons.join(",") : "none";
@@ -660,39 +668,16 @@ function buildStrictCreateFailureMessage(reasons) {
   const lines = [
     "[VALIDATION FAILED] ticket create strict mode rejected incomplete Phase 1.",
     `Missing: ${uniqueReasons.join(", ")}`,
-    "",
-    "Required one-pass inputs:",
-    "  --summary \"<concrete request summary>\"",
-    "  --plan-body \"<filled Phase 1 markdown containing every required section below>\"",
-    "",
-    "Required --plan-body sections:",
-    "  # <title>",
-    "  ## Agent Permission Contract (APC)",
-    "  ### [BOUNDARY]",
-    "  ### [CONTRACT]",
-    "  ### [PATCH PLAN]",
-    "  ## Compact Plan",
-    "  ## Problem Analysis",
-    "  ## Source Observations",
-    "  ## Cause Hypotheses",
-    "  ## Improvement Direction",
-    "  ## Audit Evidence",
-    "",
-    "Copy/paste command shape:",
-    "  npx deuk-agent-rule ticket create --topic <topic> --summary \"<concrete summary>\" --plan-body \"$(cat <<'EOF'",
-    "  # <title>",
-    "  <filled Phase 1 markdown with all sections listed above>",
-    "  EOF",
-    "  )\" --non-interactive",
-    "",
+    "Fix: provide `--summary` and a filled `--plan-body` with APC, Compact Plan, Problem Analysis, Source Observations, Cause Hypotheses, Improvement Direction, and Audit Evidence.",
+    "Command: npx deuk-agent-flow ticket create --topic <topic> --summary \"<concrete summary>\" --plan-body \"<filled phase 1 markdown>\" --non-interactive",
     "Manual fallback is forbidden: do not write .deuk-agent/tickets/**/*.md directly after this failure."
   ];
 
   if (uniqueReasons.includes("summary_missing_or_placeholder")) {
-    lines.push("Summary fix: replace placeholder/TBD wording with a concrete --summary value.");
+    lines.push("Summary fix: replace placeholder/TBD wording with a concrete `--summary` value.");
   }
   if (uniqueReasons.includes("missing_apc_block") || uniqueReasons.some(reason => reason.startsWith("apc_"))) {
-    lines.push("APC fix: include ## Agent Permission Contract (APC) with [BOUNDARY], [CONTRACT], and [PATCH PLAN].");
+    lines.push("APC fix: include `## Agent Permission Contract (APC)` with `[BOUNDARY]`, `[CONTRACT]`, and `[PATCH PLAN]`.");
   }
   if (uniqueReasons.includes("compact_plan_placeholder_or_incomplete")) {
     lines.push("Compact Plan fix: replace scaffold text with concrete finding, direction, and verification lines.");
@@ -733,7 +718,7 @@ function assertTicketLifecycleProvenance(entry, meta = {}) {
     `[VALIDATION FAILED] Ticket ${entry?.id || entry?.topic || "unknown"} cannot be used as an execution ticket: ${reasons.join(", ")}.`,
     "This ticket file does not carry CLI creation provenance.",
     "Do not create or repair tickets by writing .deuk-agent/tickets/**/*.md directly.",
-    "Use: npx deuk-agent-rule ticket create --topic <topic> --summary <summary> --plan-body \"<filled phase 1 markdown>\" --non-interactive"
+    "Use: npx deuk-agent-flow ticket create --topic <topic> --summary <summary> --plan-body \"<filled phase 1 markdown>\" --non-interactive"
   ].join("\n"));
 }
 
@@ -755,26 +740,24 @@ function updatePreviousTicketRef(cwd, prevTicketEntry, ticketId) {
 
 function archivePartitionForEntry(entry, now = new Date()) {
   const storedYearMonth = String(entry?.archiveYearMonth || "");
-  const storedDay = String(entry?.archiveDay || "");
-  if (/^\d{4}-\d{2}$/.test(storedYearMonth) && /^\d{2}$/.test(storedDay)) {
-    return { yearMonth: storedYearMonth, day: storedDay };
+  if (/^\d{4}-\d{2}$/.test(storedYearMonth)) {
+    return { yearMonth: storedYearMonth };
   }
 
   const source = String(entry?.createdAt || "");
   const match = source.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) return { yearMonth: `${match[1]}-${match[2]}`, day: match[3] };
+  if (match) return { yearMonth: `${match[1]}-${match[2]}` };
 
   const iso = now.toISOString();
-  return { yearMonth: iso.slice(0, 7), day: iso.slice(8, 10) };
+  return { yearMonth: iso.slice(0, 7) };
 }
 
 function getArchiveDestination(ticketDir, entry, fileName) {
   const partition = archivePartitionForEntry(entry);
-  const archiveDir = join(ticketDir, "archive", entry.group || "sub", partition.yearMonth, partition.day);
+  const archiveDir = join(ticketDir, "archive", entry.group || "sub", partition.yearMonth);
   return {
     archiveDir,
     archiveYearMonth: partition.yearMonth,
-    archiveDay: partition.day,
     newAbsPath: join(archiveDir, fileName)
   };
 }
@@ -784,8 +767,7 @@ function archiveStorageFromPath(ticketDir, absPath, entry) {
   const archiveIdx = parts.indexOf("archive");
   if (archiveIdx < 0) return archivePartitionForEntry(entry);
   return {
-    archiveYearMonth: parts[archiveIdx + 2] || archivePartitionForEntry(entry).yearMonth,
-    archiveDay: parts[archiveIdx + 3] || archivePartitionForEntry(entry).day
+    archiveYearMonth: parts[archiveIdx + 2] || archivePartitionForEntry(entry).yearMonth
   };
 }
 
@@ -866,7 +848,7 @@ function buildUseNoMatchError(topic, candidates) {
 
   lines.push("");
   lines.push("Choose one explicitly:");
-  lines.push("  npx deuk-agent-rule ticket use --topic <ticket-id> --non-interactive");
+  lines.push("  npx deuk-agent-flow ticket use --topic <ticket-id> --non-interactive");
   return lines.join("\n");
 }
 
@@ -904,8 +886,8 @@ function buildOpenTicketLimitError(indexJson) {
     "Review the active ticket list, decide what can be archived, then create the ticket again.",
     "",
     "Commands:",
-    "  npx deuk-agent-rule ticket list --active --non-interactive",
-    "  npx deuk-agent-rule ticket archive --topic <ticket-id> --non-interactive",
+    "  npx deuk-agent-flow ticket list --active --non-interactive",
+    "  npx deuk-agent-flow ticket archive --topic <ticket-id> --non-interactive",
     "",
     "Oldest archive candidates:"
   ];
@@ -939,7 +921,6 @@ function archiveTicketEntry({ cwd, ticketDir, indexJson, found, opts = {}, repor
         indexJson.entries[entryIdx].fileName = fileName;
         indexJson.entries[entryIdx].status = "archived";
         indexJson.entries[entryIdx].archiveYearMonth = storage.archiveYearMonth;
-        indexJson.entries[entryIdx].archiveDay = storage.archiveDay;
         indexJson.entries[entryIdx].updatedAt = new Date().toISOString();
       }
       const archivedRelativePath = toRepoRelativePath(cwd, archivedAbsPath);
@@ -948,7 +929,7 @@ function archiveTicketEntry({ cwd, ticketDir, indexJson, found, opts = {}, repor
       }
       return { id: found.id, path: archivedRelativePath, repaired: true };
     }
-    if (String(found.status || "").toLowerCase() === "closed" && found.archiveYearMonth && found.archiveDay) {
+    if (String(found.status || "").toLowerCase() === "closed" && found.archiveYearMonth) {
       const entryIdx = indexJson.entries.findIndex(e => e.id === found.id);
       if (entryIdx >= 0) {
         indexJson.entries[entryIdx].fileName = fileName;
@@ -970,7 +951,7 @@ function archiveTicketEntry({ cwd, ticketDir, indexJson, found, opts = {}, repor
 
   const originalBody = readFileSync(absPath, "utf8");
   const { meta: archiveMeta } = parseFrontMatter(originalBody);
-  const { archiveDir, archiveYearMonth, archiveDay, newAbsPath } = getArchiveDestination(ticketDir, found, fileName);
+  const { archiveDir, archiveYearMonth, newAbsPath } = getArchiveDestination(ticketDir, found, fileName);
   if (!opts.dryRun) mkdirSync(archiveDir, { recursive: true });
 
   const bodyLines = originalBody.trimEnd().split(/\r?\n/);
@@ -1026,7 +1007,6 @@ function archiveTicketEntry({ cwd, ticketDir, indexJson, found, opts = {}, repor
     indexJson.entries[entryIdx].fileName = fileName;
     indexJson.entries[entryIdx].status = "archived";
     indexJson.entries[entryIdx].archiveYearMonth = archiveYearMonth;
-    indexJson.entries[entryIdx].archiveDay = archiveDay;
     indexJson.entries[entryIdx].updatedAt = new Date().toISOString();
   }
 
@@ -1052,6 +1032,47 @@ function autoArchiveDoneTickets(cwd, indexJson, opts = {}) {
       archived.push(result);
       if (!isCompactTicketOutput(opts)) {
         console.warn(`[AUTO-ARCHIVE] ${candidate.id} (${candidate.status}) archived before open-ticket limit check.`);
+      }
+    }
+  }
+
+  if (archived.length > 0) {
+    writeTicketIndexJson(cwd, indexJson, opts);
+  }
+
+  return archived;
+}
+
+function canAutoArchiveOpenLimit(indexJson) {
+  const openRows = (indexJson.entries || []).filter(isOpenTicketEntry);
+  if (openRows.length <= MAX_OPEN_TICKETS) {
+    return { needed: 0, candidates: [], ok: true };
+  }
+
+  const candidates = selectOpenLimitCandidates(indexJson);
+  const needed = openRows.length - MAX_OPEN_TICKETS;
+  return {
+    needed,
+    candidates,
+    ok: candidates.length >= needed
+  };
+}
+
+function autoArchiveOpenLimitTickets(cwd, indexJson, opts = {}) {
+  const ticketDir = detectConsumerTicketDir(cwd);
+  if (!ticketDir) return [];
+
+  const { needed, candidates, ok } = canAutoArchiveOpenLimit(indexJson);
+  if (needed <= 0 || !ok) return [];
+
+  const archived = [];
+  console.warn("[AUTO-CLEANUP] Open-ticket limit reached. 자동으로 티켓 정리를 진행하겠습니다.");
+  for (const candidate of candidates.slice(0, needed)) {
+    const result = archiveTicketEntry({ cwd, ticketDir, indexJson, found: candidate, opts, report: null });
+    if (result?.id) {
+      archived.push(result);
+      if (!isCompactTicketOutput(opts)) {
+        console.warn(`[AUTO-CLEANUP] ${candidate.id} archived to stay within the open-ticket limit.`);
       }
     }
   }
@@ -1274,7 +1295,8 @@ export async function runTicketCreate(opts) {
             }
           ]
         };
-        const limitError = buildOpenTicketLimitError(simulatedIndexJson);
+        const autoArchiveCheck = canAutoArchiveOpenLimit(simulatedIndexJson);
+        const limitError = autoArchiveCheck.ok ? null : buildOpenTicketLimitError(simulatedIndexJson);
         if (limitError) {
           throw new Error(limitError);
         }
@@ -1287,7 +1309,7 @@ export async function runTicketCreate(opts) {
       }, opts);
 
       const limitIndexJson = readTicketIndexJson(opts.cwd);
-      autoArchiveDoneTickets(opts.cwd, limitIndexJson, opts);
+      autoArchiveOpenLimitTickets(opts.cwd, limitIndexJson, opts);
 
       const limitError = buildOpenTicketLimitError(readTicketIndexJson(opts.cwd));
       if (limitError) {
@@ -1309,6 +1331,7 @@ export async function runTicketCreate(opts) {
     }
 
     console.log(`${opts.dryRun ? "Ticket would be created" : "Ticket created"}: ${toFileUri(abs)}`);
+    printUsageReminder(opts.cwd);
     if (!opts.dryRun) {
       appendTelemetryEvent(opts.cwd, {
         event: "ticket_created",
@@ -1333,7 +1356,7 @@ export async function runTicketCreate(opts) {
 export async function runTicketList(opts) {
   const ticketDir = detectConsumerTicketDir(opts.cwd);
   if (!ticketDir) {
-    throw new Error("No ticket system found. Please run 'npx deuk-agent-rule init' first.");
+    throw new Error("No ticket system found. Please run 'npx deuk-agent-flow init' first.");
   }
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   syncActiveTicketId(opts.cwd);
@@ -1405,6 +1428,7 @@ export async function runTicketStatus(opts) {
   if (isCompactTicketOutput(opts)) {
     const reasonText = out.reasons.length === 0 ? "ok" : out.reasons.join(", ");
     console.log(`${out.id} | phase=${out.phase} | status=${out.status} | ${reasonText}`);
+    printUsageReminder(opts.cwd);
     return;
   }
 
@@ -1416,6 +1440,7 @@ export async function runTicketStatus(opts) {
     if (out.reasons.length === 0) console.log("Reasons: none");
     else console.log(`Reasons: ${out.reasons.join(", ")}`);
   }
+  printUsageReminder(opts.cwd);
 }
 
 export async function runTicketHandoff(opts) {
@@ -1690,6 +1715,7 @@ export async function runTicketUse(opts) {
     console.log(`Active ticket: ${found.id}`);
     console.log(`Path: [${posixPath}](file://${absPath})`);
     if (opts.printContent) console.log("\n" + readFileSync(join(opts.cwd, found.path), "utf8"));
+    printUsageReminder(opts.cwd);
   }
 }
 
@@ -2006,6 +2032,7 @@ export async function runTicketMove(opts) {
       status: meta.status
     });
     console.log(`ticket: moved -> ${entry.topic} is now in Phase ${nextPhase} (${meta.status})`);
+    printUsageReminder(opts.cwd);
   } catch (err) {
     rollbackTicketLifecycleArtifacts(opts.cwd, previousIndex, body, abs, opts);
     throw err;
@@ -2016,6 +2043,7 @@ export async function runTicketNext(opts) {
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   // Find the first active ticket, or if none, the first open ticket (earliest created)
   const rows = filterTicketEntries(index.entries, opts)
+    .filter(entry => isTicketNextRunnableCandidate(opts.cwd, entry))
     .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   let found = rows.find(e => e.status === "active");
   if (!found) {
@@ -2039,6 +2067,16 @@ export async function runTicketNext(opts) {
     console.log(`Path: [${posixPath}](file://${absPath})`);
     if (opts.printContent) console.log("\n" + readFileSync(join(opts.cwd, found.path), "utf8"));
   }
+}
+
+function isTicketNextRunnableCandidate(cwd, entry) {
+  const entryPath = entry.path || computeTicketPath(entry);
+  const absPath = join(cwd, entryPath);
+  if (!existsSync(absPath)) return true;
+
+  const { meta } = parseFrontMatter(readFileSync(absPath, "utf8"));
+  const lifecycleSource = String(meta.lifecycleSource || meta.ticketLifecycleSource || "").trim();
+  return lifecycleSource === "ticket-create";
 }
 
 export async function runTicketHotfix(opts) {

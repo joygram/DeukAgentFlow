@@ -53,13 +53,12 @@ export function computeTicketPath(entry) {
     return [TICKET_DIR_NAME, `${fileStem}.md`].join("/");
   }
 
-  if (isArchived && entry.archiveYearMonth && entry.archiveDay) {
+  if (isArchived && entry.archiveYearMonth) {
     return [
       TICKET_DIR_NAME,
       "archive",
       group,
       entry.archiveYearMonth,
-      entry.archiveDay,
       `${fileStem}.md`
     ].join("/");
   }
@@ -444,7 +443,7 @@ export async function checkUpdateNotifier() {
     const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
     const currentVersion = pkg.version;
-    const res = await fetch("https://registry.npmjs.org/deuk-agent-rule/latest", {
+    const res = await fetch("https://registry.npmjs.org/deuk-agent-flow/latest", {
       signal: AbortSignal.timeout(800)
     });
     if (res.ok) {
@@ -452,7 +451,7 @@ export async function checkUpdateNotifier() {
       // Only notify when registry version is strictly newer than local (handles local dev symlink case)
       if (data.version && semverLt(currentVersion, data.version)) {
         console.warn(`\n\x1b[33m💡 Update available! ${currentVersion} → ${data.version}\x1b[0m`);
-        console.warn(`\x1b[36mRun 'npm install -g deuk-agent-rule' to update.\x1b[0m\n`);
+        console.warn(`\x1b[36mRun 'npm install -g deuk-agent-flow' to update.\x1b[0m\n`);
       }
     }
   } catch(e) {

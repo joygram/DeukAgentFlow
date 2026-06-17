@@ -6,6 +6,12 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [Unreleased]
+
+### 수정됨 (Fixed)
+
+- **init/ticket:** 의도했던 month-only archive 정책을 복원했습니다. `init`가 legacy `archive/sub/YYYY-MM/DD/...` 티켓을 `archive/sub/YYYY-MM/...`로 정규화하고, `archiveDay` 없는 archive shard index를 다시 쓰며, 새 legacy import도 더 이상 day-depth 경로를 만들지 않도록 수정했습니다.
+
 ## [3.3.3] - 2026-05-06
 
 ### 수정됨 (Fixed)
@@ -18,7 +24,7 @@
 ### 포지셔닝 (Positioning)
 
 - npm/GitHub에서 보이는 정체성을 **모든 레포를 위한 AI 코딩 에이전트 가드레일**로 재정리했습니다.
-- `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, 에이전트 실행기, 일반 LLM/MCP 가드레일과 비교해 DeukAgentRules가 더하는 티켓 생명주기, 범위 계약, 검증, 아카이브 가능한 기억을 README에 드러냈습니다.
+- `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, 에이전트 실행기, 일반 LLM/MCP 가드레일과 비교해 DeukAgentFlow가 더하는 티켓 생명주기, 범위 계약, 검증, 아카이브 가능한 기억을 README에 드러냈습니다.
 - 다음 개선 방향으로 첫 실행 점검, CLI/RAG 재각인 신호, active ticket/phase/open ticket count/DeukAgentContext memory status를 보여주는 companion 표면을 명시했습니다.
 
 ## [3.3.0] - 2026-05-02
@@ -26,7 +32,7 @@
 ### 추가됨 (Added)
 
 - **docs:** VS Code, Open VSX, GitHub, skill 기반 발견 루프를 포함한 AI 코딩 에이전트 가드레일 포지셔닝, 비전, 오가닉 유입 리서치 문서를 추가했습니다.
-- **docs:** Karpathy식 skill, DeukAgentRules, DeukAgentContext 심층 비교 문서를 추가했습니다. Skill은 행동 playbook, DeukAgentRules는 workflow/permission control, DeukAgentContext는 ticketed engineering memory로 포지셔닝했습니다.
+- **docs:** Karpathy식 skill, DeukAgentFlow, DeukAgentContext 심층 비교 문서를 추가했습니다. Skill은 행동 playbook, DeukAgentFlow는 workflow/permission control, DeukAgentContext는 ticketed engineering memory로 포지셔닝했습니다.
 - **seo:** `andrej-karpathy-skills` 관련 아이디어 링크와 Claude Code, AGENTS.md, Cursor rules, agent skills, AI guardrails 검색 유입 키워드를 보강했습니다.
 
 ### 변경됨 (Changed)
@@ -168,7 +174,7 @@
 ### 수정됨 (Fixed)
 
 - **ticket:** LATEST.md를 폐기하고 ACTIVE_TICKET.md로 포인터 통일
-- **ticket:** DeukAgentRules 현재 진행 중인 티켓 안 나오던 문제 해결
+- **ticket:** DeukAgentFlow 현재 진행 중인 티켓 안 나오던 문제 해결
 
 ## [1.0.14] - 2026-04-02
 

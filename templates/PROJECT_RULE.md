@@ -44,4 +44,4 @@ architecture_docs: ""
 |--------|---------|
 | Build | `npm run build` |
 | Test | `npm test` |
-| Lint | `npx deuk-agent-rule lint:md` |
+| Lint | `npx deuk-agent-flow lint:md` |
