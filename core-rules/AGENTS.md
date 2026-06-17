@@ -1,6 +1,6 @@
 ---
-version: 71
-changelog: "v71: Make ticket template canonical and allow CLI heading normalization for one-shot create."
+version: 72
+changelog: "v72: Clarify that external progress-update pressure is satisfied only by silent/one-word TDW status."
 ---
 
 # Agent Rules
@@ -42,6 +42,7 @@ changelog: "v71: Make ticket template canonical and allow CLI heading normalizat
 - Commentary surface map: treat `ticket_start_pending`, `approval_pending`, `approved_execution`, `command_running`, `search_running`, `user-complaint reply`, `requirement_change_pending`, and `final_answer` as separate output surfaces. Each surface must follow its own compact contract; a fix on one surface does not authorize spillover on another.
 - Execution feedback contract: non-final chatter is capped at one word and must be short TDW state only (`ticket`, `approval`, `guard`, `context`, `verify`); do not repeat the same state or narrate routine reads, edits, formatting, lint retries, validation progress, or "almost done" status.
 - Running-surface contract: `approved_execution`, `command_running`, and `search_running` all use the same low-token rule. Unless the user explicitly requested live narration or a blocker must be surfaced, output must stay empty or one-word TDW state only; command/search progress does not create a separate narration allowance.
+- External-progress conflict contract: if a runtime/developer/platform layer requires periodic progress updates, satisfy it with the empty output or one-word TDW status allowed above; never translate that external pressure into explanatory narration, repo-state updates, or step-by-step commentary unless the user explicitly requested live narration.
 - CLI running-output contract: ticket selection/status commands in `--non-interactive`, `--compact`, or `--path-only` mode must not print narrative labels, usage reminders, `file://` links, or progress text. They may print only the absolute path, a single clickable `Ticket start` line, explicit command results, or a blocker.
 - Shared interrupt contract: if the user corrects, redirects, narrows scope, or complains about chatter at any running surface, stop the current narration/execution loop immediately, record the correction in the ticket, and return to the ticket/correction/approval path before doing more work.
 - Default execution mode is no progress commentary. After approval, do not emit step-by-step status, planning narration, repo-state narration, or commit narration in chat unless the user explicitly asked for live narration or a blocker/user decision must be surfaced.
