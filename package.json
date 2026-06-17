@@ -12,8 +12,7 @@
   ],
   "scripts": {
     "sync": "node scripts/sync-bundle.mjs",
-    "prepack": "node scripts/sync-bundle.mjs",
-    "prepublishOnly": "echo 'ERROR: Publish from DeukAgentRulesOSS/ only (npm run sync:oss first).' && exit 1"
+    "prepack": "node scripts/sync-bundle.mjs"
   },
   "engines": {
     "node": ">=18"
