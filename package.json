@@ -1,0 +1,31 @@
+{
+  "name": "deuk-agent-rule",
+  "version": "0.3.0",
+  "description": "DeukAgentRules: generic AGENTS.md + .cursor rule templates with init/merge CLI (npm name: deuk-agent-rule).",
+  "license": "MIT",
+  "files": [
+    "LICENSE",
+    "bundle/**/*",
+    "scripts/**/*.mjs",
+    "README.md",
+    "README.ko.md"
+  ],
+  "scripts": {
+    "sync": "node scripts/sync-bundle.mjs",
+    "prepack": "node scripts/sync-bundle.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "deuk-agent-rule": "./scripts/cli.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joygram/DeukAgentRules.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joygram/DeukAgentRules/issues"
+  },
+  "homepage": "https://github.com/joygram/DeukAgentRules#readme"
+}
