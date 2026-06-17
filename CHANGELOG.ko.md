@@ -12,6 +12,13 @@
 
 - **cli:** 티켓 탐색이 상위 워크스페이스를 상속하지 않고 현재 agent-rule 경계에서 멈추도록 수정했습니다.
 
+## [4.0.35] - 2026-05-09
+
+### 수정됨 (Fixed)
+
+- **release:** 공개 커밋 제목이 `sync` 같은 전달 단계가 아니라 공개되는 feature/fix/docs/release 변경 자체를 설명하도록 명확히 했습니다.
+- **release:** 공개 export 실행 시에도 같은 public commit message 가이드를 출력해 공개 기록이 제품 변경 중심으로 남도록 했습니다.
+
 ## [4.0.34] - 2026-05-09
 
 ### 변경됨 (Changed)
@@ -23,7 +30,7 @@
 
 - **templates:** 패키지 `templates/`를 runtime 단일 진실 공급원으로 삼고, init/merge 중 legacy `.deuk-agent/templates` 복사본을 제거하도록 정리했습니다.
 - **ticket:** `ticket create` strict 검증 전에 Phase 1 heading level 실수를 canonical heading으로 정규화하도록 수정했습니다.
-- **release:** OSS sync 대상을 공개 runtime 파일로 좁히고 오래된 tarball, `bundle/`, `node_modules/`, 내부 sync script, test 같은 공개 미러 찌꺼기를 제거하도록 했습니다.
+- **release:** 공개 export 대상을 runtime 파일로 좁히고 오래된 tarball, `bundle/`, `node_modules/`, 내부 script, test 같은 공개 트리 찌꺼기를 제거하도록 했습니다.
 
 ## [4.0.21] - 2026-05-08
 
@@ -37,7 +44,7 @@
 ### 수정됨 (Fixed)
 
 - **docs:** 영문/한글 README 상단에 통합 npm 다운로드 배지를 복구하고, 공개 표기는 `deuk-flow` 라벨로 유지했습니다.
-- **release:** `docs/badges/`를 공개 미러에도 동기화하도록 보강해 README 다운로드 배지가 OSS sync와 patch 재배포 뒤에도 유지되게 했습니다.
+- **release:** `docs/badges/`를 공개 릴리스 트리에도 복사하도록 보강해 README 다운로드 배지가 public export와 patch 재배포 뒤에도 유지되게 했습니다.
 
 ## [4.0.12] - 2026-05-07
 
@@ -58,7 +65,7 @@
 ### 수정됨 (Fixed)
 
 - npm과 GitHub 첫 화면에서 영어/한국어 README를 바로 오갈 수 있도록 언어 전환 링크를 복구했습니다.
-- README 문서 표에는 공개 문서 링크만 남기고, 내부 리서치와 성장 전략 문서는 npm/OSS 공개 표면에서 제외했습니다.
+- README 문서 표에는 공개 문서 링크만 남기고, 내부 리서치와 성장 전략 문서는 npm/Public 공개 표면에서 제외했습니다.
 
 ## [3.3.2] - 2026-05-06
 
@@ -180,7 +187,7 @@
 ### 수정됨 (Fixed)
 
 - **rules:** 전역 `npx` 캐시 이슈(과거 버전 실행 문제)를 우회하기 위해 로컬 최신 스크립트 호출을 강제/권장하도록 수정
-- **scripts:** OSS 미러 저장소 동기화 시 잘못 표기되던 URL 예시 로그 메시지 정정
+- **scripts:** Public 미러 저장소 동기화 시 잘못 표기되던 URL 예시 로그 메시지 정정
 
 ### 변경됨 (Changed)
 

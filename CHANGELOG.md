@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **cli:** stop ticket discovery at the current agent-rule boundary instead of inheriting the parent workspace.
 
+## [4.0.35] - 2026-05-09
+
+### Fixed
+
+- **release:** require public commit subjects to describe the released feature, fix, docs, or release change instead of using `sync` as the main label.
+- **release:** print the same public commit-message guidance from the export script so public history records product changes rather than transport mechanics.
+
 ## [4.0.34] - 2026-05-09
 
 ### Changed
@@ -23,21 +30,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **templates:** made package `templates/` the runtime SSoT and removed legacy `.deuk-agent/templates` copies during init/merge.
 - **ticket:** normalized common Phase 1 heading-level mistakes during `ticket create` before strict template validation.
-- **release:** narrowed OSS sync to public runtime files and cleaned stale mirror artifacts such as old tarballs, `bundle/`, `node_modules/`, internal sync scripts, and tests.
+- **release:** narrowed public export to runtime files and cleaned stale release-tree artifacts such as old tarballs, `bundle/`, `node_modules/`, internal scripts, and tests.
 
 ## [4.0.21] - 2026-05-08
 
 ### Fixed
 
 - **docs:** repaired the custom downloads badge endpoint payload so Shields accepts it, and restored the combined `deuk-flow` downloads badge at the top of the English and Korean README surfaces.
-- **release:** synced `docs/badges/npm-downloads.json` into the public mirror and removed internal-only package payload leakage from the npm release surface.
+- **release:** copied `docs/badges/npm-downloads.json` into the public release tree and removed internal-only package payload leakage from the npm release surface.
 
 ## [4.0.20] - 2026-05-08
 
 ### Fixed
 
 - **docs:** restored the combined npm downloads badge to the top of the English and Korean README surfaces while keeping the public `deuk-flow` label.
-- **release:** synced `docs/badges/` into the public mirror so the README downloads badge survives OSS sync and patch republish flow.
+- **release:** copied `docs/badges/` into the public release tree so the README downloads badge survives public export and patch republish flow.
 
 ## [4.0.12] - 2026-05-07
 
@@ -58,7 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Restored the README language switch links so npm and GitHub readers can move between English and Korean documentation from the first screen.
-- Published only public documentation links in the README tables while keeping internal research and growth notes out of the npm/OSS surface.
+- Published only public documentation links in the README tables while keeping internal research and growth notes out of the npm/Public surface.
 
 ## [3.3.2] - 2026-05-06
 
