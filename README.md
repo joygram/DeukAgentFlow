@@ -2,7 +2,7 @@
 
 **npm package:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
 
-**한국어:** [README.ko.md](README.ko.md)
+**한국어:** [README.ko.md](https://github.com/joygram/DeukAgentRules/blob/master/README.ko.md)
 
 Versioned templates for `AGENTS.md` and `.cursor/rules` for Cursor, Copilot, Gemini and similar agents: shared handoff format, concise execution, stronger cost-efficiency and responsiveness.
 

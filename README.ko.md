@@ -2,7 +2,7 @@
 
 **npm 패키지:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
 
-**English:** [README.md](README.md)
+**English:** [README.md](https://github.com/joygram/DeukAgentRules/blob/master/README.md)
 
 Cursor, Copilot, Gemini 등 여러 에이전트·도구를 함께 쓸 때를 위한 `AGENTS.md`·`.cursor/rules` 버전 관리형 템플릿. 핸드오프·간결 응답으로 비용·성능을 개선합니다.
 
