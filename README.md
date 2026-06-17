@@ -4,61 +4,77 @@
 
 **한국어:** [README.ko.md](README.ko.md)
 
-**Elevator pitch (GitHub About / one-liner):** see [`GITHUB_DESCRIPTION.md`](GITHUB_DESCRIPTION.md) — do not duplicate that text here.
-
-This repo ships versioned templates under `publish/` (built into `bundle/` on `npm pack`) and a CLI: `npx deuk-agent-rule init` updates **only** the HTML-comment tagged region in `AGENTS.md`; `.mdc` files copy into `.cursor/rules/` (default **prefix** on clashes).
-
-## GitHub About description
-
-Copy the **Paste into GitHub** blocks from [`GITHUB_DESCRIPTION.md`](GITHUB_DESCRIPTION.md).
+Versioned templates for `AGENTS.md` and `.cursor/rules` for Cursor, Copilot, Gemini and similar agents: shared handoff format, concise execution, stronger cost-efficiency and responsiveness.
 
 ## Initialize a workspace
+
+Install does nothing until you run the CLI from the **target repository root** (or pass `--cwd`).
 
 ```bash
 npm install deuk-agent-rule
 npx deuk-agent-rule init
 ```
 
-1. `cd` to your project root.
-2. Install the package (e.g. devDependency).
-3. Run `npx deuk-agent-rule init` — adds HTML comment markers if needed, fills the inner region, copies `.mdc` files under `.cursor/rules/` (default **prefix** on name clash).
+Typical first run:
 
-After upgrades:
+1. `cd` into your project root (where `AGENTS.md` should live).
+2. `npm install deuk-agent-rule` (devDependency is fine).
+3. `npx deuk-agent-rule init` — appends `<!-- deuk-agent-rule:begin -->` … `<!-- deuk-agent-rule:end -->` if missing, fills the inner region with the bundled template, and copies `.mdc` files under `.cursor/rules/` (default **prefix** on name clash).
+
+After a package upgrade:
 
 ```bash
 npm update deuk-agent-rule
 npx deuk-agent-rule init
 ```
 
+Only the **marker region** in `AGENTS.md` is replaced again; your text outside the markers stays.
+
 ### `init` parameters
 
-Flags go **after** `init`.
+All flags go **after** `init` (e.g. `npx deuk-agent-rule init --cwd ../other-repo --dry-run`).
 
 | Flag | Default (init) | Description |
 |------|----------------|-------------|
-| `--cwd <path>` | current directory | Repo root for `AGENTS.md` and `.cursor/rules/`. |
-| `--dry-run` | off | Print actions only. |
-| `--backup` | off | Write `*.bak` before overwrite. |
-| `--tag <id>` | `deuk-agent-rule` | Markers `<!-- <id>:begin -->` … `<!-- <id>:end -->`. |
-| `--marker-begin` / `--marker-end` | — | Custom markers; **both** required if used. |
-| `--agents <mode>` | `inject` | `inject` \| `skip` \| `overwrite`. |
-| `--rules <mode>` | `prefix` | `prefix` \| `skip` \| `overwrite`. |
-| `--append-if-no-markers` | off | Mostly for `merge`. |
+| `--cwd <path>` | current directory | Root of the repo to modify (`AGENTS.md`, `.cursor/rules/`). |
+| `--dry-run` | off | Print planned actions; do not write files. |
+| `--backup` | off | Write `*.bak` next to any file that would be overwritten. |
+| `--tag <id>` | `deuk-agent-rule` | HTML comment markers: `<!-- <id>:begin -->` … `<!-- <id>:end -->`. |
+| `--marker-begin <s>` / `--marker-end <s>` | (use `--tag` instead) | Custom marker strings; **both** required if either is set. |
+| `--agents <mode>` | `inject` | `inject` — update only inside markers (or append block if no markers). `skip` — do not change `AGENTS.md`. `overwrite` — replace entire `AGENTS.md` with the bundle (use with care). |
+| `--rules <mode>` | `prefix` | `prefix` — if `foo.mdc` exists, write `deuk-agent-rule-foo.mdc`. `skip` — skip existing names. `overwrite` — replace on clash. |
+| `--append-if-no-markers` | off | Rare for `init` (init already appends when markers are missing). Same flag is mainly for `merge`. |
+
+Examples:
+
+```bash
+npx deuk-agent-rule init --cwd /path/to/repo
+npx deuk-agent-rule init --dry-run
+npx deuk-agent-rule init --tag mycompany --rules overwrite
+npx deuk-agent-rule init --agents skip --rules prefix
+npx deuk-agent-rule init --backup
+```
+
+### Product model
+
+- **Managed block in `AGENTS.md`**: Between `<!-- deuk-agent-rule:begin -->` and `<!-- deuk-agent-rule:end -->` (or your `--tag`) — `init` / `merge` replace **only** that inner content with the bundled template.
+- **Updates**: Re-run `init` after `npm update` to refresh the managed block idempotently.
+- **`.mdc`**: Copied as **separate files**; default `prefix` avoids overwriting your existing rules.
 
 ### Bundled rules
 
-- **`multi-ai-workflow.mdc`** — `alwaysApply: true` (handoffs, concise output, cost-aware context use)
+- **`multi-ai-workflow.mdc`** — `alwaysApply: true`
 - **`git-commit.mdc`** — `alwaysApply: false`
 
-### `merge`
+### `merge` (stricter)
 
-Stricter defaults: `AGENTS.md` inject fails without markers unless `--append-if-no-markers`. Default `--rules skip`.
+Same flags; **`AGENTS.md` `inject` fails if markers are missing** unless `--append-if-no-markers`. Default **`--rules skip`**.
 
 ### Caveats
 
-- Trim duplicate `alwaysApply: true` rules if context grows too large.
-- Avoid auto-running `init` from `postinstall` unless your team explicitly wants that.
+- Multiple `alwaysApply: true` rule files (yours + prefixed copies) all apply — trim duplicates if context grows too large.
+- Do **not** run `init` from `postinstall` without an explicit team decision.
 
 ## Versioning
 
-Bump `version` in `package.json` before publishing. See [RELEASING.md](RELEASING.md).
+Bump `version` in `package.json` before publishing.
