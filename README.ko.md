@@ -107,8 +107,10 @@ npx deuk-agent-rule ticket list
 | `npx deuk-agent-rule ticket create ...` | 신규 티켓 문서 생성 (`--group`, `--project` 지정 가능) <br>💬 *"새 티켓 만들어 (주제: refactor, 타겟: sub1)"* |
 | `npx deuk-agent-rule ticket list` | 활성 티켓의 현재 상태 및 리스트업 (`--archived`, `--all` 지원) <br>💬 *"티켓 리스트"* |
 | `npx deuk-agent-rule ticket use --latest ...` | 빌드 파이프라인 연동을 위해 최근 티켓의 파일 경로만 반환 <br>💬 *"최근 티켓 경로"* |
+| `npx deuk-agent-rule ticket close ...` | 파일을 물리적으로 이동시키지 않고 상태만 완료로 잠금(Soft-close) <br>💬 *"현재 티켓 상태 닫아 (완료)"* |
 | `npx deuk-agent-rule ticket archive ...` | 완료된 티켓을 안전하게 보관소(`archive/`)로 이동 및 갱신 <br>💬 *"현재 티켓 아카이브해 (보고서 첨부)"* |
 | `npx deuk-agent-rule ticket reports` | 영구 보관된 에이전트 작업 보고서(`reports/`) 목록 조회 <br>💬 *"완료된 티켓 보고서 목록"* |
+| `npx deuk-agent-rule ticket migrate` | 과거 단일 LATEST.md 데이터를 신규 모듈형 인덱스 구조로 강제 이전 <br>💬 *"이전 티켓 데이터 마이그레이션"* |
 
 ### Init 고급 옵션
 | 플래그 | 기본값 | 설명 |
