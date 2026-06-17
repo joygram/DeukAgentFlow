@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
   <br />
-  <h1>Deuk Agent Flow v4.0.36</h1>
+  <h1>Deuk Agent Flow v4.0.37</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmaster%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="deuk-flow combined npm downloads" /></a>
@@ -66,7 +66,7 @@ Repo-owned work
 | Better team memory | Completed work becomes searchable project history |
 
 > **Current readiness:**
-> v4.0.36 is deployment-ready for agent-driven repositories. Interactive `init` now asks only the workspace purpose, infers the remaining setup from the project directory, hides the Deuk AgentContext MCP choice during first setup, and completes without the earlier multi-prompt stall. Ticket creation/use also keeps the clickable `Ticket start` line visible before approval is requested. It is currently most reliable in **OpenAI Codex** and **GitHub Copilot** workflows. Cursor, Windsurf, and Claude Code remain supported through pointer-style integration, but they should be validated per workspace before rollout. Deuk AgentContext MCP is an optional memory layer; MCP server registration is separate from `init`.
+> v4.0.37 is deployment-ready for agent-driven repositories. Interactive `init` now asks only the workspace purpose, infers the remaining setup from the project directory, hides the Deuk AgentContext MCP choice during first setup, completes without the earlier multi-prompt stall, and ends with a visible completion line plus a short first-use prompt guide. Ticket creation/use also keeps the clickable `Ticket start` line visible before approval is requested. It is currently most reliable in **OpenAI Codex** and **GitHub Copilot** workflows. Cursor, Windsurf, and Claude Code remain supported through pointer-style integration, but they should be validated per workspace before rollout. Deuk AgentContext MCP is an optional memory layer; MCP server registration is separate from `init`.
 > **Architecture foundation:**
 > We have officially deprecated monolithic `.cursorrules`. v3.0 introduces the **Hub-Spoke model** where `AGENTS.md` is the single source of truth, and IDE-specific rules act as thin entry-point pointers.
 

@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
   <br />
-  <h1>Deuk Agent Flow v4.0.36</h1>
+  <h1>Deuk Agent Flow v4.0.37</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmaster%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="deuk-flow combined npm downloads" /></a>
@@ -66,7 +66,7 @@ Deuk Agent Flow
 | 팀 기억 강화 | 완료된 작업이 검색 가능한 프로젝트 히스토리가 됨 |
 
 > **현재 배포 기준:**
-> v4.0.36은 에이전트 기반 리포지토리에 배포해 사용할 수 있는 상태입니다. 대화형 `init`은 이제 workspace 용도만 묻고, 나머지 설정은 프로젝트 디렉터리 성격으로 추론하며, Deuk AgentContext MCP 선택지는 첫 설정에서 숨김 처리하고, 이전의 다중 질문/먹통 완료 실패를 피합니다. 티켓 생성/사용 뒤에도 승인 요청 전에 클릭 가능한 `Ticket start` 줄이 계속 보이도록 했습니다. 현재는 **OpenAI Codex**와 **GitHub Copilot** 환경에서 가장 안정적으로 동작합니다. Cursor, Windsurf, Claude Code도 포인터 구조로 지원하지만, 워크스페이스별 검증을 권장합니다. Deuk AgentContext MCP는 선택형 기억 계층이며, MCP 서버 등록은 `init`에 딸려 들어가지 않고 별도로 설정합니다.
+> v4.0.37은 에이전트 기반 리포지토리에 배포해 사용할 수 있는 상태입니다. 대화형 `init`은 이제 workspace 용도만 묻고, 나머지 설정은 프로젝트 디렉터리 성격으로 추론하며, Deuk AgentContext MCP 선택지는 첫 설정에서 숨김 처리하고, 이전의 다중 질문/먹통 완료 실패를 피합니다. 이제 설치가 끝나면 완료 피드백과 짧은 첫 사용 가이드도 다시 보입니다. 티켓 생성/사용 뒤에도 승인 요청 전에 클릭 가능한 `Ticket start` 줄이 계속 보이도록 했습니다. 현재는 **OpenAI Codex**와 **GitHub Copilot** 환경에서 가장 안정적으로 동작합니다. Cursor, Windsurf, Claude Code도 포인터 구조로 지원하지만, 워크스페이스별 검증을 권장합니다. Deuk AgentContext MCP는 선택형 기억 계층이며, MCP 서버 등록은 `init`에 딸려 들어가지 않고 별도로 설정합니다.
 > **아키텍처 기반:**
 > 거대하고 무거운 레거시 `.cursorrules` 방식을 공식적으로 폐기했습니다. v3.0은 `AGENTS.md`를 단일 진실 공급원으로 사용하는 **Hub-Spoke 모델**을 도입하여, IDE별 규칙은 얇은 진입점 포인터 역할만 수행합니다.
 

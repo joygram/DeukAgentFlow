@@ -1684,6 +1684,11 @@ export async function runInit(opts, bundleRoot) {
   }
 }
 
+export function formatInitCompletionMessage(cwd, dryRun = false) {
+  const label = dryRun ? "Dry-run complete" : "Init complete";
+  return `[DONE] ${label} for ${basename(cwd)}. Rules and pointers are ready. \`이슈분석 티켓\`이라고 해보세요.`;
+}
+
 async function initSingleWorkspace(subCwd, opts, bundleRoot, selectedTools) {
   console.log(`\nInitializing ${basename(subCwd)}...`);
   

@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **cli:** stop ticket discovery at the current agent-rule boundary instead of inheriting the parent workspace.
 
+## [4.0.37] - 2026-05-09
+
+### Fixed
+
+- **init:** restore a visible completion message after successful init and add the short first-use prompt guide ``이슈분석 티켓`이라고 해보세요.``
+
 ## [4.0.36] - 2026-05-09
 
 ### Fixed

@@ -3,7 +3,7 @@ import { existsSync, rmSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { parseArgs, parseTicketArgs, parseSkillArgs, parseTelemetryArgs, parseUsageArgs } from "./cli-args.mjs";
-import { runInit, runMerge } from "./cli-init-commands.mjs";
+import { formatInitCompletionMessage, runInit, runMerge } from "./cli-init-commands.mjs";
 import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketDiscard, runTicketReports, runTicketMeta, runTicketConnect, runTicketRebuild, runTicketReportAttach, runTicketMove, runTicketNext, runTicketHotfix, runTicketStatus, runTicketGuard, runTicketHandoff, runTicketEvidenceCheck, runTicketEvidenceReport } from "./cli-ticket-commands.mjs";
 import { runTelemetry } from "./cli-telemetry-commands.mjs";
 import { runUsage } from "./cli-usage-commands.mjs";
@@ -168,6 +168,7 @@ async function handleInit(opts, saved) {
   }
 
   await runInit(opts, pkgRoot);
+  console.log(formatInitCompletionMessage(opts.cwd, opts.dryRun));
 }
 
 function printHelp() {
