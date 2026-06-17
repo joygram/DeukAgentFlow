@@ -24,11 +24,11 @@ async function main() {
   if (sub === "ticket") {
     const action = rest[0];
     const opts = parseTicketArgs(rest.slice(1));
-    if (action === "create") runTicketCreate(opts);
-    else if (action === "list") runTicketList(opts);
-    else if (action === "use") runTicketUse(opts);
-    else if (action === "close") runTicketClose(opts);
-    else if (action === "migrate") runTicketMigrate(opts);
+    if (action === "create") await runTicketCreate(opts);
+    else if (action === "list") await runTicketList(opts);
+    else if (action === "use") await runTicketUse(opts);
+    else if (action === "close") await runTicketClose(opts);
+    else if (action === "migrate") await runTicketMigrate(opts);
     else {
       console.error("Unknown ticket action: " + action);
       printHelp();
