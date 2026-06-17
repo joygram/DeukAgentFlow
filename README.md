@@ -38,7 +38,11 @@ deuk-agent-rule init
 > - **Windows**: If Node.js is installed in a system directory like `Program Files`, you must run your terminal (PowerShell/CMD) as an **Administrator** for the global installation to complete successfully.
 
 ### 💡 Why Global Installation?
-1. **Preventing `npx` Cache Issues**: Running `npx deuk-agent-rule` relies on the local npm cache, which may silently execute an outdated version of the CLI. This has been proven to cause severe agent hallucinations or ticket formatting errors (e.g., missing hostname sequence IDs).
+
+> [!WARNING]
+> **Submodule Local Installation STRICTLY FORBIDDEN**: Never install `deuk-agent-rule` locally (e.g., `npm install deuk-agent-rule`) inside your target consumer submodules. Doing so creates a "Local Trap" where `npx` prioritizes the outdated local `node_modules` over the globally installed latest version, leading to severe ticket formatting errors and logic mismatches.
+
+1. **Preventing `npx` Cache & Local Trap Issues**: Running `npx deuk-agent-rule` relies on the local npm cache and `node_modules` resolution. If a stale version is present locally, it will silently hijack the execution. This has been proven to cause severe agent hallucinations or ticket formatting errors (e.g., missing hostname sequence IDs).
 2. **Execution Speed**: The chatbot agent receives instant CLI responses without the overhead of `npx` checking for temporary package downloads.
 3. **Cross-Repository Consistency**: It allows you to reliably apply the exact same version of the agent rules across various submodules and independent microservices in the Deuk Family ecosystem.
 
