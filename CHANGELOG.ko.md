@@ -6,6 +6,14 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [2.4.1] - 2026-04-18
+
+### 추가됨 (Added)
+- **cli:** NPM 최신 버전을 감지하여 터미널에 업데이트를 권고하는 알림 기능(Update Notifier) 추가
+
+### 수정됨 (Fixed)
+- **ticket:** 티켓 생성 시 호스트명 슬러그가 8글자로 엄격히 제한되지 않던 버그 수정
+
 ## [2.4.0] - 2026-04-18
 
 ### 추가됨 (Added)
