@@ -69,21 +69,13 @@
   "scripts": {
     "dev:install": "npx tsc -p tsconfig.scripts.json && node scripts/out/scripts/dev-install.js",
     "dev:install:no-bump": "npx tsc -p tsconfig.scripts.json && node scripts/out/scripts/dev-install.js --no-bump",
-    "build:vscode": "node scripts/out/scripts/bundle-vscode-vsix.js",
-    "bundle:vscode": "npm run build:vscode -- --install",
-    "bundle:vscode:no-install": "npm run build:vscode",
-    "prepack": "npm run build:vscode",
-    "install:vscode": "node scripts/out/scripts/install-vscode-vsix.js --all",
-    "install:vscode:desktop": "node scripts/out/scripts/install-vscode-vsix.js --desktop",
-    "install:vscode:server": "node scripts/out/scripts/install-vscode-vsix.js --server",
     "lint:md": "node scripts/out/scripts/lint-md.js",
     "publish": "node scripts/out/scripts/publish-dual-npm.js --skip-tests",
     "publish:dry": "node scripts/out/scripts/publish-dual-npm.js --dry-run --skip-tests",
     "smoke:npm:local": "node scripts/out/scripts/smoke-npm-local.js",
     "smoke:npm:docker": "node scripts/out/scripts/smoke-npm-docker.js",
     "publish:bootstrap": "node scripts/out/scripts/publish-dual-npm.js --alias-only --skip-tests",
-    "publish:bootstrap:dry": "node scripts/out/scripts/publish-dual-npm.js --alias-only --dry-run --skip-tests",
-    "badge:downloads": "node scripts/out/scripts/update-download-badge.js"
+    "publish:bootstrap:dry": "node scripts/out/scripts/publish-dual-npm.js --alias-only --dry-run --skip-tests"
   },
   "engines": {
     "node": ">=20"
