@@ -57,6 +57,7 @@ export function writeInitConfig(cwd, opts) {
     shareTickets: !!opts.shareTickets,
     remoteSync: !!opts.remoteSync,
     pipelineUrl: opts.pipelineUrl,
+    ignoreDirs: opts.ignoreDirs || DEFAULT_IGNORE_DIRS,
     updatedAt: new Date().toISOString(),
   };
   writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
@@ -209,10 +210,12 @@ export async function checkUpdateNotifier() {
   }
 }
 
+export const DEFAULT_IGNORE_DIRS = ["node_modules", ".git", ".deuk-agent", "tmp", "temp", ".tmp", ".cache"];
+
 /**
  * Recursively finds all directories containing deuk-agent ticket structures.
  */
-export function discoverAllSubmodules(baseCwd, out = new Set()) {
+export function discoverAllSubmodules(baseCwd, ignoreDirs = DEFAULT_IGNORE_DIRS, out = new Set()) {
   if (!existsSync(baseCwd)) return Array.from(out);
 
   const hasLegacy1 = existsSync(join(baseCwd, ".deuk-agent-ticket"));
@@ -227,9 +230,9 @@ export function discoverAllSubmodules(baseCwd, out = new Set()) {
     const entries = readdirSync(baseCwd, { withFileTypes: true });
     for (const ent of entries) {
       if (!ent.isDirectory()) continue;
-      // Skip system or noisy directories
-      if (ent.name === "node_modules" || ent.name === ".git" || ent.name === AGENT_ROOT_DIR || ent.name.startsWith(".deuk-agent")) continue;
-      discoverAllSubmodules(join(baseCwd, ent.name), out);
+      // Skip system or noisy directories based on ignoreDirs configuration
+      if (ignoreDirs.includes(ent.name) || ent.name.startsWith(".deuk-agent")) continue;
+      discoverAllSubmodules(join(baseCwd, ent.name), ignoreDirs, out);
     }
   } catch {
     // Ignore permission errors on specific subfolders

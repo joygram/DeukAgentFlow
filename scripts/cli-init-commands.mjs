@@ -215,7 +215,9 @@ function deploySpokePointers(cwd, dryRun) {
 }
 
 export async function runInit(opts, bundleRoot) {
-  const submodules = discoverAllSubmodules(opts.cwd);
+  const savedConfig = loadInitConfig(opts.cwd) || {};
+  const ignoreDirs = savedConfig.ignoreDirs;
+  const submodules = discoverAllSubmodules(opts.cwd, ignoreDirs);
   if (!submodules.includes(opts.cwd)) submodules.push(opts.cwd);
 
   const markers = resolveMarkers(opts);
