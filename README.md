@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentRules Architecture" />
   <br />
-  <h1>DeukAgentRules v3.3.2</h1>
+  <h1>DeukAgentRules v3.3.3</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg" alt="npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dt/deuk-agent-rule.svg" alt="npm downloads" /></a>
@@ -10,6 +10,7 @@
   <p><b>AI coding agent guardrails for every repo</b></p>
   <p><i>Ticketed scope, verification, and memory for Codex, Copilot, Claude Code, Cursor, and more</i></p>
   <p>Part of the <a href="https://deukpack.app">Deuk Family</a> ecosystem.</p>
+  <p><a href="README.ko.md">한국어</a> · <a href="README.md">English</a></p>
 </div>
 
 ---
@@ -21,7 +22,7 @@ It is more than a prompt pack. It is a repository-level workflow layer that stan
 Ticket management lives under `.deuk-agent/`, with active work tracked in `.deuk-agent/tickets/` and related docs, plans, and archive data kept alongside it.
 
 > **Current readiness:**
-> v3.3.2 is deployment-ready for agent-driven repositories. It is currently most reliable in **OpenAI Codex** and **GitHub Copilot** workflows. Cursor, Windsurf, Claude Code, and MCP remain supported through pointer-style integration, but they should be validated per workspace before rollout. MCP server registration is separate from `init`.
+> v3.3.3 is deployment-ready for agent-driven repositories. It is currently most reliable in **OpenAI Codex** and **GitHub Copilot** workflows. Cursor, Windsurf, Claude Code, and MCP remain supported through pointer-style integration, but they should be validated per workspace before rollout. MCP server registration is separate from `init`.
 
 > **Architecture foundation:**
 > We have officially deprecated monolithic `.cursorrules`. v3.0 introduces the **Hub-Spoke model** where `AGENTS.md` is the single source of truth, and IDE-specific rules act as thin entry-point pointers.
@@ -78,10 +79,6 @@ The next step is to make this workflow even easier to see and adopt: clearer fir
 | [docs/architecture.md](docs/architecture.md) | High-level system structure and visual infographics |
 | [docs/how-it-works.md](docs/how-it-works.md) | Detailed CLI mechanics, initialization lifecycle, and file roles |
 | [docs/principles.md](docs/principles.md) | Design philosophy: Hub-Spoke, Zero-Legacy, and Source Sovereignty |
-| [docs/product-positioning-research.ko.md](docs/product-positioning-research.ko.md) | Product positioning research for AI coding agent guardrails |
-| [docs/karpathy-skills-vs-deukagent-positioning.ko.md](docs/karpathy-skills-vs-deukagent-positioning.ko.md) | Deep comparison of Karpathy-style skills, DeukAgentRules, and DeukAgentContext |
-| [docs/vision-agent-guardrails.ko.md](docs/vision-agent-guardrails.ko.md) | Vision document for the multi-agent guardrail hub |
-| [docs/organic-growth-plan.ko.md](docs/organic-growth-plan.ko.md) | Organic growth plan for VS Code, Open VSX, GitHub, and skill loops |
 | **Korean Docs** | [README.ko.md](README.ko.md) · [docs/architecture.ko.md](docs/architecture.ko.md) |
 
 ---

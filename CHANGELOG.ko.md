@@ -6,6 +6,13 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [3.3.3] - 2026-05-06
+
+### 수정됨 (Fixed)
+
+- npm과 GitHub 첫 화면에서 영어/한국어 README를 바로 오갈 수 있도록 언어 전환 링크를 복구했습니다.
+- README 문서 표에는 공개 문서 링크만 남기고, 내부 리서치와 성장 전략 문서는 npm/OSS 공개 표면에서 제외했습니다.
+
 ## [3.3.2] - 2026-05-06
 
 ### 포지셔닝 (Positioning)

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.3] - 2026-05-06
+
+### Fixed
+
+- Restored the README language switch links so npm and GitHub readers can move between English and Korean documentation from the first screen.
+- Published only public documentation links in the README tables while keeping internal research and growth notes out of the npm/OSS surface.
+
 ## [3.3.2] - 2026-05-06
 
 ### Positioning
