@@ -71,7 +71,6 @@
     "dev:install": "npx tsc -p tsconfig.scripts.json && node scripts/out/scripts/dev-install.js",
     "dev:install:no-bump": "npx tsc -p tsconfig.scripts.json && node scripts/out/scripts/dev-install.js --no-bump",
     "build:vscode": "node scripts/out/scripts/bundle-vscode-vsix.js",
-    "prepack": "npm run build:vscode",
     "install:vscode": "node scripts/out/scripts/install-vscode-vsix.js --all",
     "install:vscode:desktop": "node scripts/out/scripts/install-vscode-vsix.js --desktop",
     "install:vscode:server": "node scripts/out/scripts/install-vscode-vsix.js --server",
