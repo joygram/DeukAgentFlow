@@ -33,31 +33,14 @@ export async function runTicketCreate(opts) {
     // Find nearest or create in CWD if missing
     const ticketDir = detectConsumerTicketDir(opts.cwd, { createIfMissing: true });
     
-    // Calculate next sequence number by scanning existing files
-    let maxSeq = 0;
-    const allFiles = [];
-    const scanDirs = [join(ticketDir, "sub"), join(ticketDir, "main"), join(ticketDir, "archive/sub"), join(ticketDir, "archive/main")];
-    for (const d of scanDirs) {
-      if (existsSync(d)) {
-        const files = readdirSync(d);
-        for (const f of files) {
-          const match = f.match(/^(\d+)-/);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num > maxSeq) maxSeq = num;
-          }
-        }
-      }
-    }
-    const nextSeq = String(maxSeq + 1).padStart(3, "0");
-    const hName = hostname().toLowerCase().slice(0, 8);
-    const finalFileName = `${nextSeq}-${hName}-ticket-${topic}.md`;
+    const indexJson = readTicketIndexJson(opts.cwd);
+    const ticketId = generateTicketId(topic, indexJson.entries);
+    const finalFileName = `${ticketId}.md`;
 
     const abs = join(ticketDir, group, finalFileName);
     mkdirSync(join(ticketDir, group), { recursive: true });
     path = toRepoRelativePath(opts.cwd, abs);
 
-    const ticketId = generateTicketId(title);
     const meta = {
       id: ticketId,
       title,

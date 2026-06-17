@@ -6,6 +6,11 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [2.4.2] - 2026-04-18
+
+### 수정됨 (Fixed)
+- **ticket:** 파일명(File name)과 본문 내 티켓 ID 생성 로직 간의 불일치(Discrepancy) 해결 (단일 출처로 통합)
+
 ## [2.4.1] - 2026-04-18
 
 ### 추가됨 (Added)
