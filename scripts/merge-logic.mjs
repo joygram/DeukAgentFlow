@@ -4,11 +4,23 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  unlinkSync,
   writeFileSync,
 } from "fs";
 import { join } from "path";
 
 export const DEFAULT_TAG = "deuk-agent-rule";
+
+/** HTML-style markers in `.cursorrules` (separate from AGENTS.md markers). */
+export const CURSORRULES_TAG = "deuk-agent-rule-cursorrules";
+
+export function resolveCursorrulesMarkers(o = {}) {
+  return resolveMarkers({
+    tag: o.tag && String(o.tag).trim() ? String(o.tag).trim() : CURSORRULES_TAG,
+    markerBegin: o.markerBegin,
+    markerEnd: o.markerEnd,
+  });
+}
 
 export function resolveMarkers(o) {
   const hasBegin = o.markerBegin != null && o.markerBegin !== "";
@@ -35,7 +47,8 @@ export function findMarkerRegion(content, begin, end) {
   const j = content.indexOf(end, i + begin.length);
   if (j === -1) {
     throw new Error(
-      "Found begin marker but no matching end marker after it.\n  begin: " + begin + "\n  end: " + end,
+      `[MARKER ERROR] Found begin marker "${begin}" but no matching end marker "${end}" after it.\n` +
+      `  This usually happens if one marker was deleted or renamed manually. Please verify the target file.`
     );
   }
   const innerStart = i + begin.length;
@@ -44,60 +57,85 @@ export function findMarkerRegion(content, begin, end) {
 }
 
 export function applyAgents(opts) {
-  const {
-    targetPath,
-    bundleContent,
-    markers,
-    flavor,
-    appendIfNoMarkers,
-    dryRun,
-    backup,
-    agentsMode,
-  } = opts;
+  const { agentsMode, targetPath } = opts;
 
   if (agentsMode === "skip") {
     return {
       action: "skip",
-      reason: existsSync(targetPath)
-        ? "agents mode skip (file exists)"
-        : "agents mode skip",
+      reason: existsSync(targetPath) ? "agents mode skip (file exists)" : "agents mode skip",
     };
   }
 
   if (agentsMode === "overwrite") {
-    const prev = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : "";
-    if (dryRun) {
-      return { action: "would-write", path: targetPath, mode: "overwrite" };
-    }
-    if (backup && existsSync(targetPath)) {
-      copyFileSync(targetPath, targetPath + ".bak");
-    }
-    writeFileSync(targetPath, bundleContent, "utf8");
-    return { action: "write", path: targetPath, mode: "overwrite", hadPrevious: !!prev };
+    return handleAgentOverwrite(opts);
   }
 
   const existing = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : "";
-  const region = findMarkerRegion(existing, markers.begin, markers.end);
 
-  if (region) {
-    const inner = bundleContent.trimEnd() + "\n";
-    const next =
-      existing.slice(0, region.innerStart) +
-      "\n" +
-      inner +
-      existing.slice(region.innerEnd);
-    if (dryRun) {
-      return { action: "would-write", path: targetPath, mode: "inject-region" };
+  // Workflow Safety Check: warn about different tags and error on case-mismatch
+  const markerRegex = /<!--\s*([a-zA-Z0-9_-]+):begin\s*-->/gi;
+  const currentTagMatch = opts.markers.begin.match(/<!--\s*([a-zA-Z0-9_-]+):begin\s*-->/i);
+  const currentTag = currentTagMatch ? currentTagMatch[1] : null;
+
+  const foundTags = [];
+  let m;
+  while ((m = markerRegex.exec(existing)) !== null) {
+    if (currentTag && m[1].toLowerCase() === currentTag.toLowerCase()) {
+      if (m[1] !== currentTag) {
+        throw new Error(
+          `[CRITICAL ERROR] Case mismatch for tag "${currentTag}". Found "${m[1]}" in ${targetPath}.\n` +
+          `  Please unify casing to avoid duplicate managed blocks.`
+        );
+      }
+    } else {
+      foundTags.push(m[1]);
     }
-    if (backup && existsSync(targetPath)) {
-      copyFileSync(targetPath, targetPath + ".bak");
-    }
-    writeFileSync(targetPath, next, "utf8");
-    return { action: "write", path: targetPath, mode: "inject-region" };
   }
 
-  const allowAppend =
-    appendIfNoMarkers || flavor === "init";
+  if (foundTags.length > 0) {
+    console.warn(`[WARNING] Foreign markers in ${targetPath}: ${[...new Set(foundTags)].join(", ")}`);
+    console.warn(`          Current tag is "${currentTag}". This might lead to duplicate managed blocks.`);
+  }
+
+  const region = findMarkerRegion(existing, opts.markers.begin, opts.markers.end);
+
+  if (region) {
+    return handleAgentInject(opts, existing, region);
+  }
+
+  return handleAgentAppend(opts, existing);
+}
+
+function handleAgentOverwrite(opts) {
+  const { targetPath, bundleContent, dryRun, backup } = opts;
+  const prev = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : "";
+  if (dryRun) {
+    return { action: "would-write", path: targetPath, mode: "overwrite" };
+  }
+  if (backup && existsSync(targetPath)) {
+    copyFileSync(targetPath, targetPath + ".bak");
+  }
+  writeFileSync(targetPath, bundleContent, "utf8");
+  return { action: "write", path: targetPath, mode: "overwrite", hadPrevious: !!prev };
+}
+
+function handleAgentInject(opts, existing, region) {
+  const { targetPath, bundleContent, dryRun, backup } = opts;
+  const inner = bundleContent.trimEnd() + "\n";
+  const next = existing.slice(0, region.innerStart) + "\n" + inner + existing.slice(region.innerEnd);
+  if (dryRun) {
+    return { action: "would-write", path: targetPath, mode: "inject-region" };
+  }
+  if (backup && existsSync(targetPath)) {
+    copyFileSync(targetPath, targetPath + ".bak");
+  }
+  writeFileSync(targetPath, next, "utf8");
+  return { action: "write", path: targetPath, mode: "inject-region" };
+}
+
+function handleAgentAppend(opts, existing) {
+  const { targetPath, bundleContent, markers, flavor, appendIfNoMarkers, dryRun, backup } = opts;
+  const allowAppend = appendIfNoMarkers || flavor === "init";
 
   if (!allowAppend) {
     const hint = [
@@ -192,4 +230,136 @@ export function readBundleAgents(bundleRoot) {
     throw new Error("Bundle AGENTS.md missing: " + p);
   }
   return readFileSync(p, "utf8");
+}
+
+/**
+ * Optional bundle file: Cursor root rules pointer to AGENTS.md.
+ * @returns {string|null} file contents, or null if missing
+ */
+export function readBundleCursorrules(bundleRoot) {
+  const p = join(bundleRoot, ".cursorrules");
+  if (!existsSync(p)) {
+    return null;
+  }
+  return readFileSync(p, "utf8");
+}
+
+/**
+ * Remove one tagged block (markers inclusive). Returns ok:false if begin marker not found.
+ * @returns {{ ok: true, content: string } | { ok: false, reason: string }}
+ */
+export function removeTaggedBlock(content, begin, end) {
+  const i = content.indexOf(begin);
+  if (i === -1) {
+    return { ok: false, reason: "begin not found" };
+  }
+  const j = content.indexOf(end, i + begin.length);
+  if (j === -1) {
+    return { ok: false, reason: "end not found" };
+  }
+  const afterEnd = j + end.length;
+  let next = content.slice(0, i) + content.slice(afterEnd);
+  next = next.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "").trimEnd();
+  if (next.length) {
+    next += "\n";
+  }
+  return { ok: true, content: next };
+}
+
+/**
+ * Strip `deuk-agent-rule-cursorrules` (or custom markers) region from `.cursorrules`.
+ * @param {{ cwd: string, markers: { begin: string, end: string }, dryRun?: boolean, backup?: boolean }} opts
+ */
+export function removeCursorrules(opts) {
+  const { cwd, markers, dryRun, backup } = opts;
+  const targetPath = join(cwd, ".cursorrules");
+  if (!existsSync(targetPath)) {
+    return { action: "skip", reason: "no file" };
+  }
+  const existing = readFileSync(targetPath, "utf8");
+  const result = removeTaggedBlock(existing, markers.begin, markers.end);
+  if (!result.ok) {
+    return { action: "skip", path: targetPath, reason: result.reason };
+  }
+  if (dryRun) {
+    return { action: "would-write", path: targetPath, mode: "remove-tagged" };
+  }
+  if (backup && existsSync(targetPath)) {
+    copyFileSync(targetPath, targetPath + ".bak");
+  }
+  if (result.content === "") {
+    unlinkSync(targetPath);
+    return { action: "delete", path: targetPath, mode: "remove-tagged" };
+  }
+  writeFileSync(targetPath, result.content, "utf8");
+  return { action: "write", path: targetPath, mode: "remove-tagged" };
+}
+
+/**
+ * @param {{
+ *   bundleRoot: string,
+ *   cwd: string,
+ *   markers: { begin: string, end: string },
+ *   cursorrulesMode: "skip" | "inject" | "overwrite",
+ *   dryRun?: boolean,
+ *   backup?: boolean,
+ * }} opts
+ */
+export function applyCursorrules(opts) {
+  const { bundleRoot, cwd, markers, cursorrulesMode, dryRun, backup } = opts;
+  const raw = readBundleCursorrules(bundleRoot);
+  if (!raw) {
+    return { action: "skip", reason: "bundle .cursorrules missing" };
+  }
+  const inner = raw.trimEnd();
+  const targetPath = join(cwd, ".cursorrules");
+
+  if (cursorrulesMode === "skip") {
+    return { action: "skip", reason: "cursorrules mode skip" };
+  }
+
+  const writeTaggedOnly = (bodyInner) =>
+    markers.begin + "\n\n" + bodyInner + "\n\n" + markers.end + "\n";
+
+  if (cursorrulesMode === "overwrite") {
+    const next = writeTaggedOnly(inner);
+    if (dryRun) {
+      return { action: "would-write", path: targetPath, mode: "overwrite" };
+    }
+    if (backup && existsSync(targetPath)) {
+      copyFileSync(targetPath, targetPath + ".bak");
+    }
+    writeFileSync(targetPath, next, "utf8");
+    return { action: "write", path: targetPath, mode: "overwrite" };
+  }
+
+  // inject: update tagged region, or prepend tagged block above existing content
+  const existing = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : "";
+  const region = findMarkerRegion(existing, markers.begin, markers.end);
+
+  if (region) {
+    const next =
+      existing.slice(0, region.innerStart) + "\n" + inner + "\n" + existing.slice(region.innerEnd);
+    if (dryRun) {
+      return { action: "would-write", path: targetPath, mode: "inject-region" };
+    }
+    if (backup && existsSync(targetPath)) {
+      copyFileSync(targetPath, targetPath + ".bak");
+    }
+    writeFileSync(targetPath, next, "utf8");
+    return { action: "write", path: targetPath, mode: "inject-region" };
+  }
+
+  const block = writeTaggedOnly(inner) + "\n";
+  const rest = existing.replace(/^\uFEFF/, "").trimStart();
+  const next = rest.length ? block + rest : block.trimEnd() + "\n";
+
+  if (dryRun) {
+    return { action: "would-write", path: targetPath, mode: "prepend-tagged" };
+  }
+  if (backup && existsSync(targetPath)) {
+    copyFileSync(targetPath, targetPath + ".bak");
+  }
+  writeFileSync(targetPath, next, "utf8");
+  return { action: "write", path: targetPath, mode: "prepend-tagged" };
 }

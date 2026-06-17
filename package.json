@@ -1,7 +1,8 @@
 {
   "name": "deuk-agent-rule",
-  "version": "1.0.13",
-  "description": "DeukAgentRules: generic AGENTS.md + .cursor rule templates with init/merge CLI (npm name: deuk-agent-rule).",
+  "version": "2.1.0",
+  "type": "module",
+  "description": "DeukAgentRules",
   "keywords": [
     "agents-md",
     "cursor-rules",
@@ -10,7 +11,7 @@
     "claude",
     "windsurf",
     "jetbrains",
-    "handoff",
+    "ticket",
     "deuk-family",
     "deukpack-ecosystem"
   ],

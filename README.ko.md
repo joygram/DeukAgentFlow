@@ -1,106 +1,124 @@
-# DeukAgentRules (득에이전트룰스)
+<div align="center">
+  <br />
+  <h1>DeukAgentRules (득에이전트룰스)</h1>
+  <p><b>고신호(High-Signal) 인코딩 & 규칙 표준화 엔진</b></p>
+  <p><a href="https://deukpack.app">Deuk Family</a> 생태계의 핵심 에이전트 인프라</p>
+</div>
 
-> **Deuk Family**의 핵심 모듈 가운데 하나입니다. 구조화된 규칙으로 AI 에이전트의 협업과 응답을 다듬습니다.
+<div align="center">
+  <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg?color=black&style=flat-square" alt="NPM Version" /></a>
+  <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dm/deuk-agent-rule.svg?color=blue&style=flat-square" alt="NPM Downloads" /></a>
+  <a href="https://github.com/joygram/DeukAgentRules"><img src="https://img.shields.io/github/stars/joygram/DeukAgentRules.svg?style=flat-square&color=orange" alt="GitHub Stars" /></a>
+  <a href="https://github.com/joygram/DeukAgentRules/blob/master/LICENSE"><img src="https://img.shields.io/npm/l/deuk-agent-rule.svg?style=flat-square" alt="License" /></a>
+  <br /><br />
+  <a href="https://github.com/joygram/DeukAgentRules/blob/master/README.md">English</a>
+</div>
 
-**npm 패키지:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
+***
 
-**English:** [README.md](https://github.com/joygram/DeukAgentRules/blob/master/README.md)
+## Abstract
 
-Cursor, GitHub Copilot, Gemini / Antigravity, Claude(Cursor·Claude Code), Windsurf, JetBrains AI Assistant 등 코딩 에이전트와 함께 쓸 `AGENTS.md`·`.cursor/rules` 버전 관리형 템플릿. 그 밖에도 프로젝트 규칙을 읽는 유사 도구에 그대로 활용할 수 있습니다. 핸드오프·간결 응답으로 비용·성능을 개선합니다.
+**DeukAgentRules**는 AI 엔지니어링 에이전트(Cursor, GitHub Copilot, Gemini/Antigravity, Claude, Windsurf, JetBrains AI 등)를 위한 프로젝트 불가지론적(Agnostic) 규칙 아키텍처를 정의합니다. 지속적인 워크플로 메모리를 세션 컨텍스트와 분리하여, 세션당 반복되는 프롬프트 부하를 감소시킵니다.
 
-## 워크스페이스 초기화
+> **왜 DeukAgentRules인가?**
+> **티켓 기반 워크플로(Ticket-First)**는 반복되는 컨텍스트 부하를 세션당 단일 토픽 파일 하나로 축소하고, 저장소를 재설명하지 않고도 도구 간 핸드오버를 가능하게 합니다.
+
+---
+
+## 🚀 빠른 시작
+
+명령어 한 줄로 규칙 시스템을 초기화하고 로컬 워크스페이스를 구성하세요:
 
 ```bash
-npm install deuk-agent-rule
 npx deuk-agent-rule init
 ```
 
-레포에 **처음** `init` 할 때만(`.deuk-agent-rule.config.json` 없음) **대화형** 질문이 나옵니다. **이후** `npx deuk-agent-rule init` 은 저장된 선택을 쓰고 템플릿만 갱신하므로, 매번 `--non-interactive` 할 필요 없습니다. **CI**에서만 `--non-interactive` 를 쓰면 됩니다. 선택을 바꾸려면 **`--interactive`** 이거나 설정 파일을 지우거나 수정하세요.
+* **대화형 설정:** 최초 실행 시 CLI가 주요 기술 스택과 사용하는 AI 에이전트를 선택하도록 안내합니다. *(각 스택별 세부 지원 항목은 [시스템 및 스택 선택 가이드](docs/system-selection.ko.md)를 참조하세요).*
+* **안전한 업데이트:** 이후 실행 시 기존 커스텀 설정을 건드리지 않고 필요한 템플릿만 안전하게 주입(Append)합니다. 설정을 변경하려면 `--interactive` 옵션을 사용하세요.
 
-첫 `init` 예시:
+---
 
+## 🎫 티켓 기반 워크플로 (Ticket-First Workflow)
+
+다수의 AI 에이전트가 단일 마크다운 티켓을 통해 컨텍스트를 공유하는 구조입니다.
+
+### 6단계 워크플로
+
+| 단계 | 담당 | 역할 |
+|---|---|---|
+| 1. 탐색 & 계획 | 추론 AI | 코드베이스 분석, 구현 계획 수립 |
+| 2. 결정 | 사용자 | 계획 검토 및 승인 |
+| 3. 티켓 발행 | 추론 AI | 승인된 계획을 `.deuk-agent-ticket/` 에 저장 |
+| 4. 실행 | IDE 에이전트 | 티켓만 읽고 범위 내에서 코딩 |
+| 5. 리스크 분석 (자체검증) | IDE 에이전트 | 테스트 완료 후 빌드 산출물 자체의 결함 및 잠재 리스크 필수 분석 |
+| 6. 보고 & 종결 | 사용자+에이전트 | 리포트 검토 후 `npx deuk-agent-rule ticket close --latest` |
+
+---
+
+### 상세 워크플로 가이드
+
+**1단계: 탐색 및 계획 수립**
 ```
-$ npx deuk-agent-rule init
-
-DeukAgentRules init — let's configure your workspace.
-
-? What is your primary tech stack?
-  1) Unity / C#
-  2) Next.js + C#
-  3) Web (React / Vue / general)
-  4) Java / Spring Boot
-  5) Other / skip
-  Choice [1-5]: 1
-
-? Which agent tools do you use? (comma-separated numbers, or 'all')
-  1) Cursor
-  2) GitHub Copilot
-  3) Gemini / Antigravity
-  4) Claude (Cursor / Claude Code)
-  5) Windsurf
-  6) JetBrains AI Assistant
-  7) All of the above
-  8) Other / skip
-  Choices: 1,2
-
-  Stack : unity
-  Tools : cursor, copilot
-
-AGENTS.md: injected (inject)
-rule copied: .cursor/rules/deuk-agent-rule-multi-ai-workflow.mdc
-rule copied: .cursor/rules/deuk-agent-rule-delivery-and-parallel-work.mdc
-rule copied: .cursor/rules/deuk-agent-rule-git-commit.mdc
+[User]   "분석 저장소모듈"
+[Agent]  (코드베이스 분석 후 방향 제안)
+[User]   "계획 해당 분석내용을 진행할 계획 및 설계"
+[Agent]  (.deuk-agent-ticket/main/storage-20260406.md 에 티켓 저장)
 ```
 
-CI나 스크립트 환경에서 질문 없이 실행:
+**2단계: 실행 및 자체 검증**
+```
+[User]   "진행 (생략 시 최신 분석 내용 진행)"
+[Agent]  (티켓을 읽고 코드 변경 후 자체 검토 보고)
+[User]   "검증 이슈 및 결함, 잠재오류"
+[Agent]  (티켓 제약 사항 준수 검토 및 결함 탐색 완료)
+```
+
+---
+
+### 초단축 키워드 프롬프트 예시 (채팅창에서 바로 입력)
+
+반복되는 타이핑과 검색 피로도를 줄이기 위해 아래와 같은 키워드 기반의 단문을 권장해요.
+
+| 상황 | 입력 프롬프트 |
+|---|---|
+| **분석** | `분석 [주제/모듈]` |
+| **계획** | `계획 해당 분석내용을 진행할 계획 및 설계` |
+| **진행** | `진행 [티켓번호] (생략 시 최신 진행)` |
+| **검증** | `검증 이슈 및 결함, 잠재오류` |
+| **조회** | `/티켓` |
+
+---
+
+### CLI 레퍼런스 (선택 사항)
 
 ```bash
-npx deuk-agent-rule init --non-interactive
+npx deuk-agent-rule ticket create --topic login-api --project MyProject --content "## Task: ..."
+npx deuk-agent-rule ticket list
+npx deuk-agent-rule ticket close --latest
 ```
 
-패키지 업데이트 후:
+*([티켓 튜토리얼](docs/ticket-tutorial.ko.md) 참조)*
 
-```bash
-npm update deuk-agent-rule
-npx deuk-agent-rule init
-```
 
-**CI·헤드리스**에서만 `init --non-interactive` 를 쓰면 됩니다. 일반 업그레이드에 **`merge`를 따로 돌릴 필요는 없습니다.** 기본 **`init`** 이 번들 **`.cursor/rules`** 를 다시 맞춥니다. `--rules prefix`(기본)일 때 이미 있는 **`deuk-agent-rule-*.mdc`** 는 새 패키지 내용으로 **덮어씁니다.** 접두 없이 둔 로컬 전용 룰 파일은 건드리지 않습니다. `AGENTS.md`는 **마커 안**만 갱신되고 바깥 내용은 유지됩니다.
+---
 
-### 핸드오프 (멀티 세션·도구 넘김)
+## ⚙️ 아키텍처 및 설정 (How It Works)
 
-`init` 시 **`.deuk-agent-handoff/`** 를 만들고 기본으로 **`.gitignore`** 에 넣습니다. 채팅만이 아니라 **파일로 남겨야 할** 작업 명세는 여기(또는 `DeukAgentRules/handoff/LATEST.md` 관례)에 `AGENTS.md`의 **Handoff format** 절 구조(과제, 수정 파일, 결정, 제약)로 적어 두면, 다음 세션이나 다른 에이전트가 이어 받기 쉽습니다.
+CLI는 CI 환경 및 명시적 제어를 위한 고급 매개변수를 지원하며, 사용자의 기존 로컬 환경과 충돌하지 않도록 안전한 주입(Injection) 메커니즘을 사용합니다. 
+자세한 기술 구현 아키텍처와 덮어쓰기 방어 로직은 **[동작 원리 가이드](docs/how-it-works.ko.md)**를 참조하세요.
 
-**플랜 패널**을 쓰는 환경에서는 동일 본문을 **`.cursor/plans/deuk-handoff.plan.md`** 등으로 **선택적으로 복제**해 둘 수 있습니다. 정본과 내용이 어긋나지 않게 맞추고, 에이전트 동작은 번들된 **`multi-ai-workflow.mdc`** 를 참고하세요.
+### 핵심 매개변수 (Core Configuration)
 
-### 주요 옵션
+| 옵션 | 용도 |
+|------|---------|
+| `--non-interactive` | CI/Headless 모드 (질의응답 없이 기본값/저장된 설정 즉시 적용) |
+| `--tag <id>` | 기본 마커 영역(`<!-- <id>:begin/end -->`)을 사용자 정의 ID로 오버라이드 |
+| `--agents inject` | 기존 `AGENTS.md`에 지능형 마커 주입 (또는 `skip`, `overwrite`) |
+| `--rules prefix` | 지능형 파일 접두사를 활용하여 `.cursor/rules` 모듈 업데이트 |
 
-| 플래그 | 기본값 | 설명 |
-|--------|--------|------|
-| `--non-interactive` | 끔 | CI/스크립트: 질문 없음·저장 설정 미사용 |
-| `--interactive` | 끔 | `.deuk-agent-rule.config.json` 이 있어도 질문 다시 |
-| `--cwd <path>` | 현재 디렉터리 | 대상 레포 루트 |
-| `--dry-run` | 끔 | 쓰기 없이 동작만 출력 |
-| `--tag <id>` | `deuk-agent-rule` | 마커 id: `<!-- <id>:begin/end -->` |
-| `--agents <mode>` | `inject` | `inject` \| `skip` \| `overwrite` |
-| `--rules <mode>` | `prefix` | `prefix` \| `skip` \| `overwrite` |
-| `--backup` | 끔 | 덮어쓰기 전 `*.bak` 저장 |
+---
 
-### 번들 규칙
+## 📄 라이선스 & 생태계
 
-- **`multi-ai-workflow.mdc`** — `alwaysApply: true`
-- **`delivery-and-parallel-work.mdc`** — `alwaysApply: true` (세로 슬라이스·포트폴리오 우선·병렬 소유·리팩터 범위 축소)
-- **`git-commit.mdc`** — `alwaysApply: false`
-
-### `merge` (엄격)
-
-옵션 동일. 마커가 없으면 inject 실패(`--append-if-no-markers` 없을 때). 기본 `--rules skip`.
-
-### 주의
-
-- `alwaysApply: true` 규칙이 겹치면 컨텍스트가 커질 수 있습니다.
-- `postinstall`에서 `init` 자동 실행은 권장하지 않습니다.
-
-## 버전
-
-배포 전 `package.json`의 `version` 상향.
+이 패키지는 **DeukPack Ecosystem**의 일부로 구동되며, **Apache-2.0** 라이선스 하에 배포됩니다.
+이슈 제보, 컨트리뷰션 및 커뮤니티 논의는 [GitHub Repository](https://github.com/joygram/DeukAgentRules)를 방문해 주세요.

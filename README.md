@@ -1,106 +1,123 @@
-# DeukAgentRules
+<div align="center">
+  <br />
+  <h1>DeukAgentRules</h1>
+  <p><b>High-Signal Encoding & Rule Standardization Engine</b></p>
+  <p>Part of the <a href="https://deukpack.app">Deuk Family</a> ecosystem.</p>
+</div>
 
-> **Part of the Deuk Family** — Empowering AI Agents with structured rules.
+<div align="center">
+  <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg?color=black&style=flat-square" alt="NPM Version" /></a>
+  <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dm/deuk-agent-rule.svg?color=blue&style=flat-square" alt="NPM Downloads" /></a>
+  <a href="https://github.com/joygram/DeukAgentRules"><img src="https://img.shields.io/github/stars/joygram/DeukAgentRules.svg?style=flat-square&color=orange" alt="GitHub Stars" /></a>
+  <a href="https://github.com/joygram/DeukAgentRules/blob/master/LICENSE"><img src="https://img.shields.io/npm/l/deuk-agent-rule.svg?style=flat-square" alt="License" /></a>
+  <br /><br />
+  <a href="https://github.com/joygram/DeukAgentRules/blob/master/README.ko.md">한국어 (Korean)</a>
+</div>
 
-**npm package:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
+***
 
-**한국어:** [README.ko.md](https://github.com/joygram/DeukAgentRules/blob/master/README.ko.md)
+## Abstract
 
-Versioned templates for `AGENTS.md` and `.cursor/rules` for Cursor, GitHub Copilot, Gemini / Antigravity, Claude (via Cursor or Claude Code), Windsurf, JetBrains AI Assistant, and other coding agents that read project rules: shared handoff format, concise execution, stronger cost-efficiency and responsiveness.
+**DeukAgentRules** defines a project-agnostic rule architecture for AI engineering agents (Cursor, GitHub Copilot, Gemini/Antigravity, Claude, Windsurf, JetBrains AI). It separates persistent workflow memory from session context, reducing recurring prompt loads per session.
 
-## Initialize a workspace
+> **Why DeukAgentRules?**
+> The **Ticket-First Workflow** reduces recurring context loads into a single focused topic file per session, enabling handovers between different AI tools without re-explaining the repository.
+
+---
+
+## 🚀 Quick Start
+
+Initialize the rule system and set up the local workspace in one step:
 
 ```bash
-npm install deuk-agent-rule
 npx deuk-agent-rule init
 ```
 
-On the **first** `init` in a repo (no `.deuk-agent-rule.config.json`), a short **interactive** setup runs. **Later** `npx deuk-agent-rule init` reuses those choices and only applies template updates — no need for `--non-interactive` unless you are in **CI**. Use **`--interactive`** to change answers, or delete/edit the config file.
+* **Interactive Setup:** On the first run, the CLI guides you to select your primary stack and the AI agents you use. *(See the [System Selection Guide](docs/system-selection.md) for a detailed list of available stacks and tools).* 
+* **Safe Updates:** Subsequent runs safely append necessary templates without touching your custom extensions. Use `--interactive` to reconfigure.
 
-Running `init` for the first time (example):
+---
 
+## 🎫 The Ticket-First Workflow
+
+Multiple AI agents share context through a single Markdown ticket, reducing per-session prompt overhead.
+
+### The 6-Phase Workflow
+
+| Phase | Actor | Action |
+|---|---|---|
+| 1. Explore & Plan | Reasoning AI | Analyze codebase, propose implementation plan |
+| 2. Decide | User | Review and approve the plan |
+| 3. Ticket (Handoff) | Reasoning AI | Write approved plan to `.deuk-agent-ticket/` |
+| 4. Execute | IDE Agent | Read ticket, code strictly within scope |
+| 5. Post-Test Risk Analysis | IDE Agent | Mandatory artifact risk analysis after testing |
+| 6. Report & Close | User + Agent | Review risk report, then `npx deuk-agent-rule ticket close --latest` |
+
+---
+
+### Detailed Workflow Walkthrough
+
+**Phase 1: Explore & Plan**
 ```
-$ npx deuk-agent-rule init
-
-DeukAgentRules init — let's configure your workspace.
-
-? What is your primary tech stack?
-  1) Unity / C#
-  2) Next.js + C#
-  3) Web (React / Vue / general)
-  4) Java / Spring Boot
-  5) Other / skip
-  Choice [1-5]: 3
-
-? Which agent tools do you use? (comma-separated numbers, or 'all')
-  1) Cursor
-  2) GitHub Copilot
-  3) Gemini / Antigravity
-  4) Claude (Cursor / Claude Code)
-  5) Windsurf
-  6) JetBrains AI Assistant
-  7) All of the above
-  8) Other / skip
-  Choices: all
-
-  Stack : web
-  Tools : cursor, copilot, gemini, claude, windsurf, jetbrains, all, other
-
-AGENTS.md: injected (inject)
-rule copied: .cursor/rules/deuk-agent-rule-multi-ai-workflow.mdc
-rule copied: .cursor/rules/deuk-agent-rule-delivery-and-parallel-work.mdc
-rule copied: .cursor/rules/deuk-agent-rule-git-commit.mdc
+[User]   "Analyze storage module"
+[Agent]  (Analyzes codebase, proposes direction)
+[User]   "Plan and design for the analyzed content."
+[Agent]  (Saves ticket to .deuk-agent-ticket/main/storage-20260406.md)
 ```
 
-To skip questions (CI or scripted use):
+**Phase 2: Execution & Verification**
+```
+[User]   "Proceed" (or "Proceed with [Ticket #]")
+[Agent]  (Reads the ticket, implements changes, self-checks, and reports)
+[User]   "Verify issues, defects, and potential errors."
+[Agent]  (Runs tests, confirms compliance and finds defects)
+```
+
+---
+
+### Keyword-Based Prompt Examples
+
+| Intent | Ultra-Concise Input |
+|---|---|
+| **Analysis** | `Analyze [Topic/Module]` |
+| **Plan** | `Plan and design for the analyzed content.` |
+| **Proceed** | `Proceed [Ticket #] (or latest if omitted)` |
+| **Verify** | `Verify issues, defects, and potential errors.` |
+| **Check** | `/ticket` |
+
+---
+
+### CLI Reference (Optional)
 
 ```bash
-npx deuk-agent-rule init --non-interactive
+npx deuk-agent-rule ticket create --topic login-api --project MyProject --content "## Task: ..."
+npx deuk-agent-rule ticket list
+npx deuk-agent-rule ticket close --latest
 ```
 
-After a package upgrade:
+*([Ticket Tutorial](docs/ticket-tutorial.md))*
 
-```bash
-npm update deuk-agent-rule
-npx deuk-agent-rule init
-```
 
-Use `init --non-interactive` only in **CI** or headless scripts. You do **not** need a separate `merge` for routine upgrades: **`init` refreshes** the bundled `.cursor/rules` files. With default `--rules prefix`, existing **`deuk-agent-rule-*.mdc`** copies are **overwritten** from the new package so template fixes reach your repo. Unprefixed rule files you keep for local overrides are not touched. Only the **marker region** in `AGENTS.md` is replaced; your text outside stays.
 
-### Handoffs (multi-session and tool handover)
+---
 
-`init` creates **`.deuk-agent-handoff/`** (and adds it to **`.gitignore`** by default) so you can **persist** structured specs beyond a single chat. Use the same sections as in `AGENTS.md` (**Handoff format**): task title, files to modify, decisions, constraints. That lets the next session or another tool pick up where you left off without re-explaining the repo.
+## ⚙️ Architecture & Configuration (How It Works)
 
-Optionally, if you use an editor with a **Plans** panel, mirror the same Markdown body under **`.cursor/plans/deuk-handoff.plan.md`** (or `deuk-handoff-<topic>.plan.md`) so it appears there; keep it in sync with the canonical file under `.deuk-agent-handoff/` or `DeukAgentRules/handoff/LATEST.md`. See the bundled **`multi-ai-workflow.mdc`** rule for agent-side details.
+The CLI supports advanced parameters for CI environments and explicit structural control, utilizing a non-destructive injection mechanism to avoid user conflicts. 
+For a detailed technical overview of how we safely sandbox injected rules, see the **[How It Works Guide](docs/how-it-works.md)**.
 
-### Key options
+### Core Configuration
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--non-interactive` | off | CI/scripts: no prompts; no saved-config path |
-| `--interactive` | off | Force the setup questions even if `.deuk-agent-rule.config.json` exists |
-| `--cwd <path>` | current directory | Target repo root |
-| `--dry-run` | off | Print actions without writing |
-| `--tag <id>` | `deuk-agent-rule` | Marker id: `<!-- <id>:begin/end -->` |
-| `--agents <mode>` | `inject` | `inject` \| `skip` \| `overwrite` |
-| `--rules <mode>` | `prefix` | `prefix` \| `skip` \| `overwrite` |
-| `--backup` | off | Write `*.bak` before overwrite |
+| Flag | Purpose |
+|------|---------|
+| `--non-interactive` | CI/Headless mode; applies defaults/saved config without prompting |
+| `--tag <id>` | Overrides the default marker region (`<!-- <id>:begin -->`) |
+| `--agents inject` | Smart injection into existing `AGENTS.md` (or `skip`, `overwrite`) |
+| `--rules prefix` | Updates `.cursor/rules` via intelligent file prefixing |
 
-### Bundled rules
+---
 
-- **`multi-ai-workflow.mdc`** — `alwaysApply: true`
-- **`delivery-and-parallel-work.mdc`** — `alwaysApply: true` (vertical slices, portfolio priority, parallel ownership, scoped refactors)
-- **`git-commit.mdc`** — `alwaysApply: false`
+## 📄 License & Ecosystem
 
-### `merge` (stricter)
-
-Same flags; `AGENTS.md` inject fails without markers unless `--append-if-no-markers`. Default `--rules skip`.
-
-### Caveats
-
-- Multiple `alwaysApply: true` rules all apply — trim duplicates if context grows too large.
-- Do **not** run `init` from `postinstall` without an explicit team decision.
-
-## Versioning
-
-Bump `version` in `package.json` before publishing.
+Part of the **DeukPack Ecosystem**. Licensed under **Apache-2.0**.
+For issues, contributions, and community discussions, visit the [GitHub Repository](https://github.com/joygram/DeukAgentRules).
