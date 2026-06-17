@@ -8,6 +8,19 @@
 
 ## [Unreleased]
 
+## [4.0.34] - 2026-05-09
+
+### 변경됨 (Changed)
+
+- **init:** 첫 실행 질문을 workspace 종류, 기술 표면, AI client pointer, 선택형 Deuk AgentContext MCP memory 기준으로 재구성해 코딩 전용이 아닌 기획/시스템/연구/혼합 workspace도 자연스럽게 설정할 수 있게 했습니다.
+- **docs:** 사용자용 업데이트 안내를 `npm install -g deuk-agent-flow` 이후 `deuk-agent-flow init`만 실행하는 흐름으로 단순화하고, repo 루트와 workspace 루트 갱신 방식을 명확히 했습니다.
+
+### 수정됨 (Fixed)
+
+- **templates:** 패키지 `templates/`를 runtime 단일 진실 공급원으로 삼고, init/merge 중 legacy `.deuk-agent/templates` 복사본을 제거하도록 정리했습니다.
+- **ticket:** `ticket create` strict 검증 전에 Phase 1 heading level 실수를 canonical heading으로 정규화하도록 수정했습니다.
+- **release:** OSS sync 대상을 공개 runtime 파일로 좁히고 오래된 tarball, `bundle/`, `node_modules/`, 내부 sync script, test 같은 공개 미러 찌꺼기를 제거하도록 했습니다.
+
 ## [4.0.21] - 2026-05-08
 
 ### 수정됨 (Fixed)

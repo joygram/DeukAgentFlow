@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Global Proxy for DeukAgentFlow CLI
- * Routes to the local workspace source when present so global installs and
- * temporary npx packages do not shadow active local development.
+ * Runs the bundled CLI by default. Maintainers can opt into local workspace
+ * source routing with DEUK_AGENT_FLOW_USE_LOCAL=1 or DEUK_AGENT_FLOW_KIND=source.
  */
 const fs = require("fs");
 const path = require("path");
@@ -26,7 +26,11 @@ function findWorkspaceRoot(currentDir) {
   }
 }
 
-const wsRoot = findWorkspaceRoot(process.cwd());
+const shouldUseLocalSource = process.env.DEUK_AGENT_FLOW_USE_LOCAL === "1"
+  || process.env.DEUK_AGENT_FLOW_USE_LOCAL === "true"
+  || process.env.DEUK_AGENT_FLOW_KIND === "source";
+
+const wsRoot = shouldUseLocalSource ? findWorkspaceRoot(process.cwd()) : null;
 if (wsRoot) {
   const localCli = fs.existsSync(path.join(wsRoot, "DeukAgentFlow", "scripts", "cli.mjs"))
     ? path.join(wsRoot, "DeukAgentFlow", "scripts", "cli.mjs")

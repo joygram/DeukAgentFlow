@@ -15,7 +15,7 @@
 
 ---
 
-**Deuk Agent Flow** is the repo-owned workflow layer for AI coding agents: Codex, Copilot, Cursor, Claude Code, Gemini, Windsurf, or the next agent you adopt can enter the same ticketed flow.
+**Deuk Agent Flow** is the repo-owned workflow layer for AI-assisted workspaces: planning, software engineering, systems work, research, and operations can enter the same ticketed flow through Codex, Copilot, Cursor, Claude Code, Gemini, Windsurf, or the next agent you adopt.
 
 Most agent setups stop at instructions. Deuk Agent Flow turns short chat into an operating loop: ticket, scope, execute, verify, archive. It keeps `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills, and related agent surfaces aligned without asking you to type long commands.
 
@@ -66,7 +66,7 @@ Repo-owned work
 | Better team memory | Completed work becomes searchable project history |
 
 > **Current readiness:**
-> v4.0.0 is deployment-ready for agent-driven repositories. It is currently most reliable in **OpenAI Codex** and **GitHub Copilot** workflows. Cursor, Windsurf, Claude Code, and MCP remain supported through pointer-style integration, but they should be validated per workspace before rollout. MCP server registration is separate from `init`.
+> v4.0.0 is deployment-ready for agent-driven repositories. It is currently most reliable in **OpenAI Codex** and **GitHub Copilot** workflows. Cursor, Windsurf, and Claude Code remain supported through pointer-style integration, but they should be validated per workspace before rollout. Deuk AgentContext MCP is an optional memory layer; MCP server registration is separate from `init`.
 > **Architecture foundation:**
 > We have officially deprecated monolithic `.cursorrules`. v3.0 introduces the **Hub-Spoke model** where `AGENTS.md` is the single source of truth, and IDE-specific rules act as thin entry-point pointers.
 
@@ -136,17 +136,30 @@ npm install -g deuk-agent-flow
 deuk-agent-flow init
 ```
 
-If you manage many repos under one workspace, run `deuk-agent-flow init` in each project root that owns its own rules and tickets. The workspace root can act as a shared pointer, but day-to-day work usually belongs to each project's `PROJECT_RULE.md` and `.deuk-agent/`.
+To apply a newly installed version to an existing repo, update the global package first and then rerun init:
+
+```bash
+npm install -g deuk-agent-flow
+deuk-agent-flow init
+```
+
+`init` reapplies the currently installed package rules and removes legacy runtime template copies. It does not update the global npm package by itself.
+
+For a single repo, run `deuk-agent-flow init` from that repo root.
+
+For a root workspace that contains multiple DeukAgentFlow projects, run the same command from the workspace root. `init` updates the root pointer and discovered child workspaces that own their own `PROJECT_RULE.md` / `.deuk-agent/` state, so ordinary users can refresh their AI agent rules from their personal workspace root after installing a new package version.
+
+Agent client pointers are not a one-time decision. If you start using another client later, rerun `deuk-agent-flow init` and select the additional AI client.
 
 This is where the effect compounds: use the workspace root as the shared entry point, each project root as an independent ticket/rule/verification boundary, and nested apps or servers as separate projects only when they have their own lifecycle.
 
 ### 2. Local Source Development (Maintainer/Power User)
-v3.0 introduces a **Global CLI Proxy**. If you are developing inside the `DeukAgentFlow` workspace, the global command will automatically delegate execution to your local source.
+The global command runs the installed package by default. If you are developing against a local checkout from another project directory, opt into local source routing explicitly.
 
 ```bash
 cd ~/workspace/DeukAgentFlow
 sudo npm link
-deuk-agent-flow init  # Routes to local scripts/cli.mjs automatically
+DEUK_AGENT_FLOW_USE_LOCAL=1 deuk-agent-flow init  # Routes to local scripts/cli.mjs
 ```
 
 If you primarily work in Codex or Copilot, this is the recommended day-to-day setup. Those clients currently have the smoothest behavior with the hub-spoke and ticket-driven workflow.
@@ -191,7 +204,7 @@ The badge should display `deuk-flow` while still summing downloads from both `de
 
 The workflow is governed by a **Ticket-Driven Execution Contract**.
 
-1. **Scaffolding**: `init` deploys `.deuk-agent/templates/` and `AGENTS.md` (or local pointers like `PROJECT_RULE.md`).
+1. **Scaffolding**: `init` deploys `AGENTS.md` and local pointers like `PROJECT_RULE.md`; runtime templates come from the package `templates/` SSoT, not `.deuk-agent/templates/`.
 2. **Ticketing (Plan Phase)**: The user describes the work in natural language, and the agent turns it into a bounded work order in `.deuk-agent/tickets/`. During this phase, agents operate in **Plan Mode** and are restricted from mutating files.
 3. **Execution (Execute Phase)**: Once authorized, the AI agent reads the ticket, locks onto the **Target Submodule**, and executes code changes. MCP Soft Gates ensure that unauthorized modifications are blocked.
 4. **Verification**: The agent performs a side-effect audit and convention (e.g., DC-DUP) check before closure.

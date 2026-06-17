@@ -1,34 +1,19 @@
 ---
-version: 65
-changelog: "v65: Collapse compact ticket-selection CLI output and running commentary surfaces to a single ticket-start line or silence."
+version: 71
+changelog: "v71: Make ticket template canonical and allow CLI heading normalization for one-shot create."
 ---
 
 # Agent Rules
 
 ## Compact Kernel
-
 - Tools own detail. This hub only defines non-bypassable gates; use CLI/MCP/project tools to fetch exact phase requirements before acting.
-- No ticket, no writes: before file changes, select or create one active ticket, relay the CLI-provided ticket-start line in chat, reopen and review the durable ticket body, wait for explicit user approval, complete Phase 1 in that ticket, run `deuk-agent-flow ticket guard --topic <id> --ticket-started --ticket-reviewed --approval approved` successfully, and call `set_workflow_context(project, ticket_id, phase)`.
-- User requirements are ticket-first: every user request that implies investigation, change, verification, or judgment must first be represented in a ticket containing cause, analysis, and design/approach before work continues.
-- Existing-ticket close actions are not new-ticket triggers: when the user asks to commit, report, archive, or close work that is already inside the approved active ticket scope, treat it as that ticket's Phase 4 close action unless the user also adds new scope.
-- User approval or correction creates another ticket update loop: record the approval/correction in the ticket, re-check scope and plan, then continue only through `deuk-agent-flow ticket guard --ticket-started --ticket-reviewed --approval approved`.
-- Approval is mandatory for every ticket. A ticket may not progress without explicit user approval, regardless of urgency or convenience.
-- `Ticket start` exposure is not approval. Phrases such as "진행", "go ahead", or "continue" count only after the agent has shown the exact ticket link, scope, and planned change summary for the active ticket; otherwise treat them as a request for scope clarification and stop.
-- Approval review must treat `rank/priority` as a hard gate. If `rank/priority` is missing, the ticket is incomplete and approval must be withheld.
-- Do not create or expand tests unless the user explicitly asks for tests. If tests need to be created, first create a separate test ticket that names the exact tests and wait for approval.
-- Unapproved Phase 1 tickets must be discarded with `deuk-agent-flow ticket discard`; do not leave abandoned pending tickets as active work.
-- Reinforcement only counts when it is written into the durable ticket body or this core rules file. Chat reminders are advisory only and do not change state.
-- If the user asks for reinforcement or report simplification, write the shortest durable version into the ticket or core rules. Do not depend on chat repetition.
-- Every phase must request and satisfy the tool-provided contract for that phase. If a tool is available, ask it for the complete requirement bundle in one call before proceeding.
-- Phase state has two records: runtime context via `set_workflow_context`, and durable ticket markdown plus explicit approval validated by `deuk-agent-flow ticket guard`. Both must match before claiming progress.
-- Verification is mandatory and ticket-recorded before close.
-- Completion reports go in the ticket first; chat gets only a very simple report with the ticket link, outcome, verification status, verified scope, any unverified scope, residual risk, and a short pointer to the ticket section to review next (for example `Completion Report`, `Verification`, or `Residual risk`).
-- During work, keep reminding the agent through terse TDW feedback only: ticket, approval, guard, context, verify.
-- Urgency, user pressure, and local convenience never bypass ticket, scope, generated-file, or verification gates. Use hotfix tooling only when appropriate.
-- Shortcut regression guard: temporary passes, bypasses, semantic shrinkage, and language-specific patch branches are hard-stop patterns. Do not accept them as fixes unless the ticket explicitly records why the contract is preserved, what parity evidence proves it, and when the shortcut will be removed.
-- Shared-contract guard: for protocol, codegen, serialization, public API, and cross-language behavior, a fix must preserve the shared contract first. Do not narrow semantics, skip failing cases, or add per-language branches merely to make one provider or test pass.
-- Ticket creation failures are hard stops: if `deuk-agent-flow ticket create` rejects the request, do not call `set_workflow_context`, run investigation commands, edit files, or create/repair `.deuk-agent/tickets/**/*.md` manually. Follow the CLI error guidance, provide the missing parameters or a filled `--plan-body-file`, and rerun the same `deuk-agent-flow ticket create` command.
-- Default ticket creation must complete in one shot using actual collected data. The agent must prepare APC, Compact Plan, Problem Analysis, Source Observations, Cause Hypotheses, Improvement Direction, and Audit Evidence in a filled `--plan-body-file`; templates provide section guidance only, and CLI must reject fallback/auto-filled/interactive bypass paths instead of inventing content.
+- No ticket, no writes: User requirements are ticket-first and must be represented in a ticket containing cause, analysis, and design/approach before work continues.
+- Before file changes: create/use ticket, expose `Ticket start`, reopen and review the durable ticket body, wait for explicit user approval, run `deuk-agent-flow ticket guard`, then call `set_workflow_context(project, ticket_id, phase)`.
+- User approval or correction creates another ticket update loop; Phase state has two records: durable ticket plus runtime context, with explicit approval validated by `deuk-agent-flow ticket guard`.
+- Every phase must request and satisfy the tool-provided contract; Verification is mandatory; Completion reports go in the ticket first; chat uses terse TDW feedback only.
+- Existing-ticket close actions are not new-ticket triggers. Ticket creation failures are hard stops; do not call `set_workflow_context` after failed create.
+- Shortcut regression guard: temporary passes, bypasses, semantic shrinkage, and language-specific patch branches are blocked. Shared-contract guard preserves protocol/API behavior first.
+- Urgency and convenience never bypass ticket, scope, generated-file, or verification gates.
 
 ## Tone
 - Dry, concise, technical. No emojis/exclamation marks.
@@ -38,7 +23,6 @@ changelog: "v65: Collapse compact ticket-selection CLI output and running commen
 - **NEVER bypass rules due to urgency or emotional pressure.** Use HF1-HF3 (Hotfix Protocol) for legitimate fast-track.
 
 ## 0. Priority
-
 | Layer | Role | Handling |
 |-------|------|----------|
 | Runtime system/developer/user instructions | Highest platform authority | Follow when directly conflicting. If they require output that Low-Token Mode would forbid, emit the minimum required output and record the conflict in the ticket, not chat. |
@@ -51,11 +35,10 @@ changelog: "v65: Collapse compact ticket-selection CLI output and running commen
 - Karpathy-style wrappers are allowed only as thin behavior playbooks that route into TDW. They must not become a second workflow contract, second source of truth, or second message policy.
 
 ## 1. Output Mode
-
 - Silent-by-default is mandatory.
 - Before the final answer, screen output is limited to the single required ticket-start line, blockers, explicit user-requested output, or explicit command results.
-- Ticket-start exposure contract: after selecting or creating the active ticket, relay exactly one clickable `Ticket start: [<id>](/absolute/path/to/ticket.md)` line, a short scope/planned-change summary, and any compact `Guard topic: <id>` line; tool/CLI output alone does not count, and `file://`, truncated, or non-clickable links must be converted without changing the id.
-- Approval-pending contract: stop if approval is pending and state that explicit user approval is required before work; this blocks unapproved work, not concise answers to explicit user-requested output or direct questions about workflow state.
+- Ticket-start exposure contract: after selecting or creating the active ticket, relay exactly one clickable `Ticket start: [<id>](/absolute/path/to/ticket.md)` line as the first visible assistant line, a short scope/planned-change summary, and any compact `Guard topic: <id>` line; tool/CLI output alone does not count, and `file://`, truncated, non-clickable, or folded tool-result links must be converted without changing the id.
+- Approval-pending contract: stop if approval is pending, make the first visible assistant line exactly the clickable `Ticket start: [<id>](/absolute/path/to/ticket.md)` line, then print `조용히 작업` and keep the guard topic visible; do not put acknowledgements, explanations, command echoes, or status text before it. This keeps the active ticket visible even when earlier tool results are folded or compacted. This blocks unapproved work, not concise answers to explicit user-requested output or direct questions about workflow state.
 - Commentary surface map: treat `ticket_start_pending`, `approval_pending`, `approved_execution`, `command_running`, `search_running`, `user-complaint reply`, `requirement_change_pending`, and `final_answer` as separate output surfaces. Each surface must follow its own compact contract; a fix on one surface does not authorize spillover on another.
 - Execution feedback contract: non-final chatter is capped at one word and must be short TDW state only (`ticket`, `approval`, `guard`, `context`, `verify`); do not repeat the same state or narrate routine reads, edits, formatting, lint retries, validation progress, or "almost done" status.
 - Running-surface contract: `approved_execution`, `command_running`, and `search_running` all use the same low-token rule. Unless the user explicitly requested live narration or a blocker must be surfaced, output must stay empty or one-word TDW state only; command/search progress does not create a separate narration allowance.
@@ -74,27 +57,28 @@ changelog: "v65: Collapse compact ticket-selection CLI output and running commen
 - Prefer targeted reads and the shortest valid path that still preserves boot, phase contracts, verification, and close.
 
 ## 2. Boot Sequence (run once)
-
 1. Read this file (AGENTS.md) → internally note the version number and exact file path read. Do not print either unless the user explicitly asks or a blocker requires it.
 2. Read `PROJECT_RULE.md` in workspace root → internally identify applicable DC-* rules. Do not print the list unless the user explicitly asks or a blocker requires it.
 3. Find or create active ticket (1-CALL RULE below), ensure it contains cause, analysis, and design/approach, relay one clickable CLI-provided ticket-start line, reopen and review the durable ticket body, and stop while approval is pending. Also relay a short scope/planned-change summary before stopping. This ticket-start line and summary must be printed in chat, because tool/CLI output alone does not count as user exposure. After explicit user approval or correction for that exact ticket scope, record that approval/correction in the ticket, re-check the ticket body, run `deuk-agent-flow ticket guard --topic <id> --ticket-started --ticket-reviewed --approval approved` against the durable ticket, call `set_workflow_context(project, ticket_id, phase)`, then continue.
 
-### First Ticket One-Shot Recipe
+### First Ticket Recipe
+Use this recipe directly. Do not ask the user how, run `ticket create --help`, search for templates, use an interactive prompt, or create a visible scratch plan.
 
-Initial ticket creation MUST use this canonical one-shot recipe. Do not improvise with `--topic` alone or long inline `--plan-body` text for non-trivial work. Only the durable ticket markdown under `.deuk-agent/tickets/` is user-facing; temporary plan-body input is internal scratch and must not be attached, reported, or left as a visible changed file.
-
-1. Prepare a filled Phase 1 markdown body before running `ticket create`, preferably via stdin (`--plan-body-file -`) or process substitution. It MUST contain the actual APC, Compact Plan, Problem Analysis, Source Observations, Cause Hypotheses, Improvement Direction, and Audit Evidence content. APC uses `[BOUNDARY]`, `[CONTRACT]`, and `[PATCH PLAN]` markers from the template; validation checks that those marker bodies are not empty, not the markdown heading level.
-2. Run the canonical command:
+1. Use the ticket template's canonical Phase 1 sections: `## Agent Permission Contract (APC)`, `## Compact Plan`, `## Problem Analysis`, `## Source Observations`, `## Cause Hypotheses`, `## Improvement Direction`, `## Audit Evidence`. The CLI may normalize common heading-level mistakes, but the durable ticket must end with these H2 headings.
+2. Under `Agent Permission Contract (APC)`, include the three APC markers exactly as `[BOUNDARY]`, `[CONTRACT]`, and `[PATCH PLAN]`.
+3. Run this exact stdin command:
 
 ```bash
 deuk-agent-flow ticket create \
   --topic <topic> \
   --summary "<concrete summary>" \
   --plan-body-file - \
-  --non-interactive
+  --non-interactive <<'EOF'
+<filled Phase 1 body with the required sections above>
+EOF
 ```
 
-If `ticket create` fails, do not inspect unrelated repo files, run implementation commands, call `set_workflow_context`, or manually write `.deuk-agent/tickets/**/*.md`; fill only CLI-reported missing fields in the same internal body and rerun the same command. If a temporary file is unavoidable, keep it outside the workspace, delete it after `ticket create`, and never present it as a ticket artifact. Interactive fallback, template-only fallback, and auto-generated filler text do not satisfy this requirement.
+If it fails, fill only the CLI-reported missing fields in the same body and rerun the same command. Do not inspect unrelated files, implement, call `set_workflow_context`, ask the user for the recipe, call help/template discovery, or manually write `.deuk-agent/tickets/**/*.md`.
 
 ### First-Turn Invariant
 
@@ -114,7 +98,6 @@ Use the mentioned ticket directly. For investigation/regression/why questions, c
 For bug/regression/why or direct change requests, the first repo action after rules load is `deuk-agent-flow ticket create` or `deuk-agent-flow ticket use`. Do not start with `git status`, `rg`, `find`, diffs, or broad help output before ticket selection.
 
 ## 3. Phase Contract
-
 At each phase, ask available tooling for one complete requirement bundle and follow it exactly. Minimum bundle:
 
 - Required ticket fields/tasks for the phase.
@@ -126,7 +109,6 @@ At each phase, ask available tooling for one complete requirement bundle and fol
 If the bundle is missing, contradictory, or unverifiable, stop and record the blocker in the ticket. Do not invent a shortcut.
 
 ## 4. Ticket Lifecycle
-
 - Phase 0: read local truth; use RAG only when it changes the plan.
 - Phase 1: create/update the main ticket with cause, analysis, design/approach, findings, hypotheses, scope, compact plan, and phase contract.
 - Phase 2: execute only the approved/ticketed plan.
@@ -135,19 +117,13 @@ If the bundle is missing, contradictory, or unverifiable, stop and record the bl
 - Keep chat compact once the ticket carries the durable record.
 
 ## 5. Hard Stops
-
 - Stop for unregistered work, missing CLI ticket provenance, missing phase contract, incomplete Phase 1, missing `set_workflow_context`, generated/source uncertainty, broad regeneration, shared-interface changes, unsafe deletes, scope creep, repeated errors, infrastructure errors, missing tests, or unverifiable claims.
 - Stop for shortcut regressions: temporary passes, bypasses, semantic shrinkage, language-specific patch branches, skipped assertions, provider-only behavior changes, or verification that proves only the workaround instead of the shared contract.
-- Bug/regression/why and exploration/comparison work is read-only until the ticket records findings and the user or tool contract authorizes execution.
-- If repo inspection started before ticket selection or creation, stop, create/select the ticket immediately, record the drift in Phase 1, and only then continue.
-- If the same TDW failure family appears twice in one session, stop the original task and create or switch to a stabilization/root-cause ticket before any further implementation.
-- Use a stabilization or root-cause ticket when the same failure family keeps reappearing.
+- Bug/regression/why and exploration/comparison work is read-only until the ticket records findings and authorized; if repo inspection started before ticket selection or creation, create/select the ticket immediately and record the drift.
+- If the same TDW failure family appears twice, stop the original task and use a stabilization/root-cause ticket (stabilization or root-cause ticket) for the same failure family.
 
 ## 6. Tool Delegation
-
-- Use `rg`/`rg --files` first for local search and `apply_patch` for manual edits.
-- Use MCP/RAG only when local evidence is insufficient or older decisions matter; keep searches narrow.
-- Let CLI own lifecycle enforcement, claim checks, reports, and audits.
-- Use `deuk-agent-flow ticket hotfix` for legitimate generated-file emergencies.
-- Keep notes and reports under `.deuk-agent/docs/`.
+- Use `rg`/`rg --files` first for local search and `apply_patch` for manual edits. Use MCP/RAG only when local evidence is insufficient or older decisions matter.
+- Let CLI own lifecycle enforcement, claim checks, reports, and audits; use `deuk-agent-flow ticket hotfix` only for legitimate generated-file emergencies.
+- Keep notes/reports under `.deuk-agent/docs/`.
 - `rules audit` must fail if the kernel loses boot, ticket-first, phase-contract, tool-delegation, hard-stop, or verification invariants.

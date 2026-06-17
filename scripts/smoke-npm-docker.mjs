@@ -78,7 +78,7 @@ try {
     "test -f .codex/AGENTS.md",
     "test -f PROJECT_RULE.md",
     "test -d .deuk-agent",
-    "test -d .deuk-agent/templates",
+    "test ! -d .deuk-agent/templates",
     "test -d .deuk-agent/skill-templates",
   ].join("\n");
 

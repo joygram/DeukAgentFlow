@@ -11,7 +11,6 @@ export function toFileUri(absPath) {
 
 export const AGENT_ROOT_DIR = ".deuk-agent";
 export const TICKET_SUBDIR = "tickets";
-export const TEMPLATE_SUBDIR = "templates";
 export const RULES_SUBDIR = "rules";
 export const WORKFLOW_MODE_PLAN = "plan";
 export const WORKFLOW_MODE_EXECUTE = "execute";
@@ -85,21 +84,34 @@ export function normalizeTicketGroup(rawGroup, fallback = "sub") {
 export const INIT_CONFIG_FILENAME = `${AGENT_ROOT_DIR}/config.json`;
 export const INIT_CONFIG_VERSION = 1;
 
+export const WORKSPACE_KINDS = [
+  { label: "Product planning / strategy / specs", value: "planning" },
+  { label: "Software engineering / coding", value: "coding" },
+  { label: "Systems engineering / operations", value: "systems" },
+  { label: "Research / analysis / knowledge work", value: "research" },
+  { label: "Mixed team workspace", value: "mixed" },
+  { label: "Other / decide later", value: "other" },
+];
+
 export const STACKS = [
-  { label: "Unity / C#", value: "unity" },
-  { label: "Unity + WebApp + C++ Server (Hybrid)", value: "unity-webapp-cpp" },
-  { label: "Next.js + C#", value: "nextjs-dotnet" },
-  { label: "Web (React / Vue / general)", value: "web" },
-  { label: "Java / Spring Boot", value: "java" },
+  { label: "Not primarily a code repo", value: "none" },
+  { label: "Web / product app", value: "web" },
+  { label: "Backend / service / API", value: "backend" },
+  { label: "Unity / game / simulation", value: "unity" },
+  { label: "Data / ML / analysis", value: "data" },
+  { label: "Infrastructure / platform / SRE", value: "infra" },
+  { label: "Hybrid / multiple stacks", value: "hybrid" },
   { label: "Other / skip", value: "other" },
 ];
 
 export const AGENT_TOOLS = [
-  { label: "Cursor (Rule System)", value: "cursor" },
+  { label: "OpenAI Codex", value: "codex" },
   { label: "GitHub Copilot", value: "copilot" },
-  { label: "Codex / OpenAI", value: "codex" },
+  { label: "Claude Code", value: "claude" },
+  { label: "Cursor", value: "cursor" },
   { label: "Gemini / Antigravity", value: "gemini" },
-  { label: "Claude / Dev", value: "claude" },
+  { label: "Windsurf", value: "windsurf" },
+  { label: "JetBrains AI Assistant", value: "jetbrains" },
 ];
 
 export const SPOKE_REGISTRY = [
@@ -190,10 +202,13 @@ export function writeInitConfig(cwd, opts) {
     agentsMode: opts.agents ?? existing.agentsMode ?? "inject",
     workflowMode,
     approvalState: workflowMode === WORKFLOW_MODE_EXECUTE ? "approved" : "pending",
+    workspaceKind: opts.workspaceKind ?? opts.kind ?? existing.workspaceKind ?? existing.kind,
     stack: opts.stack ?? existing.stack,
+    kind: opts.workspaceKind ?? opts.kind ?? existing.workspaceKind ?? existing.kind,
     agentTools: opts.agentTools ?? existing.agentTools,
     docsLanguage: normalizeDocsLanguage(opts.docsLanguage ?? existing.docsLanguage ?? "auto"),
     shareTickets: opts.shareTickets ?? existing.shareTickets ?? false,
+    contextMcp: opts.contextMcp ?? existing.contextMcp ?? "skip",
     remoteSync: opts.remoteSync ?? existing.remoteSync ?? false,
     pipelineUrl: opts.pipelineUrl,
     ignoreDirs: opts.ignoreDirs || existing.ignoreDirs || DEFAULT_IGNORE_DIRS,
@@ -467,7 +482,7 @@ export async function checkUpdateNotifier() {
       // Only notify when registry version is strictly newer than local (handles local dev symlink case)
       if (data.version && semverLt(currentVersion, data.version)) {
         console.warn(`\n\x1b[33m💡 Update available! ${currentVersion} → ${data.version}\x1b[0m`);
-        console.warn(`\x1b[36mRun 'npm install -g deuk-agent-flow' to update.\x1b[0m\n`);
+        console.warn(`\x1b[36mRun 'npm install -g deuk-agent-flow', then 'deuk-agent-flow init' from the repo or workspace root.\x1b[0m\n`);
       }
     }
   } catch(e) {

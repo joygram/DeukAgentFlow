@@ -28,6 +28,10 @@ async function main() {
   if (sub === "ticket") {
     const action = rest[0];
     const opts = parseTicketArgs(rest.slice(1));
+    if (!action || action === "-h" || action === "--help" || action === "help" || opts.help) {
+      printHelp();
+      return;
+    }
     if (action === "create") await runTicketCreate(opts);
     else if (action === "list") await runTicketList(opts);
     else if (action === "use") await runTicketUse(opts);
@@ -139,10 +143,12 @@ async function main() {
 
 async function handleInit(opts, saved) {
   if (opts.clean && !opts.dryRun) {
-    console.log(`[CLEAN] Removing legacy templates and config...`);
+    console.log(`[CLEAN] Removing runtime template copies, legacy templates, and config...`);
     const templatesDir = join(opts.cwd, LEGACY_TEMPLATE_DIR);
+    const runtimeTemplatesDir = join(opts.cwd, AGENT_ROOT_DIR, "templates");
     const configFile = join(opts.cwd, LEGACY_CONFIG_FILE);
     if (existsSync(templatesDir)) rmSync(templatesDir, { recursive: true, force: true });
+    if (existsSync(runtimeTemplatesDir)) rmSync(runtimeTemplatesDir, { recursive: true, force: true });
     if (existsSync(configFile)) rmSync(configFile, { force: true });
   }
 
@@ -184,6 +190,9 @@ Options:
   --tag <id>            Custom marker ID (default: deuk-agent-rule)
   --agents <mode>       inject | skip | overwrite
   --cursorrules <mode>  inject | skip | overwrite
+  --workspace-kind <k>  planning | coding | systems | research | mixed | other
+  --stack <name>        none | web | backend | unity | data | infra | hybrid | other
+  --context-mcp <mode>  skip | configured | later
   --workflow <mode>     plan | execute
   --approval <state>    pending | approved (alias for workflow)
   --docs-language <lang> auto | ko | en

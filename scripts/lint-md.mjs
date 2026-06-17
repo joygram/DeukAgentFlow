@@ -45,20 +45,18 @@ function isPlanReport(relPath) {
   return relPath.includes(`${AGENT_ROOT_DIR}/docs/plan/`) && relPath.endsWith("-report.md");
 }
 
-const LEGACY_ARCHIVED_TEMPLATE_NAMES = new Set([
-  "module-rule-template.md",
-  "ticket-list-template.md",
-  "ticket-template-ko.md",
-  "ticket-template.md"
-]);
+function isTicketPath(repoRoot, absPath) {
+  try {
+    const relPath = relative(repoRoot, absPath).replace(/\\/g, "/");
+    return relPath.startsWith(`${TICKET_DIR_NAME}/`);
+  } catch {
+    return false;
+  }
+}
 
-function isLegacyArchivedTemplateArtifact(relPath, content) {
-  const normalized = relPath.replace(/\\/g, "/");
-  if (!normalized.includes(`${TICKET_DIR_NAME}/archive/`)) return false;
-  if (!LEGACY_ARCHIVED_TEMPLATE_NAMES.has(normalized.split("/").pop())) return false;
-
-  const src = String(content || "");
-  return src.includes("<%=") || src.includes("<%-") || /^id:\s*(module-rule-template|ticket-list-template|ticket-template-ko|ticket-template)\s*$/m.test(src);
+function isImplicitUpwardEvidenceLink(target) {
+  const normalized = String(target || "").replace(/\\/g, "/");
+  return normalized.startsWith("../") && !normalized.includes(`${TICKET_DIR_NAME}/`);
 }
 
 function looksLikeYamlFrontmatter(content) {
@@ -118,10 +116,6 @@ function lintFile(absPath, repoRoot) {
   const content = readFileSync(absPath, "utf8");
   const errors = [];
 
-  if (isLegacyArchivedTemplateArtifact(rel, content)) {
-    return errors;
-  }
-
   const lines = content.split(/\r?\n/);
   lines.forEach((line, idx) => {
     if (/\s+$/.test(line)) {
@@ -177,7 +171,14 @@ function lintFile(absPath, repoRoot) {
     }
     const pathOnly = target.split("#")[0].split("?")[0];
     if (!pathOnly) continue;
+    if (isImplicitUpwardEvidenceLink(pathOnly)) continue;
+
     const resolved = join(dirname(absPath), pathOnly);
+
+    if (!isTicketPath(repoRoot, resolved)) {
+      continue;
+    }
+
     if (!statExists(resolved)) {
       errors.push(`${rel}: broken relative link -> ${target}`);
     }

@@ -8,7 +8,7 @@ import { rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.mj
 import { readTicketIndexJson, writeTicketIndexJson } from "./cli-ticket-index.mjs";
 
 import { runInteractive } from "./cli-prompts.mjs";
-import { AGENT_ROOT_DIR, TICKET_SUBDIR, TEMPLATE_SUBDIR, TICKET_INDEX_FILENAME, TICKET_LIST_FILENAME, discoverAllWorkspaces, isMcpActive, toRepoRelativePath, toPosixPath, resolveWorkflowMode, pruneRuleModules, loadInitConfig, writeInitConfig, isWorkflowExecute, normalizeWorkflowMode, SPOKE_REGISTRY, parseFrontMatter, stringifyFrontMatter, LEGACY_TEMPLATE_DIR, LEGACY_TICKET_DIR, LEGACY_TICKET_DIR_PLURAL, LEGACY_TICKET_DIR_ROOT, LEGACY_CONFIG_FILE, normalizeTicketGroup } from "./cli-utils.mjs";
+import { AGENT_ROOT_DIR, TICKET_SUBDIR, TICKET_INDEX_FILENAME, TICKET_LIST_FILENAME, discoverAllWorkspaces, isMcpActive, toRepoRelativePath, toPosixPath, resolveWorkflowMode, pruneRuleModules, loadInitConfig, writeInitConfig, isWorkflowExecute, normalizeWorkflowMode, SPOKE_REGISTRY, parseFrontMatter, stringifyFrontMatter, LEGACY_TEMPLATE_DIR, LEGACY_TICKET_DIR, LEGACY_TICKET_DIR_PLURAL, LEGACY_TICKET_DIR_ROOT, LEGACY_CONFIG_FILE, normalizeTicketGroup } from "./cli-utils.mjs";
 
 function sortedDirEntries(dir, options = {}) {
   const entries = readdirSync(dir, options);
@@ -112,6 +112,15 @@ export function ensureSourceModeCommandShims(bundleRoot, opts = {}) {
   }
 
   return { created, skipped, binDir, onPath };
+}
+
+function isSourceKind(value) {
+  return String(value || "").trim().toLowerCase() === "source";
+}
+
+export function shouldEnsureSourceModeCommandShims(opts = {}, savedConfig = {}) {
+  if (opts.sourceShims === false) return false;
+  return isSourceKind(opts.kind) || isSourceKind(opts.sourceKind) || isSourceKind(savedConfig.kind) || isSourceKind(savedConfig.sourceKind);
 }
 
 function wrapManagedBlock(content) {
@@ -413,63 +422,11 @@ function classifyAgentFileTarget(cwd, sourceAbs, fallbackDir = "plan") {
   return join(cwd, AGENT_ROOT_DIR, "docs", fallbackDir, fileName);
 }
 
-function recursiveMerge(src, dest, cwd, dryRun) {
-  if (!existsSync(src)) return;
-  if (!existsSync(dest)) {
-    if (!dryRun) {
-      mkdirSync(dirname(dest), { recursive: true });
-      renameSync(src, dest);
-    }
-    return;
-  }
-  // Both exist, merge contents
-  const entries = sortedDirEntries(src, { withFileTypes: true });
-  for (const ent of entries) {
-    const sPath = join(src, ent.name);
-    const dPath = join(dest, ent.name);
-    if (ent.isDirectory()) {
-      recursiveMerge(sPath, dPath, cwd, dryRun);
-    } else {
-      if (!existsSync(dPath)) {
-        if (!dryRun) {
-          renameSync(sPath, dPath);
-          console.log(`[MIGRATE] Moved: ${toRepoRelativePath(cwd, sPath)} -> ${toRepoRelativePath(cwd, dPath)}`);
-        } else {
-          console.log(`[DRY-RUN] Would move: ${toRepoRelativePath(cwd, sPath)} -> ${toRepoRelativePath(cwd, dPath)}`);
-        }
-      } else {
-        // If destination exists, check if content is identical
-        const sContent = readFileSync(sPath, "utf8");
-        const dContent = readFileSync(dPath, "utf8");
-        if (sContent === dContent) {
-          if (!dryRun) {
-            unlinkSync(sPath);
-            console.log(`[MIGRATE] Removed identical file: ${toRepoRelativePath(cwd, sPath)}`);
-          }
-        } else {
-          console.warn(`[WARNING] Migration conflict: ${toRepoRelativePath(cwd, dPath)} already exists with different content. Skipping.`);
-        }
-      }
-    }
-  }
-  // Clean up src if empty
-  try {
-    if (!dryRun && sortedDirEntries(src).length === 0) {
-      rmSync(src, { recursive: true });
-      console.log(`[MIGRATE] Removed empty directory: ${toRepoRelativePath(cwd, src)}`);
-    }
-  } catch (err) {
-    if (process.env.DEBUG) console.warn(`[DEBUG] Failed to clean up ${src}:`, err);
-  }
-}
-
 export function migrateLegacyStructure(cwd, dryRun) {
 
   const legacyTemplates = join(cwd, LEGACY_TEMPLATE_DIR);
-  const newTemplates = join(cwd, AGENT_ROOT_DIR, TEMPLATE_SUBDIR);
   if (existsSync(legacyTemplates)) {
-    console.log(`[MIGRATE] Merging legacy templates into ${AGENT_ROOT_DIR}/${TEMPLATE_SUBDIR}`);
-    recursiveMerge(legacyTemplates, newTemplates, cwd, dryRun);
+    console.log(`[CLEANUP] removing legacy runtime templates: ${LEGACY_TEMPLATE_DIR}`);
     if (!dryRun && existsSync(legacyTemplates)) rmSync(legacyTemplates, { recursive: true, force: true });
   }
 
@@ -850,7 +807,13 @@ function canonicalizeAgentTicketsLayout(cwd, dryRun) {
 function canonicalizeAgentRootLayout(cwd, dryRun) {
   const agentRoot = join(cwd, AGENT_ROOT_DIR);
   if (!existsSync(agentRoot)) return;
-  const allowedDirs = new Set(["docs", "knowledge", "tickets", "templates", "skill-templates", "skills"]);
+  const runtimeTemplates = join(agentRoot, "templates");
+  if (existsSync(runtimeTemplates)) {
+    if (!dryRun) rmSync(runtimeTemplates, { recursive: true, force: true });
+    console.log(`[CLEANUP] removed runtime template copy: ${toRepoRelativePath(cwd, runtimeTemplates)}`);
+  }
+
+  const allowedDirs = new Set(["docs", "knowledge", "tickets", "skill-templates", "skills"]);
   const allowedFiles = new Set(["config.json", "telemetry.jsonl", "skills.json", "usage.json"]);
 
   for (const entry of sortedDirEntries(agentRoot, { withFileTypes: true })) {
@@ -1370,26 +1333,14 @@ function canonicalizeRecursiveInitSurfaces(cwd, bundleRoot, dryRun) {
   return count;
 }
 
-function syncTemplates(cwd, bundleRoot, dryRun) {
-  const tplDestDir = join(cwd, AGENT_ROOT_DIR, TEMPLATE_SUBDIR);
-  const tplSourceDir = join(bundleRoot, "templates");
-  if (!existsSync(tplSourceDir)) return;
-
-  if (!existsSync(tplDestDir) && !dryRun) {
-    mkdirSync(tplDestDir, { recursive: true });
+function removeRuntimeTemplateCopies(cwd, dryRun) {
+  const runtimeTemplates = join(cwd, AGENT_ROOT_DIR, "templates");
+  const legacyTemplates = join(cwd, LEGACY_TEMPLATE_DIR);
+  for (const target of [runtimeTemplates, legacyTemplates]) {
+    if (!existsSync(target)) continue;
+    if (!dryRun) rmSync(target, { recursive: true, force: true });
+    console.log(`[CLEANUP] removed runtime template copy: ${toRepoRelativePath(cwd, target)}`);
   }
-
-  if (!dryRun) {
-    for (const entry of readdirSync(tplSourceDir, { withFileTypes: true })) {
-      if (!entry.isFile()) continue;
-      const source = join(tplSourceDir, entry.name);
-      const target = join(tplDestDir, entry.name);
-      cpSync(source, target);
-    }
-    console.log(`[SYNC] templates synced to ${toRepoRelativePath(cwd, tplDestDir)}`);
-    return;
-  }
-  console.log(`[SYNC] templates synced to ${toRepoRelativePath(cwd, tplDestDir)} (dry-run mode)`);
 }
 
 function syncSkillTemplates(cwd, bundleRoot, dryRun) {
@@ -1492,11 +1443,6 @@ function canonicalizeGeneratedCommandReferences(cwd, bundleRoot, dryRun) {
   for (const target of targets) {
     canonicalizeTextFile(target, cwd, bundleRoot, dryRun, "legacy command reference");
   }
-
-  const templateDir = join(cwd, AGENT_ROOT_DIR, TEMPLATE_SUBDIR);
-  walkMdFiles(templateDir, (absPath) => {
-    canonicalizeTextFile(absPath, cwd, bundleRoot, dryRun, "legacy template command reference");
-  });
 }
 
 /**
@@ -1617,7 +1563,7 @@ This pointer is a thin bootstrap, not a second workflow contract.
 2. Then read local \`PROJECT_RULE.md\` and internally identify applicable DC-* rules.
 3. After the core hub is loaded, \`core-rules/AGENTS.md\` is the DeukAgentFlow SSoT for TDW, RAG, silence, scope, and verification.
 
-Do not print pointer/core metadata, version, DC-* lists, progress commentary, or interim summaries. Before the final answer, only the single required ticket-start line, blockers, explicit user-requested output, or explicit command results may appear. During approved_execution, command_running, or search_running, stay silent unless the user explicitly asks for live narration or a blocker/user decision must be surfaced.
+Do not print pointer/core metadata, version, DC-* lists, progress commentary, or interim summaries. When approval is pending, make the first visible assistant line exactly the clickable \`Ticket start: [<id>](/absolute/path/to/ticket.md)\` line. Before the final answer, only the single required ticket-start line, blockers, explicit user-requested output, or explicit command results may appear. During approved_execution, command_running, or search_running, stay silent unless the user explicitly asks for live narration or a blocker/user decision must be surfaced.
 `;
 
   if (spoke.format === "mdc") {
@@ -1700,7 +1646,7 @@ export async function runInit(opts, bundleRoot) {
     );
   }
 
-  if (opts.sourceShims !== false) {
+  if (shouldEnsureSourceModeCommandShims(opts, savedConfig)) {
     const sourceShimResult = ensureSourceModeCommandShims(bundleRoot, { dryRun: opts.dryRun });
     if (sourceShimResult.created.length > 0) {
       console.log(`[SOURCE MODE] Installed command shims in ${sourceShimResult.binDir}: ${sourceShimResult.created.join(", ")}`);
@@ -1713,13 +1659,13 @@ export async function runInit(opts, bundleRoot) {
   // 0. Sync Global Codex Instructions
   syncGlobalCodexInstructions(opts.dryRun);
 
-  // 0.1 MCP / Phase 0 Status Check
+  // 0.1 Deuk AgentContext MCP memory status check
   const mcpActive = await isMcpActive(opts.cwd);
-  console.log(`\n[POLICY] MCP Status: ${mcpActive ? "\x1b[32mACTIVE\x1b[0m" : "\x1b[33mINACTIVE\x1b[0m"}`);
+  console.log(`\n[MEMORY] Deuk AgentContext MCP: ${mcpActive ? "\x1b[32mDETECTED\x1b[0m" : "\x1b[33mNOT CONFIGURED\x1b[0m"}`);
   if (mcpActive) {
-    console.log(`[POLICY] Phase 0 RAG validation is \x1b[32mENFORCED\x1b[0m for ticket creation.\n`);
+    console.log(`[MEMORY] Historical ticket/rule/code recall can be used when a task needs prior context.\n`);
   } else {
-    console.log(`[POLICY] Running in offline/disconnected mode.\n`);
+    console.log(`[MEMORY] Flow will run local-first. init does not install or register Deuk AgentContext MCP.\n`);
   }
 
   const submodules = discoverAllWorkspaces(opts.cwd, ignoreDirs);
@@ -1777,8 +1723,8 @@ async function initSingleWorkspace(subCwd, opts, bundleRoot, selectedTools) {
     }
   }
 
-  // 5. Templates Sync (.deuk-agent/templates/)
-  syncTemplates(subCwd, bundleRoot, opts.dryRun);
+  // 5. Runtime template cleanup; package templates/ is the SSoT.
+  removeRuntimeTemplateCopies(subCwd, opts.dryRun);
   syncSkillTemplates(subCwd, bundleRoot, opts.dryRun);
   canonicalizeGeneratedCommandReferences(subCwd, bundleRoot, opts.dryRun);
   canonicalizeRecursiveInitSurfaces(subCwd, bundleRoot, opts.dryRun);
@@ -1794,6 +1740,6 @@ export function runMerge(opts, bundleRoot) {
     );
   }
   
-  syncTemplates(opts.cwd, bundleRoot, opts.dryRun);
+  removeRuntimeTemplateCopies(opts.cwd, opts.dryRun);
   syncSkillTemplates(opts.cwd, bundleRoot, opts.dryRun);
 }

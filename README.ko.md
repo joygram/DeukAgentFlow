@@ -15,7 +15,7 @@
 
 ---
 
-**Deuk Agent Flow**는 AI 코딩 에이전트를 위한 레포 소유 워크플로우 계층입니다. Codex, Copilot, Cursor, Claude Code, Gemini, Windsurf, 그리고 다음에 쓰게 될 에이전트까지 같은 티켓 흐름으로 들어오게 만듭니다.
+**Deuk Agent Flow**는 AI가 참여하는 작업 공간을 위한 레포 소유 워크플로우 계층입니다. 기획, 소프트웨어 엔지니어링, 시스템 운영, 리서치 같은 다양한 환경을 Codex, Copilot, Cursor, Claude Code, Gemini, Windsurf, 그리고 다음에 쓰게 될 에이전트까지 같은 티켓 흐름으로 묶습니다.
 
 대부분의 에이전트 설정은 "지침"에서 멈춥니다. Deuk Agent Flow는 짧은 대화를 작업 루프로 바꿉니다: 티켓, 범위, 실행, 검증, 보관. 긴 명령을 외우지 않아도 `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills 같은 표면을 같은 흐름으로 묶습니다.
 
@@ -66,7 +66,7 @@ Deuk Agent Flow
 | 팀 기억 강화 | 완료된 작업이 검색 가능한 프로젝트 히스토리가 됨 |
 
 > **현재 배포 기준:**
-> v4.0.0은 에이전트 기반 리포지토리에 배포해 사용할 수 있는 상태입니다. 현재는 **OpenAI Codex**와 **GitHub Copilot** 환경에서 가장 안정적으로 동작합니다. Cursor, Windsurf, Claude Code, MCP도 포인터 구조로 지원하지만, 워크스페이스별 검증을 권장합니다. MCP 서버 등록은 `init`에 딸려 들어가지 않고 별도로 설정합니다.
+> v4.0.0은 에이전트 기반 리포지토리에 배포해 사용할 수 있는 상태입니다. 현재는 **OpenAI Codex**와 **GitHub Copilot** 환경에서 가장 안정적으로 동작합니다. Cursor, Windsurf, Claude Code도 포인터 구조로 지원하지만, 워크스페이스별 검증을 권장합니다. Deuk AgentContext MCP는 선택형 기억 계층이며, MCP 서버 등록은 `init`에 딸려 들어가지 않고 별도로 설정합니다.
 > **아키텍처 기반:**
 > 거대하고 무거운 레거시 `.cursorrules` 방식을 공식적으로 폐기했습니다. v3.0은 `AGENTS.md`를 단일 진실 공급원으로 사용하는 **Hub-Spoke 모델**을 도입하여, IDE별 규칙은 얇은 진입점 포인터 역할만 수행합니다.
 
@@ -156,13 +156,28 @@ npm install -g deuk-agent-flow
 deuk-agent-flow init
 ```
 
+기존 저장소에 새 버전을 반영할 때는 먼저 글로벌 패키지를 업데이트한 뒤 init을 다시 실행합니다.
+
+```bash
+npm install -g deuk-agent-flow
+deuk-agent-flow init
+```
+
+`init`은 현재 설치된 패키지의 규칙을 다시 적용하고 legacy/runtime template copy를 제거합니다. 글로벌 npm 패키지 업데이트 자체를 자동으로 수행하지는 않습니다.
+
+단일 저장소라면 해당 저장소 루트에서 `deuk-agent-flow init`을 실행합니다.
+
+여러 DeukAgentFlow 프로젝트를 포함한 루트 워크스페이스라면 그 워크스페이스 루트에서 같은 명령을 실행합니다. `init`은 루트 포인터와 자체 `PROJECT_RULE.md` / `.deuk-agent/` 상태를 가진 하위 워크스페이스를 함께 갱신하므로, 일반 사용자도 새 패키지 버전을 설치한 뒤 자신의 개인 워크스페이스 루트에서 AI agent rule을 갱신할 수 있습니다.
+
+사용하는 AI client 선택은 한 번으로 고정되지 않습니다. 나중에 다른 client를 쓰게 되면 `deuk-agent-flow init`을 다시 실행하고 추가할 AI client를 선택하면 됩니다.
+
 ### 2. 로컬 소스 개발 (메인테이너/파워 유저)
-v3.0은 **Global CLI Proxy**를 도입했습니다. `DeukAgentFlow` 워크스페이스 내부에서 개발 중이라면, 글로벌 명령이 자동으로 로컬 소스로 실행을 위임합니다.
+글로벌 명령은 기본적으로 설치된 패키지를 실행합니다. 다른 프로젝트 디렉터리에서 로컬 checkout 소스를 실행해야 하는 개발자는 명시적으로 로컬 소스 라우팅을 켜야 합니다.
 
 ```bash
 cd ~/workspace/DeukAgentFlow
 sudo npm link
-deuk-agent-flow init  # 자동으로 로컬 scripts/cli.mjs로 라우팅됨
+DEUK_AGENT_FLOW_USE_LOCAL=1 deuk-agent-flow init  # 로컬 scripts/cli.mjs로 라우팅됨
 ```
 
 Codex나 Copilot을 주로 사용한다면 이 구성이 일상 운영에 가장 적합합니다. 현재는 이 두 환경에서 Hub-Spoke와 티켓 기반 워크플로우가 가장 부드럽게 동작합니다.
@@ -207,7 +222,7 @@ npm run badge:downloads
 
 워크플로우는 **티켓 기반 실행 계약(Ticket-Driven Execution Contract)**에 의해 통제됩니다.
 
-1. **스캐폴딩 (Scaffolding)**: `init` 명령어가 프로젝트의 성격을 파악하고 `.deuk-agent/templates/`와 `AGENTS.md` (혹은 `PROJECT_RULE.md` 포인터)를 자동 배치합니다.
+1. **스캐폴딩 (Scaffolding)**: `init` 명령어가 `AGENTS.md`와 `PROJECT_RULE.md` 같은 로컬 포인터를 배치합니다. 런타임 템플릿은 `.deuk-agent/templates/`가 아니라 패키지의 `templates/`를 단일 진실 공급원으로 사용합니다.
 2. **티켓팅 (Plan Phase)**: 사용자가 짧게 지시하면 에이전트가 맥락을 읽고 내부 작업 지시서를 생성합니다. 이때 에이전트는 Plan Mode로 동작하며 코드를 수정할 수 없고 계획 수립에만 집중합니다.
 3. **실행 (Execute Phase)**: 사용자의 승인을 받은 후, 에이전트는 **타겟 서브모듈**에 고정되어 실질적인 코드 작성을 수행합니다. MCP Soft Gate가 인가되지 않은 파일의 수정을 감시합니다.
 4. **검증 (Verify Phase)**: 개발 작업 종료 전 사이드 이펙트 감사(Audit) 및 컨벤션(DC-DUP 등 아키텍처 규칙) 체크를 수행합니다.

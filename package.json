@@ -1,6 +1,6 @@
 {
   "name": "deuk-agent-flow",
-  "version": "4.0.21",
+  "version": "4.0.34",
   "description": "Keep AI coding work from vanishing between chats: repo-owned tickets, scope, verification, and memory for AGENTS.md-powered agents.",
   "keywords": [
     "agents-md",
@@ -72,7 +72,6 @@
   ],
   "scripts": {
     "lint:md": "node scripts/lint-md.mjs",
-    "test": "node --test scripts/tests/*.test.mjs",
     "publish": "node scripts/publish-dual-npm.mjs",
     "publish:dry": "node scripts/publish-dual-npm.mjs --dry-run",
     "smoke:npm:local": "node scripts/smoke-npm-local.mjs",

@@ -39,7 +39,7 @@ CLI(`deuk-agent-flow`, 호환 명령 `deuk-agent-rule`)는 **소스 주권(Sourc
 | `PROJECT_RULE.md` | 로컬 프로젝트 특화 규칙 오버라이드 |
 | `.deuk-agent/config.json` | 프로젝트별 초기화 상태 정보 |
 | `.deuk-agent/tickets/` | 제한된 실행 계약서 (작업 지시서) |
-| `.deuk-agent/templates/` | 티켓 및 플랜 작성을 위한 표준화된 청사진 |
+| `templates/` | 티켓, 규칙, 스킬 템플릿의 패키지 소유 단일 진실 공급원 |
 | `bin/deuk-agent-flow.js` | 글로벌 실행 프록시 |
 
 ## 5. 엄격한 Phase 기반 티켓 워크플로우 (TDW)

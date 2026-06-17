@@ -39,7 +39,7 @@ Running `deuk-agent-flow init` triggers the following lifecycle:
 | `PROJECT_RULE.md` | Local project-specific rule overrides |
 | `.deuk-agent/config.json` | Project-specific initialization state |
 | `.deuk-agent/tickets/` | Bounded execution contracts (Work orders) |
-| `.deuk-agent/templates/` | Standardized blueprint for tickets and plans |
+| `templates/` | Package-owned SSoT for ticket, rule, and skill templates |
 | `bin/deuk-agent-flow.js` | The Global Execution Proxy |
 
 ## 5. Strict Phase-Driven Workflow (TDW)

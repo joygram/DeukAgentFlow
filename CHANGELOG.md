@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **cli:** stop ticket discovery at the current agent-rule boundary instead of inheriting the parent workspace.
 
+## [4.0.34] - 2026-05-09
+
+### Changed
+
+- **init:** redesigned first-run prompts around workspace kind, technical surface, AI client pointers, and optional Deuk AgentContext MCP memory so non-coding and mixed workspaces are not forced into a coding-only setup.
+- **docs:** simplified user-facing update instructions to `npm install -g deuk-agent-flow` followed by `deuk-agent-flow init`, with repo-root and workspace-root refresh guidance.
+
+### Fixed
+
+- **templates:** made package `templates/` the runtime SSoT and removed legacy `.deuk-agent/templates` copies during init/merge.
+- **ticket:** normalized common Phase 1 heading-level mistakes during `ticket create` before strict template validation.
+- **release:** narrowed OSS sync to public runtime files and cleaned stale mirror artifacts such as old tarballs, `bundle/`, `node_modules/`, internal sync scripts, and tests.
+
 ## [4.0.21] - 2026-05-08
 
 ### Fixed

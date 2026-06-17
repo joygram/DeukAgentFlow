@@ -1,11 +1,21 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
+function extractSection(rules, heading) {
+  const pattern = new RegExp(`(^## ${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n[\\s\\S]*?)(?=^## |\\z)`, "m");
+  return rules.match(pattern)?.[1] || "";
+}
+
+function nonEmptyLineCount(text) {
+  return String(text || "").split(/\r?\n/).filter((line) => line.trim()).length;
+}
+
 const RULE_CHECKS = [
   {
     code: "DR-KERNEL-01",
     message: "Compact kernel must keep ticket-first and tool-contract invariants at the top of the core rules.",
     test: (rules) => /## Compact Kernel/i.test(rules)
+      && nonEmptyLineCount(extractSection(rules, "Compact Kernel")) <= 10
       && /Tools own detail/i.test(rules)
       && /No ticket, no writes/i.test(rules)
       && /User requirements are ticket-first/i.test(rules)

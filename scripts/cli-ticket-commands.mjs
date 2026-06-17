@@ -202,6 +202,22 @@ function parseMarkdownH2Sections(content) {
   return sections;
 }
 
+const PHASE1_HEADING_ALIASES = new Map([
+  ["apc", "Agent Permission Contract (APC)"],
+  ["agent permission contract", "Agent Permission Contract (APC)"],
+  ["agent permission contract (apc)", "Agent Permission Contract (APC)"],
+  ...REQUIRED_PHASE1_DATA_SECTIONS.map(section => [section.toLowerCase(), section])
+]);
+
+function normalizePhase1PlanBodyHeadings(body) {
+  return String(body || "").split("\n").map((line) => {
+    const match = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
+    if (!match) return line;
+    const normalized = PHASE1_HEADING_ALIASES.get(match[1].trim().toLowerCase());
+    return normalized ? `## ${normalized}` : line;
+  }).join("\n");
+}
+
 function buildClaimCoverageSummary(claimTerms, sectionText) {
   const haystack = String(sectionText || "").toLowerCase();
   const normalized = haystack.replace(/\s+/g, " ");
@@ -293,7 +309,10 @@ function buildPlanBodyRequiredMessage(reasons = []) {
   return [
     "[VALIDATION FAILED] ticket create requires a filled Phase 1 plan body with actual data.",
     `Missing or incomplete: ${uniqueReasons.join(", ")}`,
-    "Use the one-shot flow: collect real observations first, pass a filled body with `--plan-body-file -`, then run `ticket create` once.",
+    "Use the AGENTS.md self-serve recipe: do not ask the user, call help, or search for templates.",
+    "Run with stdin: `deuk-agent-flow ticket create --topic <topic> --summary \"<summary>\" --plan-body-file - --non-interactive`.",
+    "Use these exact H2 headings: `## Agent Permission Contract (APC)`, `## Compact Plan`, `## Problem Analysis`, `## Source Observations`, `## Cause Hypotheses`, `## Improvement Direction`, `## Audit Evidence`.",
+    "Under `## Agent Permission Contract (APC)`, include `[BOUNDARY]`, `[CONTRACT]`, and `[PATCH PLAN]`.",
     "If a scratch plan-body file is unavoidable, keep it outside the workspace, delete it after create, and never present it as a ticket artifact.",
     "Do not rely on template defaults or auto-generated filler text for Phase 1 ticket content."
   ].join("\n");
@@ -454,14 +473,10 @@ function printUsageReminder(cwd, opts = {}) {
   }
 }
 
-function printCreateApprovalGate(ticketId, opts = {}) {
-  if (isCompactTicketOutput(opts)) {
-    console.log("Approval pending: explicit user approval is required before work.");
-    console.log(`Guard topic: ${ticketId}`);
-    return;
-  }
-  console.log("Approval pending: share the ticket-start line in chat, review the durable ticket body, and stop here until the user explicitly approves.");
-  console.log(`After approval: deuk-agent-flow ticket guard --topic ${ticketId} --ticket-started --ticket-reviewed --approval approved`);
+function printCreateApprovalGate(ticketId, opts = {}, scopeSummary = "") {
+  void scopeSummary;
+  console.log("조용히 작업");
+  console.log(`Guard topic: ${ticketId}`);
 }
 
 function formatTicketStartLine(ticketId, absPath) {
@@ -1191,7 +1206,7 @@ export async function runTicketCreate(opts) {
     let finalTopic = topic;
     
     if (typeof opts.planBody === "string" && opts.planBody.trim()) {
-      parsedPlan = parsePlan("inline-plan-body.md", opts.planBody);
+      parsedPlan = parsePlan("inline-plan-body.md", normalizePhase1PlanBodyHeadings(opts.planBody));
 
       finalTitle = opts.topic || parsedPlan.title || title;
       finalTopic = requireNonEmptySlug(finalTitle, "ticket topic");
@@ -1388,10 +1403,12 @@ export async function runTicketCreate(opts) {
       }
     }
 
-    console.log(`${opts.dryRun ? "Ticket would be created" : "Ticket created"}: ${toFileUri(abs)}`);
+    if (!isCompactTicketOutput(opts)) {
+      console.log(`${opts.dryRun ? "Ticket would be created" : "Ticket created"}: ${toFileUri(abs)}`);
+    }
     printTicketStartLine(ticketId, abs);
     if (!opts.dryRun) {
-      printCreateApprovalGate(ticketId, opts);
+      printCreateApprovalGate(ticketId, opts, summary);
     }
     printUsageReminder(opts.cwd, opts);
     if (!opts.dryRun) {
@@ -1770,21 +1787,38 @@ export async function runTicketClose(opts) {
 
   try {
     const entry = updateTicketEntryStatus(opts.cwd, opts);
-    const { meta } = parseFrontMatter(previousBody);
     runTicketLifecycleQualityGate(opts.cwd, {
       ticketAbsPath: abs,
       context: `ticket close ${entry.topic}`
     });
-    syncActiveTicketId(opts.cwd);
+
+    let archiveResult = null;
+    if (String(opts.status || "").toLowerCase() === "closed") {
+      const ticketDir = detectConsumerTicketDir(opts.cwd);
+      const currentIndex = readTicketIndexJson(opts.cwd);
+      archiveResult = archiveTicketEntry({
+        cwd: opts.cwd,
+        ticketDir,
+        indexJson: currentIndex,
+        found: entry,
+        opts,
+        report: null
+      });
+      writeTicketIndexJson(opts.cwd, currentIndex, opts);
+      syncActiveTicketId(opts.cwd);
+    }
+
+    const finalPath = archiveResult?.path || entry.path;
     appendTelemetryEvent(opts.cwd, {
       event: "ticket_closed",
       action: "ticket-close",
       ticket: entry.id || entry.topic,
-      file: entry.path,
+      file: finalPath,
       phase: 4,
       status: opts.status
     });
-    console.log(`ticket: ${opts.status} -> ${entry.topic} (${entry.path})`);
+    console.log(`ticket: ${opts.status} -> ${entry.topic} (${finalPath})`);
+    return archiveResult || { status: opts.status, ticket: entry.topic, path: finalPath };
   } catch (err) {
     rollbackTicketLifecycleArtifacts(opts.cwd, previousIndex, previousBody, abs, opts);
     throw err;
