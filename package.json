@@ -43,6 +43,7 @@
     "docs/assets/**/*",
     "bundled/**/*",
     "templates/**/*",
+    "scripts/bundle-vscode-vsix.ts",
     "scripts/cli.ts",
     "scripts/cli-args.ts",
     "scripts/cli-usage-commands.ts",
@@ -92,7 +93,8 @@
     "deukagentrule": "./bin/deuk-agent-rule.js"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@types/node": "^25.9.3"
   },
   "dependencies": {
     "ejs": "^5.0.2",
