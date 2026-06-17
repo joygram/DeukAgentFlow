@@ -41,11 +41,27 @@ export function resolveMarkers(o) {
   };
 }
 
+/**
+ * Strip all internal begin/end marker lines from content.
+ * Preserves only the content between markers without nesting.
+ */
+export function stripInternalMarkers(content, begin, end) {
+  return content
+    .split('\n')
+    .filter(line => {
+      const t = line.trim();
+      return t !== begin && t !== end;
+    })
+    .join('\n');
+}
+
 export function findMarkerRegion(content, begin, end) {
   const i = content.indexOf(begin);
   if (i === -1) return null;
-  const j = content.indexOf(end, i + begin.length);
-  if (j === -1) {
+  // Use lastIndexOf to match the outermost end marker,
+  // preventing nested markers from causing partial replacement.
+  const j = content.lastIndexOf(end);
+  if (j === -1 || j <= i) {
     throw new Error(
       `[MARKER ERROR] Found begin marker "${begin}" but no matching end marker "${end}" after it.\n` +
       `  This usually happens if one marker was deleted or renamed manually. Please verify the target file.`
@@ -120,8 +136,10 @@ function handleAgentOverwrite(opts) {
 }
 
 function handleAgentInject(opts, existing, region) {
-  const { targetPath, bundleContent, dryRun, backup } = opts;
-  const inner = bundleContent.trimEnd() + "\n";
+  const { targetPath, bundleContent, markers, dryRun, backup } = opts;
+  // Strip any internal begin/end markers from bundle content to prevent nesting
+  const cleanContent = stripInternalMarkers(bundleContent, markers.begin, markers.end);
+  const inner = cleanContent.trimEnd() + "\n";
   const next = existing.slice(0, region.innerStart) + "\n" + inner + existing.slice(region.innerEnd);
   if (dryRun) {
     return { action: "would-write", path: targetPath, mode: "inject-region" };
