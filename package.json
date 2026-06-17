@@ -80,7 +80,8 @@
     "smoke:npm:local": "node scripts/out/scripts/smoke-npm-local.js",
     "smoke:npm:docker": "node scripts/out/scripts/smoke-npm-docker.js",
     "publish:bootstrap": "node scripts/out/scripts/publish-dual-npm.js --alias-only --skip-tests",
-    "publish:bootstrap:dry": "node scripts/out/scripts/publish-dual-npm.js --alias-only --dry-run --skip-tests"
+    "publish:bootstrap:dry": "node scripts/out/scripts/publish-dual-npm.js --alias-only --dry-run --skip-tests",
+    "build": "npx tsc -p tsconfig.scripts.json && npm run build:vscode"
   },
   "engines": {
     "node": ">=20"
@@ -90,6 +91,9 @@
     "deukagentflow": "./bin/deuk-agent-flow.js",
     "deuk-agent-rule": "./bin/deuk-agent-rule.js",
     "deukagentrule": "./bin/deuk-agent-rule.js"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "ejs": "^5.0.2",

@@ -15,21 +15,18 @@ This project uses TypeScript. Compiled output (`scripts/out/`) is not committed 
 # 1. Install dependencies (includes TypeScript)
 npm install
 
-# 2. Compile TypeScript → scripts/out/
-npx tsc -p tsconfig.scripts.json
+# 2. Build: compile TypeScript + build VSIX
+npm run build
 
-# 3. Build VSIX extension bundle → bundled/deuk-agent-flow.vsix
-npm run build:vscode
-
-# 4. Pack (validates the package)
+# 3. Pack (validates the package)
 npm pack --dry-run
 
-# 5. Publish
+# 4. Publish
 npm publish --access public
 ```
 
-> Steps 2 and 3 must be run before `npm pack` or `npm publish`.
-> The `bundled/` directory is included in the published package and contains the pre-built VS Code extension.
+> `npm run build` compiles TypeScript (`scripts/out/`) and builds the VS Code extension (`bundled/deuk-agent-flow.vsix`).
+> Both must exist before `npm pack` or `npm publish`.
 
 ---
 
