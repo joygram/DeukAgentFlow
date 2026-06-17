@@ -37,6 +37,11 @@ deuk-agent-rule init
 > - **Linux/macOS**: Running `npm install -g` may result in `EACCES` permission errors. It is highly recommended to use a Node version manager (`nvm`, `fnm`, etc.) to bypass these constraints. If using the system Node installation, you may unavoidably need to use `sudo npm install -g deuk-agent-rule`.
 > - **Windows**: If Node.js is installed in a system directory like `Program Files`, you must run your terminal (PowerShell/CMD) as an **Administrator** for the global installation to complete successfully.
 
+### 💡 Why Global Installation?
+1. **Preventing `npx` Cache Issues**: Running `npx deuk-agent-rule` relies on the local npm cache, which may silently execute an outdated version of the CLI. This has been proven to cause severe agent hallucinations or ticket formatting errors (e.g., missing hostname sequence IDs).
+2. **Execution Speed**: The chatbot agent receives instant CLI responses without the overhead of `npx` checking for temporary package downloads.
+3. **Cross-Repository Consistency**: It allows you to reliably apply the exact same version of the agent rules across various submodules and independent microservices in the Deuk Family ecosystem.
+
 Upon initialization, interactive questions will ask for the project's **tech stack** and **agent tools in use**. Based on your selections, optimized markdown templates and rule files (`.cursor/rules/*`) will be automatically generated and synchronized.
 - If you don't need to change the tech stack later, simply run `deuk-agent-rule init` to refresh the rules. (If not installed globally, you can fallback to `npx deuk-agent-rule init`).
 - Suppress interactive prompts in CI or script environments by appending the `--non-interactive` flag.

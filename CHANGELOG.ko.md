@@ -6,12 +6,39 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [2.4.0] - 2026-04-18
+
+### 추가됨 (Added)
+
+- **init:** 깔끔한 마이그레이션을 위한 구버전 템플릿 자동 정리 기능 추가
+- **rules:** `AGENTS.md` 문서 내 티켓 검증 단계(TICKET VERIFICATION RULE) 규약 추가
+- **ticket:** 티켓에 우선순위(Priority) 속성 추가
+- **ticket:** 순차 번호 및 호스트네임 기반의 티켓 식별자(ID) 자동 생성 도입 (`NNN-hostname-topic` 포맷)
+- **ticket:** 호스트네임 길이 제한(8자) 및 자동 순번 부여 로직 개선
+
+### 수정됨 (Fixed)
+
+- **rules:** 전역 `npx` 캐시 이슈(과거 버전 실행 문제)를 우회하기 위해 로컬 최신 스크립트 호출을 강제/권장하도록 수정
+- **scripts:** OSS 미러 저장소 동기화 시 잘못 표기되던 URL 예시 로그 메시지 정정
+
+### 변경됨 (Changed)
+
+- **docs:** 리드미(README) 파일에 [Step 4] 티켓 검증 안내 추가
+- **docs:** 전역 설치(Global Install) 권장 안내 및 운영체제(OS)별 권한 제약 명확화
+- **rules:** 구현 아티팩트(`implementation_plan.md` 등) 내 티켓 번호 참조 의무화
+
 ## [2.3.2] - 2026-04-17
 
 ### 수정됨 (Fixed)
 
 - **cli:** 배포 환경에서 하드코딩된 `yaml` 의존성 경로 문제(`ERR_MODULE_NOT_FOUND`) 해결
 - **dependencies:** `yaml`을 명시적 의존성 목록에 추가
+
+## [2.3.1] - 2026-04-17
+
+### 변경됨 (Changed)
+
+- **readme:** 체인지로그 및 자동화된 릴리즈 프로세스 가이드 추가
 
 ## [2.3.0] - 2026-04-17
 
