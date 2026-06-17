@@ -1637,7 +1637,7 @@ test("runTicketClose ignores linked plan markdown and still closes ticket", asyn
   }
 });
 
-test("runTicketClose defaults to latest instead of prompting when stdout is not a TTY", async () => {
+test("runTicketClose requires explicit ticket selection when stdout is not a TTY", async () => {
   const ticketPath = ".deuk-agent/tickets/sub/002-default-host.md";
   const { cwd, ticketDir } = makeTicketWorkspace([
     makeEntry({
@@ -1668,25 +1668,23 @@ test("runTicketClose defaults to latest instead of prompting when stdout is not 
     "",
     "## Problem Analysis",
     "",
-    "The no-topic close command should use latest in non-TTY terminals.",
+    "The no-topic close command should require explicit ticket selection in non-TTY terminals.",
     "",
     "## Improvement Direction",
     "",
-    "Default to latest while preserving lifecycle mutation behavior.",
+    "Fail fast unless the caller passes --topic or --latest explicitly.",
     ""
   ].join("\n"), "utf8");
 
-  const originalDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
-  Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
-
   try {
-    await runTicketClose({ cwd });
-
-    const body = readFileSync(join(cwd, ticketPath), "utf8");
-    assert.match(body, /phase: 4/);
-    assert.match(body, /status: closed/);
+    await assert.rejects(
+      () => runTicketClose({ cwd }),
+      err => {
+        assert.match(err.message, /ticket close requires --topic or --latest/);
+        return true;
+      }
+    );
   } finally {
-    if (originalDescriptor) Object.defineProperty(process.stdout, "isTTY", originalDescriptor);
     rmSync(cwd, { recursive: true, force: true });
   }
 });
@@ -2662,6 +2660,28 @@ test("runTicketHandoff compact mode emits current and next ticket summary", asyn
   }
 
   assert.deepStrictEqual(lines, ["001-current-host | phase=2 | status=active | next=002-next-host:open | blockers=none"]);
+});
+
+test("runTicketHandoff requires explicit ticket selection in non-interactive mode", async () => {
+  const { cwd } = makeTicketWorkspace([
+    makeEntry({
+      id: "001-current-host",
+      topic: "001-current-host",
+      fileName: "001-current-host.md",
+      status: "active",
+      createdAt: "2026-05-01 08:00:00"
+    })
+  ]);
+
+  await assert.rejects(
+    () => runTicketHandoff({ cwd, nonInteractive: true }),
+    err => {
+      assert.match(err.message, /ticket handoff requires --topic or --latest/);
+      return true;
+    }
+  );
+
+  rmSync(cwd, { recursive: true, force: true });
 });
 
 test("runTicketCreate leaves closed tickets in place before enforcing open ticket limit", async () => {

@@ -210,7 +210,7 @@ Ticket Options:
   --handoff             Emit compact handoff output for session continuation
   --phase <number>      Explicitly set the phase number (e.g., --phase 2)
   --next                Move to the next phase
-  --latest, -l          Use most recent ticket (default if no topic)
+  --latest, -l          Use most recent ticket explicitly
   --path-only           Print only the file path
   --json                Output result in JSON format
 

@@ -52,6 +52,8 @@ Running `deuk-agent-flow init` triggers the following lifecycle:
 6. **Knowledge Distillation Archive**: When archiving, core information is extracted (Zero-Token Distillation) to save context tokens for long-term memory.
 7. **No Exception Path**: Every piece of work starts with a ticket. Nothing bypasses the ticket flow for closed, archived, or untracked work.
 
+- Lifecycle commands do not infer a ticket silently in non-interactive mode; pass `--topic` or `--latest` explicitly when you mean a specific ticket.
+
 ## 6. Ticket Files in Git
 
 Ticket files are part of the repository workflow, but they should not be handled like ordinary handwritten notes.

@@ -1479,7 +1479,21 @@ export async function runTicketStatus(opts) {
 }
 
 export async function runTicketHandoff(opts) {
-  if (!opts.topic && !opts.latest) opts.latest = true;
+  if (!opts.topic && !opts.latest) {
+    if (opts.nonInteractive || !process.stdout.isTTY) {
+      throw new Error("ticket handoff requires --topic or --latest. Select a ticket explicitly before continuing.");
+    }
+    await withReadline(async (rl) => {
+      const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+      const choices = index.entries
+        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
+      if (choices.length > 0) {
+        opts.topic = await selectOne(rl, "Choose a ticket to hand off:", choices);
+      } else {
+        throw new Error("No tickets found to hand off.");
+      }
+    });
+  }
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
   const current = pickTicketEntry(opts, index);
   if (!current) throw new Error("ticket handoff: no matching ticket found");
@@ -1633,20 +1647,19 @@ export async function runTicketClose(opts) {
   applyTicketContext(opts);
   if (!opts.topic && !opts.latest) {
     if (opts.nonInteractive || !process.stdout.isTTY) {
-      opts.latest = true;
-    } else {
-      await withReadline(async (rl) => {
-        const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
-        const choices = index.entries
-          .filter(e => e.status !== "closed" && e.status !== "cancelled")
-          .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
-        if (choices.length > 0) {
-          opts.topic = await selectOne(rl, "Choose a ticket to close:", choices);
-        } else {
-          throw new Error("No open tickets found to close.");
-        }
-      });
+      throw new Error("ticket close requires --topic or --latest. Select a ticket explicitly before closing.");
     }
+    await withReadline(async (rl) => {
+      const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+      const choices = index.entries
+        .filter(e => e.status !== "closed" && e.status !== "cancelled")
+        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
+      if (choices.length > 0) {
+        opts.topic = await selectOne(rl, "Choose a ticket to close:", choices);
+      } else {
+        throw new Error("No open tickets found to close.");
+      }
+    });
   }
   // Respect --status flag (e.g. 'cancelled', 'wontfix'); default to 'closed'
   if (!opts.status) opts.status = "closed";
@@ -1881,7 +1894,7 @@ export async function runTicketArchive(opts) {
 
   if (!opts.latest && !opts.topic) {
     if (opts.nonInteractive) {
-      throw new Error("ticket archive: --topic or --latest is required in non-interactive mode.");
+      throw new Error("ticket archive requires --topic or --latest. Select a ticket explicitly before archiving.");
     }
     await withReadline(async (rl) => {
       const choices = indexJson.entries
@@ -2008,10 +2021,20 @@ export async function runTicketRebuild(opts) {
 export async function runTicketMove(opts) {
   applyTicketContext(opts);
   if (!opts.topic && !opts.latest) {
-    if (opts.nonInteractive) {
-      throw new Error("ticket move: --topic or --latest is required in non-interactive mode.");
+    if (opts.nonInteractive || !process.stdout.isTTY) {
+      throw new Error("ticket move requires --topic or --latest. Select a ticket explicitly before moving.");
     }
-    opts.latest = true; // Default to latest
+    await withReadline(async (rl) => {
+      const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
+      const choices = index.entries
+        .filter(e => e.status !== "archived")
+        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.topic }));
+      if (choices.length > 0) {
+        opts.topic = await selectOne(rl, "Choose a ticket to move:", choices);
+      } else {
+        throw new Error("No tickets found to move.");
+      }
+    });
   }
   
   const index = rebuildTicketIndexFromTopicFilesIfNeeded(opts.cwd, { ...opts, force: false });
