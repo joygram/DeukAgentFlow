@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "fs";
 import { delimiter, resolve } from "path";
+import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
 import { tmpdir } from "os";
 import { CliOpts, makePath } from "./cli-utils.js";
 
-const rootDir = resolve(new URL("..", import.meta.url).pathname);
+const rootDir = fileURLToPath(new URL("../../..", import.meta.url));
 const aliasDir = makePath(rootDir, "packages", "deuk-agent-rule");
+const npm = "npm";
+const npmShell = process.platform === "win32";
 const workDir = mkdtempSync(makePath(tmpdir(), "deuk-agent-flow-local-smoke-"));
 const prefixDir = makePath(workDir, "prefix");
 
@@ -18,6 +21,7 @@ function run(command, args, cwd, opts: CliOpts = {}) {
     encoding: "utf8",
     env: opts.env || process.env,
     stdio: opts.capture ? "pipe" : "inherit",
+    shell: npmShell,
   });
   if (result.status !== 0) {
     if (opts.capture) {
@@ -34,7 +38,7 @@ function readJson(path) {
 }
 
 function pack(cwd, expected) {
-  const result = run("npm", ["pack", "--json", "--pack-destination", workDir], cwd, { capture: true });
+  const result = run(npm, ["pack", "--json", "--pack-destination", workDir, "--ignore-scripts"], cwd, { capture: true });
   const rows = JSON.parse(result.stdout);
   const row = rows[0];
   const filename = row?.filename;
@@ -91,7 +95,7 @@ try {
     ],
   });
 
-  run("npm", ["install", "-g", "--prefix", prefixDir, flow.tarball, rule.tarball], rootDir);
+  run(npm, ["install", "-g", "--prefix", prefixDir, flow.tarball, rule.tarball], rootDir);
 
   const binDir = globalBinDir(prefixDir);
   const pathEnv = [binDir, process.env.PATH || ""].join(delimiter);

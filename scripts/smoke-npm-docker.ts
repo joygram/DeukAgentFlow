@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
 import { resolve } from "path";
+import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
 import { tmpdir } from "os";
 import { CliOpts, makePath } from "./cli-utils.js";
 
-const rootDir = resolve(new URL("..", import.meta.url).pathname);
+const rootDir = fileURLToPath(new URL("../../..", import.meta.url));
 const aliasDir = makePath(rootDir, "packages", "deuk-agent-rule");
+const npm = "npm";
+const npmShell = process.platform === "win32";
 const workDir = mkdtempSync(makePath(tmpdir(), "deuk-agent-flow-docker-smoke-"));
 
 function run(command, args, cwd, opts: CliOpts = {}) {
@@ -16,6 +19,7 @@ function run(command, args, cwd, opts: CliOpts = {}) {
     cwd,
     encoding: "utf8",
     stdio: opts.capture ? "pipe" : "inherit",
+    shell: npmShell,
   });
   if (result.status !== 0) {
     if (opts.capture) {
@@ -32,7 +36,7 @@ function readJson(path) {
 }
 
 function pack(cwd) {
-  const result = run("npm", ["pack", "--json", "--pack-destination", workDir], cwd, { capture: true });
+  const result = run(npm, ["pack", "--json", "--pack-destination", workDir, "--ignore-scripts"], cwd, { capture: true });
   const rows = JSON.parse(result.stdout);
   const filename = rows[0]?.filename;
   if (!filename) throw new Error(`npm pack did not return a filename for ${cwd}`);
