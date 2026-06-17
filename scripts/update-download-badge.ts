@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { dirname } from "path";
+import { CliOpts, makePath, toFileUri } from "./cli-utils.js";
 
 const DEFAULT_PACKAGES = ["deuk-agent-flow", "deuk-agent-rule"];
 const DEFAULT_RANGE = "last-month";
@@ -49,7 +50,7 @@ async function fetchDownloads(packageName, range) {
     throw new Error(`npm downloads request failed for ${packageName}: ${res.status} ${res.statusText}`);
   }
 
-  const body = await res.json();
+  const body = await res.json() as Record<string, any>;
   return {
     package: packageName,
     downloads: Number(body.downloads || 0),
@@ -88,14 +89,14 @@ export async function buildDownloadsBadge(opts) {
 export async function main(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
   const badge = await buildDownloadsBadge(opts);
-  const outPath = join(process.cwd(), opts.out);
+  const outPath = makePath(process.cwd(), opts.out);
 
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, JSON.stringify(badge, null, 2) + "\n", "utf8");
   console.log(`Wrote ${opts.out}: ${badge.message}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === toFileUri(process.argv[1])) {
   main().catch((error) => {
     console.error(error.message);
     process.exit(1);

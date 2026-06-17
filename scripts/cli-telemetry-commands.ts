@@ -1,8 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
-import { join } from "path";
-import { loadInitConfig, AGENT_ROOT_DIR, SPOKE_REGISTRY, toSlug } from "./cli-utils.mjs";
-
-const TELEMETRY_FILE = `${AGENT_ROOT_DIR}/telemetry.jsonl`;
+import { CliOpts, SPOKE_REGISTRY, loadInitConfig, makePath, toSlug } from "./cli-utils.js";
+import { resolveHomeTicketDirForWorkspace } from "./cli-ticket-home.js";
 const RAG_RESULTS = new Set(["hit", "weak-hit", "miss", "stale"]);
 const KNOWLEDGE_ACTIONS = new Set(["none", "add_knowledge", "refresh_document"]);
 const TOKEN_QUALITIES = new Set(["useful", "waste", "rework", "saved"]);
@@ -47,11 +45,15 @@ function accumulateTotals(logs, keySelector) {
   }, {});
 }
 
+function resolveTelemetryPath(cwd) {
+  return makePath(resolveHomeTicketDirForWorkspace(cwd), "telemetry.jsonl");
+}
+
 function loadTelemetryEntries(cwd) {
-  const absPath = join(cwd, TELEMETRY_FILE);
+  const absPath = resolveTelemetryPath(cwd);
   if (!existsSync(absPath)) return null;
   const lines = readFileSync(absPath, "utf8").split("\n").filter(l => l.trim());
-  return lines.map(l => JSON.parse(l));
+  return lines.map(l => JSON.parse(l) as Record<string, any>);
 }
 
 export function buildTelemetrySummary(cwd) {
@@ -200,11 +202,11 @@ async function logAction(opts) {
     occurredAt: opts.occurredAt || ""
   });
 
-  console.log(`[TELEMETRY] Logged ${entry.tokens} tokens for ticket ${entry.ticket} in ${TELEMETRY_FILE}`);
+  console.log(`[TELEMETRY] Logged ${entry.tokens} tokens for ticket ${entry.ticket}`);
 }
 
 async function syncAction(opts) {
-  const absPath = join(opts.cwd, TELEMETRY_FILE);
+  const absPath = resolveTelemetryPath(opts.cwd);
   if (!existsSync(absPath)) {
     console.log("[TELEMETRY] No local logs to sync.");
     return;
@@ -214,7 +216,7 @@ async function syncAction(opts) {
   const pipelineUrl = opts.remote || config?.pipelineUrl || "http://localhost:8001/api/telemetry/ingest";
 
   const lines = readFileSync(absPath, "utf8").split("\n").filter(l => l.trim());
-  const entries = lines.map(l => JSON.parse(l));
+  const entries = lines.map(l => JSON.parse(l) as Record<string, any>);
   const unsynced = entries.filter(e => !e.synced);
 
   if (unsynced.length === 0) {
@@ -309,14 +311,14 @@ async function summaryAction(opts) {
 }
 
 async function migrateAction(opts) {
-  const absPath = join(opts.cwd, TELEMETRY_FILE);
+  const absPath = resolveTelemetryPath(opts.cwd);
   if (!existsSync(absPath)) {
     console.log("[TELEMETRY] No logs found.");
     return;
   }
 
   const lines = readFileSync(absPath, "utf8").split("\n").filter(l => l.trim());
-  const entries = lines.map(l => JSON.parse(l));
+  const entries = lines.map(l => JSON.parse(l) as Record<string, any>);
   const migrated = entries.map(entry => normalizeTelemetryRecord(entry));
   const changedCount = migrated.filter((entry, index) => JSON.stringify(entry) !== JSON.stringify(entries[index])).length;
 
@@ -329,10 +331,10 @@ async function migrateAction(opts) {
   console.log(`[TELEMETRY] Migrated ${changedCount} telemetry entries.`);
 }
 
-export function appendTelemetryRecord(cwd, entry = {}) {
-  const telemetryDir = join(cwd, AGENT_ROOT_DIR);
+export function appendTelemetryRecord(cwd, entry: Record<string, any> = {}) {
+  const telemetryPath = resolveTelemetryPath(cwd);
+  const telemetryDir = makePath(resolveHomeTicketDirForWorkspace(cwd));
   if (!existsSync(telemetryDir)) mkdirSync(telemetryDir, { recursive: true });
-  const telemetryPath = join(cwd, TELEMETRY_FILE);
   const occurredAt = entry.occurredAt || new Date().toISOString();
   const event = resolveTelemetryEvent(entry);
   const payload = {
@@ -374,7 +376,7 @@ export function appendTelemetryRecord(cwd, entry = {}) {
   return payload;
 }
 
-export function appendInternalWorkflowEvent(cwd, event = {}) {
+export function appendInternalWorkflowEvent(cwd, event: Record<string, any> = {}) {
   return appendTelemetryRecord(cwd, {
     ...event,
     source: INTERNAL_SOURCE,
@@ -387,7 +389,7 @@ export function appendInternalWorkflowEvent(cwd, event = {}) {
   });
 }
 
-function resolveTelemetryEvent(entry = {}) {
+function resolveTelemetryEvent(entry: Record<string, any> = {}) {
   const explicitEvent = normalizeText(entry.event);
   if (explicitEvent) return explicitEvent;
 
@@ -401,7 +403,7 @@ function resolveTelemetryEvent(entry = {}) {
   return normalizeText(entry.kind) || "work";
 }
 
-function normalizeTelemetryRecord(entry = {}) {
+function normalizeTelemetryRecord(entry: Record<string, any> = {}) {
   const cloned = { ...entry };
   cloned.source = cloned.source || "manual";
   cloned.kind = cloned.kind || "work";
@@ -431,12 +433,12 @@ function normalizeSyncedState(value) {
   return value === true || value === "true";
 }
 
-function countBy(logs, key) {
-  return logs.reduce((acc, log) => {
+function countBy(logs, key): Record<string, number> {
+  return logs.reduce((acc: Record<string, number>, log) => {
     const value = log[key];
     if (value) acc[value] = (acc[value] || 0) + 1;
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
 }
 
 function isInternalWorkflowEvent(log) {
@@ -478,7 +480,7 @@ function summarizeWorkflowEvents(events) {
 }
 
 function summarizeSessionModes(logs) {
-  const grouped = {};
+  const grouped: Record<string, any> = {};
   for (const log of logs) {
     const mode = normalizeEnum(log.sessionMode, SESSION_MODES);
     if (!mode) continue;
@@ -594,6 +596,7 @@ function printSessionModeComparison(summary) {
   if (entries.length === 0) return;
   console.log(`Session Mode Comparison:`);
   for (const [mode, row] of entries) {
-    console.log(`  - ${mode}: entries=${row.entries}, tokens=${row.tokens}, retries=${row.retries}, turns=${row.turns}, failures=${row.failures}, success=${formatRate(row.successCount, row.entries)}, quality=${row.averageQualityScore.toFixed(1)}`);
+    const r = row as Record<string, any>;
+    console.log(`  - ${mode}: entries=${r.entries}, tokens=${r.tokens}, retries=${r.retries}, turns=${r.turns}, failures=${r.failures}, success=${formatRate(r.successCount, r.entries)}, quality=${r.averageQualityScore.toFixed(1)}`);
   }
 }

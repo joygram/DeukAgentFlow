@@ -1,35 +1,31 @@
 #!/usr/bin/env node
-import { readFileSync, readdirSync, statSync } from "fs";
-import { join, relative, dirname, resolve } from "path";
-import { spawnSync } from "child_process";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "fs";
+import { relative, dirname, resolve } from "path";
 import YAML from "yaml";
-import { AGENT_ROOT_DIR, TICKET_DIR_NAME } from "./cli-utils.mjs";
+import { DEUK_ROOT_DIR, CliOpts, TICKET_SUBDIR, makePath, toFileUri } from "./cli-utils.js";
 
 const ignoredDirs = new Set([".git", "node_modules"]);
 
+export function normalizeMarkdownContent(content) {
+  const src = String(content || "").replace(/\r\n/g, "\n");
+  return src
+    .split("\n")
+    .map(line => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .trimEnd() + "\n";
+}
+
+export function normalizeMarkdownFile(absPath) {
+  if (!statExists(absPath) || !isMarkdownFile(absPath)) return false;
+  const current = readFileSync(absPath, "utf8");
+  const next = normalizeMarkdownContent(current);
+  if (next === current) return false;
+  writeFileSync(absPath, next, "utf8");
+  return true;
+}
+
 export function collectChangedFiles(repoRoot) {
-  const changed = new Set();
-
-  const gitArgs = ["-C", repoRoot, "diff", "--name-only", "--diff-filter=ACMRTUXB"];
-  const gitDiff = spawnSync("git", gitArgs, { encoding: "utf8" });
-  if (gitDiff.status === 0) {
-    gitDiff.stdout
-      .split("\n")
-      .map(s => s.trim())
-      .filter(Boolean)
-      .forEach(f => changed.add(f));
-  }
-
-  const gitUntracked = spawnSync("git", ["-C", repoRoot, "ls-files", "--others", "--exclude-standard"], { encoding: "utf8" });
-  if (gitUntracked.status === 0) {
-    gitUntracked.stdout
-      .split("\n")
-      .map(s => s.trim())
-      .filter(Boolean)
-      .forEach(f => changed.add(f));
-  }
-
-  return Array.from(changed).sort();
+  return [];
 }
 
 export function collectChangedMarkdownFiles(repoRoot) {
@@ -42,13 +38,13 @@ function isMarkdownFile(filePath) {
 }
 
 function isPlanReport(relPath) {
-  return relPath.includes(`${AGENT_ROOT_DIR}/docs/plan/`) && relPath.endsWith("-report.md");
+  return relPath.includes(`${DEUK_ROOT_DIR}/docs/plan/`) && relPath.endsWith("-report.md");
 }
 
 function isTicketPath(repoRoot, absPath) {
   try {
     const relPath = relative(repoRoot, absPath).replace(/\\/g, "/");
-    return relPath.startsWith(`${TICKET_DIR_NAME}/`);
+    return relPath.startsWith(`${DEUK_ROOT_DIR}/${TICKET_SUBDIR}/`);
   } catch {
     return false;
   }
@@ -56,7 +52,7 @@ function isTicketPath(repoRoot, absPath) {
 
 function isImplicitUpwardEvidenceLink(target) {
   const normalized = String(target || "").replace(/\\/g, "/");
-  return normalized.startsWith("../") && !normalized.includes(`${TICKET_DIR_NAME}/`);
+  return normalized.startsWith("../") && !normalized.includes(`${DEUK_ROOT_DIR}/${TICKET_SUBDIR}/`);
 }
 
 function looksLikeYamlFrontmatter(content) {
@@ -102,10 +98,10 @@ function walkMarkdownFiles(rootDir, out = []) {
   for (const entry of readdirSync(rootDir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       if (ignoredDirs.has(entry.name)) continue;
-      walkMarkdownFiles(join(rootDir, entry.name), out);
+      walkMarkdownFiles(makePath(rootDir, entry.name), out);
       continue;
     }
-    const filePath = join(rootDir, entry.name);
+    const filePath = makePath(rootDir, entry.name);
     if (isMarkdownFile(filePath)) out.push(filePath);
   }
   return out;
@@ -117,11 +113,6 @@ function lintFile(absPath, repoRoot) {
   const errors = [];
 
   const lines = content.split(/\r?\n/);
-  lines.forEach((line, idx) => {
-    if (/\s+$/.test(line)) {
-      errors.push(`${rel}:${idx + 1}: trailing whitespace`);
-    }
-  });
 
   const fenceCount = lines.filter(line => /^```/.test(line.trim())).length;
   if (fenceCount % 2 !== 0) {
@@ -138,7 +129,7 @@ function lintFile(absPath, repoRoot) {
     } else {
       try {
         const parsed = YAML.parse(match[1]);
-        const isDeukAgentDoc = rel.includes(`${AGENT_ROOT_DIR}/docs/`) || rel.includes(`${AGENT_ROOT_DIR}/tickets/`);
+        const isDeukAgentDoc = rel.includes(`${DEUK_ROOT_DIR}/docs/`) || rel.includes(`${DEUK_ROOT_DIR}/tickets/`);
         const isArchive = rel.includes("archive/");
         const isTemplate = rel.includes("templates/");
         if (isDeukAgentDoc && !isArchive && !isTemplate) {
@@ -154,7 +145,7 @@ function lintFile(absPath, repoRoot) {
       }
     }
   } else {
-    const isDeukAgentDoc = rel.includes(`${AGENT_ROOT_DIR}/docs/`) || rel.includes(`${AGENT_ROOT_DIR}/tickets/`);
+    const isDeukAgentDoc = rel.includes(`${DEUK_ROOT_DIR}/docs/`) || rel.includes(`${DEUK_ROOT_DIR}/tickets/`);
     const isArchive = rel.includes("archive/");
     const isTemplate = rel.includes("templates/");
     if (isDeukAgentDoc && !isArchive && !isTemplate) {
@@ -173,7 +164,7 @@ function lintFile(absPath, repoRoot) {
     if (!pathOnly) continue;
     if (isImplicitUpwardEvidenceLink(pathOnly)) continue;
 
-    const resolved = join(dirname(absPath), pathOnly);
+    const resolved = makePath(dirname(absPath), pathOnly);
 
     if (!isTicketPath(repoRoot, resolved)) {
       continue;
@@ -202,10 +193,9 @@ function statExists(absPath) {
 function resolveMarkdownLintTargets(repoRoot, explicitPaths = []) {
   const files = explicitPaths.length > 0
     ? explicitPaths.map(p => resolve(repoRoot, p)).filter(statExists).filter(isMarkdownFile)
-    : collectChangedMarkdownFiles(repoRoot).map(p => join(repoRoot, p));
+    : walkMarkdownFiles(repoRoot);
 
-  const targets = files.length > 0 ? files : walkMarkdownFiles(repoRoot);
-  return Array.from(new Set(targets));
+  return Array.from(new Set(files));
 }
 
 function parseLintArgs(argv) {
@@ -263,6 +253,6 @@ export function runMarkdownLint(argv = process.argv.slice(2)) {
   console.log(`lint:md passed (${targets.length} file${targets.length === 1 ? "" : "s"})`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === toFileUri(process.argv[1])) {
   runMarkdownLint();
 }

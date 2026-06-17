@@ -1,6 +1,8 @@
 ---
 name: generated-file-guard
-summary: Prevent direct generated artifact edits and route changes to their source.
+summary: 🛡️ generated 파일 직접 편집을 막고 소스로 변경을 라우팅.
+category: guard
+bind: phase2
 ---
 
 # Generated File Guard

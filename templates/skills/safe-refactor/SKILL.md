@@ -1,6 +1,8 @@
 ---
 name: safe-refactor
-summary: Keep refactors small, scoped, and test-backed inside DeukAgentFlow TDW.
+summary: ✂️ 리팩터를 최소·스코프·검증 중심으로 유지.
+category: refactor
+bind: phase2
 ---
 
 # Safe Refactor

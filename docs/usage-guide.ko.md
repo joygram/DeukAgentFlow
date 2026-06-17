@@ -32,15 +32,54 @@ DeukAgentFlow의 초기화 단위는 단순히 "현재 폴더 하나"가 아닙�
       .deuk-agent/
 ```
 
-이 모델에서 workspace 루트는 "공통 진입점"이고, 실제 작업 단위는 각 프로젝트의 `.deuk-agent/`입니다. 에이전트는 현재 CWD에서 가장 가까운 프로젝트 규칙과 티켓을 우선 사용합니다.
+이 모델에서 workspace 루트는 "공통 진입점"이고, 실제 작업 단위는 각 프로젝트의 `.deuk-agent/`입니다. 에이전트는 전역 registry, 명시적 workspace id, ticket id를 기준으로 프로젝트 규칙과 티켓을 선택합니다.
 
 이렇게 사용하면 효과가 극대화됩니다.
 
 - workspace 루트에는 공통 포인터만 둬서 어느 대화창에서 시작해도 같은 코어 규칙을 읽게 합니다.
 - 각 프로젝트 루트에는 별도 `PROJECT_RULE.md`와 `.deuk-agent/`를 둬서 작업 맥락, 티켓, 검증 기록이 섞이지 않게 합니다.
 - 서버/앱/패키지처럼 lifecycle이 다른 하위 폴더는 중첩 프로젝트로 초기화해 독립 티켓을 갖게 합니다.
-- 에이전트에게는 긴 명령 대신 "진행", "다음", "원인", "정리"처럼 짧게 말하고, 에이전트가 현재 CWD 기준으로 맞는 프로젝트 티켓을 선택하게 합니다.
+- 에이전트에게는 긴 명령 대신 "진행", "다음", "원인", "정리"처럼 짧게 말하고, 에이전트가 registry와 ticket id 기준으로 맞는 프로젝트 티켓을 선택하게 합니다.
 - 공통 규칙은 코어 허브에서, 프로젝트별 아키텍처/빌드/검증 규칙은 해당 프로젝트의 `PROJECT_RULE.md`에서 관리합니다.
+
+workspace 루트에 여러 프로젝트가 있을 때는 명시적 `--workspace` 값이 있는 경우에만 sibling project root 이름으로 target repo를 전환합니다. `--project`는 티켓 메타데이터/필터로만 사용하고 저장소 전환에는 사용하지 않습니다. `DeukAgentFlow`, `DeukAIContext`처럼 각 프로젝트 루트에 `.deuk-agent/`가 있으면 `--workspace DeukAgentFlow`, `--workspace agent-flow`, `--workspace flow`처럼 정확한 이름/별칭으로 resolve합니다. title/summary 본문은 target 선택에 사용하지 않습니다.
+
+target repo를 확정한 뒤에는 해당 repo의 `.deuk-agent/tickets`에서만 workflow를 실행합니다. target 없이 티켓을 만들면 registry의 단일 workspace 또는 ticket id로 확인된 workspace만 사용하며, 여러 workspace가 가능하면 `--workspace`로 명확히 지정합니다.
+
+티켓 workflow 상태 메시지는 Flow 표준 prefix로 구분합니다.
+
+```text
+flow:[workspace:티켓시작] [ticket-id](/absolute/path/to/ticket.md)
+승인하려면 `승인`이라고 입력해 주세요.
+
+flow:[workspace:티켓종료] [ticket-id](/absolute/path/to/ticket.md)
+티켓 작업이 종료되었습니다.
+```
+
+### MCP 연결 구조
+
+DeukAgentFlow와 DeukAgentContext를 함께 쓸 때는 `워크스페이스 공용 서버 + 프로젝트별 연결` 구조로 이해하면 가장 정확합니다.
+
+- `DeukAgentFlow`는 티켓, 승인, 검증, project 경계를 정의합니다.
+- `DeukAgentContext`는 검색, 기억, telemetry를 제공하는 MCP 서버입니다.
+- IDE 연결은 각 프로젝트 루트의 `.mcp.json` 또는 Claude project-scope MCP 등록으로 붙습니다.
+- 현재 등록 프로젝트 목록과 collection mapping의 사실상 소스는 `DeukAgentContext/.local/ingest.yaml`입니다.
+- `DeukAgentContext/.local/config.yaml`은 프로젝트 목록보다는 인프라/search/telemetry 설정에 가깝습니다.
+
+즉, 실제 사용감은 "Flow가 MCP를 소유한다"보다 "MCP가 연결된 프로젝트에서 Flow가 그 사용 규칙을 지휘한다"에 가깝습니다.
+
+현재 구조에서 새 workspace를 AgentContext registry로 끌어올릴 때는 아래 순서가 가장 자연스럽습니다.
+
+```bash
+npx deuk-agent-flow context derive-agentflow --workspace ~/workspace
+npx deuk-agent-flow context derive-agentflow --workspace ~/workspace --apply
+npx deuk-agent-flow context setup-ide
+```
+
+- `derive-agentflow`는 DeukAgentFlow 프로젝트 루트(`PROJECT_RULE.md` + `.deuk-agent/`)를 스캔해 `ingest.yaml` 후보를 만듭니다.
+- `--apply`를 주면 현재 `ingest.yaml`에 반영합니다.
+- `setup-ide`는 반영된 registry를 기준으로 각 프로젝트 `.mcp.json` 또는 Claude project-scope MCP 연결을 갱신합니다.
+- `deuk-agent-flow context ...`는 사용자 실행 흐름을 Flow에 두고, 내부적으로 DeukAgentContext CLI를 호출합니다.
 
 ### 적용 기준
 
@@ -121,7 +160,7 @@ cd ~/workspace/i/i_server && deuk-agent-flow init
 - 작업 중 티켓 본문을 다듬는 것은 괜찮지만, 상태를 바꿀 때는 frontmatter를 직접 고치지 말고 반드시 CLI를 사용합니다.
 - `.deuk-agent/telemetry.jsonl`은 보통 실행 로그에 가깝기 때문에, 저장소 정책상 꼭 추적하는 경우가 아니라면 커밋 목록에 넣지 않는 편이 안전합니다.
 - 작업을 끝냈다면 `ticket archive`까지 마친 뒤 커밋하는 편이 좋습니다. archive는 티켓 파일 위치와 archive index를 함께 정리하므로, 중간에 손으로 옮기면 기록 흐름이 흐려집니다.
-- 여러 작업을 한 커밋에 섞지 말고, 가능하면 "코드 변경 + 해당 티켓 lifecycle 변경" 묶음으로 나눕니다.
+- 여러 작업을 한 커밋에 섞지 말고, 가능하면 "코드 변경 + 해당 티켓 workflow 변경" 묶음으로 나눕니다.
 
 빠르게 확인할 때는 아래 정도를 습관처럼 보면 좋습니다.
 
@@ -131,7 +170,7 @@ git diff -- .deuk-agent/tickets/INDEX.json
 git diff -- .deuk-agent/tickets/INDEX.archive.*.json
 ```
 
-티켓 관련 변경이 보일 때는 "이 변경이 CLI lifecycle의 결과인가?"를 먼저 확인하세요. 아니라면 손으로 고치기보다 `ticket status`, `ticket list`, `ticket archive` 같은 명령으로 상태를 다시 맞추는 편이 안전합니다.
+티켓 관련 변경이 보일 때는 "이 변경이 CLI workflow의 결과인가?"를 먼저 확인하세요. 아니라면 손으로 고치기보다 `ticket status`, `ticket list`, `ticket archive` 같은 명령으로 상태를 다시 맞추는 편이 안전합니다.
 
 ---
 
@@ -164,7 +203,7 @@ git diff -- .deuk-agent/tickets/INDEX.archive.*.json
 
 스킬은 전체 workflow를 대체하지 않는 짧은 행동 playbook입니다. DeukAgentFlow에서는 티켓/APC/Phase Gate가 계속 상위 권한이고, 스킬은 특정 실패 패턴에서 에이전트의 움직임만 더 날카롭게 만듭니다.
 
-`init`을 실행하면 first-party 스킬 원본은 `.deuk-agent/skill-templates/`로 동기화됩니다. 실제 장착은 프로젝트 성격에 맞게 `skill add`로 선택합니다.
+`init`은 first-party 스킬 원본을 프로젝트 안으로 복제하지 않습니다. 스킬 원본은 DeukAgentFlow 패키지의 `templates/skills/`가 SSoT입니다.
 
 기본 추천 장착:
 
@@ -201,7 +240,7 @@ deuk-agent-flow skill expose --platform claude
 deuk-agent-flow skill expose --platform cursor
 ```
 
-`skill add`는 프로젝트의 `.deuk-agent/skills/<id>/SKILL.md`에 스킬을 설치하고, `skill expose`는 설치된 스킬을 Claude/Cursor가 읽을 수 있는 얇은 포인터로 노출합니다.
+`skill add`/`skill expose`는 스킬 사용 경로를 열지만, `init`은 로컬 스킬 템플릿 복제본을 만들거나 보존하지 않습니다.
 
 ---
 

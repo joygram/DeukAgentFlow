@@ -1,10 +1,10 @@
 import { createInterface } from "readline";
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { WORKSPACE_KINDS, AGENT_TOOLS, resolveDocsLanguage, normalizeWorkflowMode, WORKFLOW_MODE_EXECUTE } from "./cli-utils.mjs";
+import { AGENT_TOOLS, CliOpts, WORKFLOW_MODE_EXECUTE, WORKSPACE_KINDS, makePath, normalizeWorkflowMode, resolveDocsLanguage } from "./cli-utils.js";
+import { cliText } from "./cli-locales.js";
 
-export async function ask(rl, question) {
-  return new Promise((resolve) => rl.question(question, resolve));
+export async function ask(rl, question): Promise<string> {
+  return new Promise<string>((resolve) => rl.question(question, resolve));
 }
 
 export async function askYesNo(question, defaultYes = true) {
@@ -40,11 +40,11 @@ export async function selectMany(rl, prompt, choices) {
 }
 
 function hasAny(cwd, names) {
-  return names.some((name) => existsSync(join(cwd, name)));
+  return names.some((name) => existsSync(makePath(cwd, name)));
 }
 
-export function inferInitDefaults(cwd, opts = {}) {
-  const packageJsonPath = join(cwd, "package.json");
+export function inferInitDefaults(cwd, opts: CliOpts = {}) {
+  const packageJsonPath = makePath(cwd, "package.json");
   const packageJson = existsSync(packageJsonPath)
     ? readFileSync(packageJsonPath, "utf8")
     : "";
@@ -74,26 +74,12 @@ export function inferInitDefaults(cwd, opts = {}) {
 export async function runInteractive(opts) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    console.log("\nDeukAgentFlow init — let's configure your workspace.\n");
+    const locale = resolveDocsLanguage(opts.docsLanguage ?? "auto");
+    console.log(`\n${cliText("prompts.init.heading", { locale })}\n`);
 
-    const workspaceKind = await selectOne(rl, "What kind of workspace is this?", WORKSPACE_KINDS);
+    const workspaceKind = await selectOne(rl, cliText("prompts.init.workspaceKind", { locale }), WORKSPACE_KINDS);
     const defaults = inferInitDefaults(opts.cwd, opts);
 
-    const targetAgents = join(opts.cwd, "AGENTS.md");
-    let agentsDefault = "inject";
-    if (!existsSync(targetAgents)) {
-      agentsDefault = "inject"; // will append markers
-      console.log("\n  No AGENTS.md found — will create with markers.");
-    } else {
-      const content = readFileSync(targetAgents, "utf8");
-      const hasMarkers = content.includes("deuk-agent-rule:begin") || content.includes("## DeukAgentFlow");
-      if (!hasMarkers) {
-        agentsDefault = "inject";
-        console.log("\n  AGENTS.md exists without managed markers — will append a managed block.");
-      }
-    }
-
-    opts.agents = opts.agents ?? agentsDefault;
     opts.workspaceKind = workspaceKind;
     opts.kind = workspaceKind;
     opts.stack = defaults.stack;
@@ -105,16 +91,15 @@ export async function runInteractive(opts) {
     opts.remoteSync = defaults.remoteSync;
     opts.pipelineUrl = defaults.pipelineUrl;
 
-    console.log("\n  Workspace Kind: " + workspaceKind);
-    console.log("  Technical Surface: " + opts.stack);
-    console.log("  AI Clients: " + (opts.agentTools.join(", ") || "all supported clients"));
-    console.log("  Docs Language: " + opts.docsLanguage);
-    console.log("  Workflow Mode: " + opts.workflowMode);
-    console.log("  Share Tickets: " + (opts.shareTickets ? "Yes (Shared)" : "No (Private)"));
-    console.log("  Deuk AgentContext MCP: hidden during init");
-    console.log("  External Sync: " + (opts.remoteSync ? "Enabled" : "Disabled"));
-    if (opts.remoteSync) console.log("  Sync URL: " + opts.pipelineUrl);
-    console.log("  AGENTS: " + opts.agents + "\n");
+    console.log(`\n  ${cliText("prompts.init.summary.workspaceKind", { locale, vars: { value: workspaceKind } })}`);
+    console.log(`  ${cliText("prompts.init.summary.technicalSurface", { locale, vars: { value: opts.stack } })}`);
+    console.log(`  ${cliText("prompts.init.summary.aiClients", { locale, vars: { value: opts.agentTools.join(", ") || cliText("prompts.init.summary.allSupportedClients", { locale }) } })}`);
+    console.log(`  ${cliText("prompts.init.summary.docsLanguage", { locale, vars: { value: opts.docsLanguage } })}`);
+    console.log(`  ${cliText("prompts.init.summary.workflowMode", { locale, vars: { value: opts.workflowMode } })}`);
+    console.log(`  ${cliText("prompts.init.summary.shareTickets", { locale, vars: { value: opts.shareTickets ? cliText("prompts.init.summary.shareYes", { locale }) : cliText("prompts.init.summary.shareNo", { locale }) } })}`);
+    console.log(`  ${cliText("prompts.init.summary.contextMcp", { locale })}`);
+    console.log(`  ${cliText("prompts.init.summary.externalSync", { locale, vars: { value: opts.remoteSync ? cliText("prompts.init.summary.enabled", { locale }) : cliText("prompts.init.summary.disabled", { locale }) } })}`);
+    if (opts.remoteSync) console.log(`  ${cliText("prompts.init.summary.syncUrl", { locale, vars: { value: opts.pipelineUrl } })}\n`);
   } finally {
     rl.close();
   }

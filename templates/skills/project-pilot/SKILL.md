@@ -1,63 +1,24 @@
 ---
 name: project-pilot
-summary: Apply the ProjectPilot Refactor Contract Kit before cross-language, generated/runtime, or repeated-drift refactors.
+summary: 🗺️ 광범위한 리팩터 전 ProjectPilot 계약 키트를 적용하는 스킬.
+category: refactor
+bind: phase2
 ---
 
 # ProjectPilot
 
 Authority: follow `core-rules/AGENTS.md`, the active ticket APC, Phase Gate, and project rules.
 
-Use this skill when the task involves any of the following:
+## 적용 조건
+멀티-언어 변경, 프로토콜/직렬화/코덱 작업, generated 계약 드리프트, fallback/stub 정리, 명명·레이아웃 통합, 반복 실패 패밀리 중 하나라도 해당되면 적용.
 
-- multi-language feature or behavior changes
-- protocol, serialization, transport, codec, or table lane work
-- generated/runtime/report contract drift
-- fallback, alias, helper, no-op, placeholder, or silent stub cleanup
-- convention, naming, file layout, factory surface, or lifecycle unification
-- repeated failure families where one local fix would hide shared contract drift
-
-## Micro-Protocol
-
-1. Read local project rules and architecture constraints first.
-2. Create or select the active ticket and record ProjectPilot scope before editing.
-3. Define the refactor contract before proposing or making edits.
-4. Build the implementation matrix across the relevant surfaces.
-5. Classify drift as `C`, `P`, `S`, `B`, `U`, or `D`.
-6. Identify source owners before touching source, generated, runtime, report, or template files.
-7. Fill the drift checklist and reject shortcuts that hide drift.
-8. Define the conformance gate in the ticket without creating tests unless the user requested tests.
-9. Only then split remediation tickets or implement scoped changes.
-
-## Required Outputs
-
-- Implementation Matrix
-- Refactor Contract
-- Flow Contract
-- Integration Contract
-- Owner Map
-- Drift Checklist
-- Conformance Gate
-- Remediation Plan
-
-Use the shared ProjectPilot semantics and templates when available:
-
-- `docs/PROJECT_PILOT.md`
-- `templates/project-pilot/IMPLEMENTATION_MATRIX_TEMPLATE.md`
-- `templates/project-pilot/REFACTOR_CONTRACT_TEMPLATE.md`
-- `templates/project-pilot/FLOW_CONTRACT_TEMPLATE.md`
-- `templates/project-pilot/INTEGRATION_CONTRACT_TEMPLATE.md`
-- `templates/project-pilot/OWNER_MAP_TEMPLATE.md`
-- `templates/project-pilot/DRIFT_CHECKLIST.md`
-- `templates/project-pilot/CONFORMANCE_GATE_TEMPLATE.md`
-- `templates/project-pilot/REMEDIATION_PLAN_TEMPLATE.md`
-
-Consumer projects may keep only project-local pilot evidence and references. Shared ProjectPilot semantics and templates are owned by DeukAgentFlow.
+## Micro-Protocol (순서 엄수)
+1. 로컬 프로젝트 룰·아키텍처 제약 먼저 읽기
+2. 티켓 생성/선택 후 ProjectPilot 스코프 기록
+3. 리팩터 계약 정의 → 구현 매트릭스 작성
+4. 드리프트 분류(`C/P/S/B/U/D`), 소스 오너 확인
+5. 드리프트 체크리스트 완성, 숏컷 거부
+6. 준수 게이트 정의(테스트는 요청 시만) → 구현
 
 ## Stop Conditions
-
-- No active ticket or no approval boundary for refactor-contract work.
-- No implementation matrix or refactor contract can be stated clearly.
-- Source-of-truth owner cannot be identified.
-- A fix depends on generated direct edits or hidden fallback.
-- Unsupported-by-contract and broken-entrypoint are not separated.
-- Verification cannot prove the claimed alignment.
+활성 티켓 없음 / 계약 불명확 / 소스 오너 불명 / generated 직접 편집 의존 / 검증 불가

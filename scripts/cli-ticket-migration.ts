@@ -1,11 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, copyFileSync, statSync } from "fs";
-import { basename, dirname, join, relative } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, copyFileSync, renameSync } from "fs";
+import { basename, dirname } from "path";
 import {
-  toRepoRelativePath, AGENT_ROOT_DIR, TICKET_SUBDIR, TICKET_LIST_FILENAME,
-  parseFrontMatter, stringifyFrontMatter, findFileRecursively, detectConsumerTicketDir
-} from "./cli-utils.mjs";
-import { readTicketIndexJson, writeTicketIndexJson, syncActiveTicketId } from "./cli-ticket-index.mjs";
-import { collectTicketMarkdownFiles, rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.mjs";
+  toRepoRelativePath, TICKET_SUBDIR, TICKET_LIST_FILENAME,
+  parseFrontMatter, findFileRecursively, detectConsumerTicketDir, makePath
+ , CliOpts } from "./cli-utils.js";
+import { readTicketIndexJson, syncActiveTicketId, writeTicketIndexJson } from "./cli-ticket-index.js";
+import { collectTicketMarkdownFiles, rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.js";
+import { splitTicketDocMetaSection } from "./cli-ticket-docmeta.js";
+import { writeTicketDocument } from "./cli-ticket-document.js";
 
 // ─── Summary Extraction ─────────────────────────────────────────────────────
 
@@ -22,7 +24,7 @@ export function extractSummary(meta, content) {
   const lines = content.split("\n");
 
   // Collect section contents by known header patterns
-  const sections = {};
+  const sections: Record<string, any> = {};
   let currentSection = null;
   for (const line of lines) {
     const trimmed = line.trim();
@@ -147,7 +149,7 @@ export function ensureCautionBlock(content) {
 
 // ─── Main Migration ─────────────────────────────────────────────────────────
 
-export function performUpgradeMigration(cwd, opts = {}) {
+export function performUpgradeMigration(cwd, opts: CliOpts = {}) {
   const root = detectConsumerTicketDir(cwd, { createIfMissing: true });
   
   const files = collectTicketMarkdownFiles(root).filter(p => {
@@ -191,8 +193,8 @@ export function performUpgradeMigration(cwd, opts = {}) {
     // 3. Archive placement fix (existing logic)
     if (meta.status === "archived" && !isAlreadyInArchive && !opts.dryRun) {
       const finalAbs = moveFileToArchive(cwd, abs, meta.group || basename(dirname(abs)));
-      const migratedBody = stringifyFrontMatter(meta, modifiedContent);
-      writeFileSync(finalAbs, migratedBody, "utf8");
+      const ticketDocMeta = splitTicketDocMetaSection(modifiedContent);
+      writeTicketDocument(finalAbs, { meta, content: ticketDocMeta.body, docmeta: ticketDocMeta.docmeta });
       upgraded++;
       console.log(`[OK] Upgraded + archived: ${toRepoRelativePath(cwd, finalAbs)}`);
       continue;
@@ -205,8 +207,8 @@ export function performUpgradeMigration(cwd, opts = {}) {
         if (cautionResult !== null) changes.push("caution+targetModule");
         console.log(`[DRY-RUN] Would upgrade: ${rel} (+${changes.join(", ")})`);
       } else {
-        const migratedBody = stringifyFrontMatter(meta, modifiedContent);
-        writeFileSync(abs, migratedBody, "utf8");
+        const ticketDocMeta = splitTicketDocMetaSection(modifiedContent);
+        writeTicketDocument(abs, { meta, content: ticketDocMeta.body, docmeta: ticketDocMeta.docmeta });
         upgraded++;
       }
     }
@@ -216,67 +218,26 @@ export function performUpgradeMigration(cwd, opts = {}) {
 
   if (!opts.dryRun) {
     rebuildTicketIndexFromTopicFilesIfNeeded(cwd, { ...opts, force: true });
-    performDefragmentation(cwd, opts);
     syncActiveTicketId(cwd);
   }
-  
+
   return upgraded;
 }
 
-// ─── Defragmentation ────────────────────────────────────────────────────────
-
-export function performDefragmentation(cwd, opts = {}) {
-  const rootTicketDir = detectConsumerTicketDir(cwd);
-  if (!rootTicketDir) return;
-  const tickets = collectTicketMarkdownFiles(rootTicketDir).filter(p => {
-    const base = basename(p);
-    return base !== "LATEST.md" && base !== TICKET_LIST_FILENAME && base !== "ACTIVE_TICKET.md";
-  });
-
-  console.log(`[DEFRAG] Checking ${tickets.length} tickets for workspace placement...`);
-
-  const modifiedPaths = new Set();
-  
-  for (const abs of tickets) {
-    const { meta } = parseFrontMatter(readFileSync(abs, "utf8"));
-    if (meta.submodule && meta.submodule !== "global") {
-      const subPath = join(cwd, meta.submodule);
-      if (existsSync(subPath) && statSync(subPath).isDirectory()) {
-        const subTicketDir = join(subPath, AGENT_ROOT_DIR, TICKET_SUBDIR);
-        
-        const relToRoot = relative(rootTicketDir, abs);
-        const destAbs = join(subTicketDir, relToRoot);
-        
-        if (opts.dryRun) {
-          console.log(`[DRY-RUN] Would move to workspace: ${relToRoot} -> ${meta.submodule}/${AGENT_ROOT_DIR}/${TICKET_SUBDIR}/`);
-        } else {
-          mkdirSync(dirname(destAbs), { recursive: true });
-          copyFileSync(abs, destAbs);
-          unlinkSync(abs);
-          console.log(`[DEFRAG] Moved: ${meta.submodule}/${AGENT_ROOT_DIR}/${TICKET_SUBDIR}/${relToRoot}`);
-          modifiedPaths.add(subPath);
-        }
-      }
-    }
-  }
-
-  if (!opts.dryRun) {
-    for (const p of modifiedPaths) {
-      rebuildTicketIndexFromTopicFilesIfNeeded(p, { ...opts, force: true });
-      syncActiveTicketId(p);
-    }
-  }
-}
+// #727: performDefragmentation 제거 — 홈 uuid 스토어의 티켓을 meta.submodule 기준으로
+// 서브모듈 .deuk/tickets 로 역이동(cwd write)시켜 홈 일원화(#622)를 되돌리던 코드였다.
+// normalizeTicketPaths 주석('티켓은 홈에 산다, cwd로 끌어내면 안 됨')과 정면 모순이라
+// 함수와 호출(upgrade 흐름)을 통째로 제거. 티켓은 홈에만 산다.
 
 // ─── Utilities ──────────────────────────────────────────────────────────────
 
 export function moveFileToArchive(cwd, abs, group) {
   const ticketDir = detectConsumerTicketDir(cwd);
-  const archiveBase = join(ticketDir, "archive");
+  const archiveBase = makePath(ticketDir, "archive");
   const targetSubDir = (basename(ticketDir) === TICKET_SUBDIR || !group) ? "sub" : group;
-  const targetDir = join(archiveBase, targetSubDir);
+  const targetDir = makePath(archiveBase, targetSubDir);
   mkdirSync(targetDir, { recursive: true });
-  const finalAbs = join(targetDir, basename(abs));
+  const finalAbs = makePath(targetDir, basename(abs));
   if (finalAbs !== abs) {
     if (existsSync(finalAbs)) {
       unlinkSync(abs);
@@ -288,7 +249,7 @@ export function moveFileToArchive(cwd, abs, group) {
   return finalAbs;
 }
 
-export function normalizeTicketPaths(cwd, opts = {}) {
+export function normalizeTicketPaths(cwd, opts: CliOpts = {}) {
   const index = readTicketIndexJson(cwd);
   const ticketDir = detectConsumerTicketDir(cwd);
   const entries = index.entries || [];
@@ -296,15 +257,30 @@ export function normalizeTicketPaths(cwd, opts = {}) {
 
   for (const entry of entries) {
     if (!entry.path) continue;
-    
-    const currentAbs = join(cwd, entry.path);
+
+    // #622/#623: 티켓 .md는 cwd(워크스페이스 git 트리)가 아니라 홈 ticketDir에 산다.
+    // 정상 위치는 makePath(ticketDir, entry.path)이다. entry.path를 cwd 기준으로 해석해
+    // 그쪽으로 옮기면, 홈에 멀쩡히 있던 .md를 워크스페이스로 끌어내 홈 디렉토리를 비우고
+    // (그 순간 rebuild 스캔이 entries=0을 보고 active claim을 고아로 오인해 삭제한다).
+    // 따라서 파일이 이미 ticketDir 하위에 있으면 그게 올바른 위치이므로 이동하지 않는다.
+    const canonicalAbs = makePath(ticketDir, entry.path);
+    if (existsSync(canonicalAbs)) continue;
+
+    const currentAbs = makePath(cwd, entry.path);
     if (!existsSync(currentAbs)) {
       const fileName = basename(entry.path);
       const found = findFileRecursively(ticketDir, fileName);
       if (found) {
-        const newRel = toRepoRelativePath(cwd, found);
-        if (entry.path !== newRel) {
-          entry.path = newRel;
+        // 발견된 파일이 이미 홈 ticketDir 하위면 정상 위치 — 워크스페이스로 옮기지 않는다.
+        const destAbs = canonicalAbs;
+        if (found !== destAbs) {
+          mkdirSync(dirname(destAbs), { recursive: true });
+          try {
+            renameSync(found, destAbs);
+          } catch {
+            copyFileSync(found, destAbs);
+            unlinkSync(found);
+          }
           modified = true;
         }
       }

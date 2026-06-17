@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "fs";
-import { delimiter, join, resolve } from "path";
+import { delimiter, resolve } from "path";
 import { spawnSync } from "child_process";
 import { tmpdir } from "os";
+import { CliOpts, makePath } from "./cli-utils.js";
 
 const rootDir = resolve(new URL("..", import.meta.url).pathname);
-const aliasDir = join(rootDir, "packages", "deuk-agent-rule");
-const workDir = mkdtempSync(join(tmpdir(), "deuk-agent-flow-local-smoke-"));
-const prefixDir = join(workDir, "prefix");
+const aliasDir = makePath(rootDir, "packages", "deuk-agent-rule");
+const workDir = mkdtempSync(makePath(tmpdir(), "deuk-agent-flow-local-smoke-"));
+const prefixDir = makePath(workDir, "prefix");
 
-function run(command, args, cwd, opts = {}) {
+function run(command, args, cwd, opts: CliOpts = {}) {
   const shown = [command, ...args].join(" ");
   console.log(`\n$ ${shown}`);
   const result = spawnSync(command, args, {
@@ -38,7 +39,7 @@ function pack(cwd, expected) {
   const row = rows[0];
   const filename = row?.filename;
   if (!filename) throw new Error(`npm pack did not return a filename for ${cwd}`);
-  const tarball = join(workDir, filename);
+  const tarball = makePath(workDir, filename);
   if (!existsSync(tarball)) throw new Error(`packed tarball missing: ${tarball}`);
 
   const fileSet = new Set((row.files || []).map(file => file.path));
@@ -49,11 +50,11 @@ function pack(cwd, expected) {
 }
 
 function globalBinDir(prefix) {
-  return process.platform === "win32" ? prefix : join(prefix, "bin");
+  return process.platform === "win32" ? prefix : makePath(prefix, "bin");
 }
 
 function assertGlobalCommand(binDir, name) {
-  const script = process.platform === "win32" ? join(binDir, `${name}.cmd`) : join(binDir, name);
+  const script = process.platform === "win32" ? makePath(binDir, `${name}.cmd`) : makePath(binDir, name);
   if (!existsSync(script)) throw new Error(`global command shim missing: ${script}`);
   if (process.platform !== "win32") {
     const mode = statSync(script).mode;
@@ -62,8 +63,8 @@ function assertGlobalCommand(binDir, name) {
 }
 
 try {
-  const rootPkg = readJson(join(rootDir, "package.json"));
-  const aliasPkg = readJson(join(aliasDir, "package.json"));
+  const rootPkg = readJson(makePath(rootDir, "package.json"));
+  const aliasPkg = readJson(makePath(aliasDir, "package.json"));
   if (aliasPkg.dependencies?.["deuk-agent-flow"] !== rootPkg.version) {
     throw new Error(`deuk-agent-rule must depend on deuk-agent-flow@${rootPkg.version}`);
   }
@@ -73,10 +74,11 @@ try {
     files: [
       "bin/deuk-agent-flow.js",
       "bin/deuk-agent-rule.js",
-      "scripts/cli.mjs",
-      "scripts/cli-ticket-commands.mjs",
-      "scripts/lint-md.mjs",
-      "scripts/lint-rules.mjs",
+      "scripts/out/scripts/cli.js",
+      "scripts/out/scripts/cli-ticket-command-shared.js",
+      "scripts/out/scripts/cli-ticket-commands.js",
+      "scripts/out/scripts/lint-md.js",
+      "scripts/out/scripts/lint-rules.js",
       "package.json",
     ],
   });

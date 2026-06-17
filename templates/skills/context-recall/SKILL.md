@@ -1,6 +1,8 @@
 ---
 name: context-recall
-summary: Reuse prior ticket and rule memory without turning RAG into the source of truth.
+summary: 🧠 RAG를 소스 오브 트루스로 삼지 않고 이전 티켓·룰 메모리를 재사용.
+category: memory
+bind: phase1
 ---
 
 # Context Recall

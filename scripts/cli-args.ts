@@ -1,12 +1,35 @@
+// Parse a phase token from --phase/--to. Accepts "2", "phase2", "phase 2", "end", "start".
+// Returns NaN when no digit is present and not a known named state so callers can detect
+// a malformed value (e.g. "--to phaseX") instead of silently advancing. (#635)
+const NAMED_PHASE_MAP = { start: 1, phase1: 1, phase2: 2, phase3: 3, phase4: 4, end: 4 };
+function parsePhaseToken(raw) {
+  const s = String(raw ?? "").trim().toLowerCase();
+  if (NAMED_PHASE_MAP[s] !== undefined) return NAMED_PHASE_MAP[s];
+  const m = s.match(/\d+/);
+  return m ? Number(m[0]) : NaN;
+}
+
 export function parseTicketArgs(argv) {
-  const out = { cwd: process.cwd(), dryRun: false, nonInteractive: false, limit: 20 };
+  const invocationCwd = process.cwd();
+  const out: Record<string, any> = { cwd: invocationCwd, invocationCwd, dryRun: false, nonInteractive: false, limit: 20 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--cwd") out.cwd = argv[++i];
+    if (a === "--cwd") {
+      out.cwd = argv[++i];
+      out.cwdExplicit = true;
+    }
     else if (a === "--dry-run") out.dryRun = true;
+    else if (a === "--apply") out.apply = true;
     else if (a === "--non-interactive") out.nonInteractive = true;
-    else if (a === "--topic" || a === "--id") out.topic = argv[++i];
+    else if (a === "--id" || a === "--ticket") out.ticketId = argv[++i];
+    else if (a === "--title") out.title = argv[++i];
+    else if (a === "--platform") out.platform = argv[++i];
     else if (a === "--group") out.group = argv[++i];
+    else if (a === "--parent" || a === "--main-ticket") out.parent = argv[++i];
+    else if (a === "--workspace") out.workspace = argv[++i];
+    else if (a === "--allow-cwd-target") {
+      throw new Error("ticket commands no longer support cwd-based target selection. Use --workspace <id>.");
+    }
     else if (a === "--project") out.project = argv[++i];
     else if (a === "--content") out.content = argv[++i];
     else if (a === "--content-file") out.contentFile = argv[++i];
@@ -19,7 +42,10 @@ export function parseTicketArgs(argv) {
     else if (a === "--latest" || a === "-l") out.latest = true;
     else if (a === "--path-only") out.pathOnly = true;
     else if (a === "--print-content") out.printContent = true;
+    else if (a === "--with-total") out.withTotal = true;
+    else if (a === "--takeover") out.takeover = true;
     else if (a === "--all") out.all = true;
+    else if (a === "--active") out.active = true;
     else if (a === "--status") out.status = argv[++i];
     else if (a === "--archived") out.archived = true;
     else if (a === "--priority") out.priority = argv[++i];
@@ -33,13 +59,12 @@ export function parseTicketArgs(argv) {
     else if (a === "--docs-language") out.docsLanguage = argv[++i];
     else if (a === "--workflow") out.workflowMode = argv[++i];
     else if (a === "--approval") out.approval = argv[++i];
-    else if (a === "--ticket-started") out.ticketStarted = true;
-    else if (a === "--ticket-reviewed") out.ticketReviewed = true;
     else if (a === "--evidence") out.evidence = argv[++i];
     else if (a === "--skip-phase0") out.skipPhase0 = true;
     else if (a === "--summary") out.summary = argv[++i];
+    else if (a === "--type") out.ticketType = argv[++i];
     else if (a === "--tags") out.tags = argv[++i];
-    else if (a === "--phase") out.phase = Number(argv[++i]);
+    else if (a === "--phase" || a === "--to") { out.phase = parsePhaseToken(argv[++i]); out.phaseRequested = true; }
     else if (a === "--next") out.next = true;
     else if (a === "--handoff") out.handoff = true;
     else if (a === "--reason") out.reason = argv[++i];
@@ -48,30 +73,41 @@ export function parseTicketArgs(argv) {
     else if (a === "--allow-placeholder") out.allowPlaceholder = true;
     else if (a === "--compact") out.compact = true;
     else if (a === "--status-detail") out.statusDetail = true;
+    else if (a === "--verbose") out.verbose = true;
     else if (a === "-h" || a === "--help") out.help = true;
+    else if (a === "--session-id") out.sessionId = argv[++i];
+    else if (!a.startsWith("-")) out.ticketId = out.ticketId || a;
   }
   return out;
 }
 
 export function parseArgs(argv) {
-  const out = { cwd: process.cwd(), dryRun: false, backup: false };
+  const out: Record<string, any> = { cwd: process.cwd(), dryRun: false, backup: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--cwd") out.cwd = argv[++i];
+    if (a === "--cwd") {
+      out.cwd = argv[++i];
+      out.cwdExplicit = true;
+    }
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--backup") out.backup = true;
     else if (a === "--non-interactive") out.nonInteractive = true;
     else if (a === "--interactive") out.interactive = true;
     else if (a === "--clean") out.clean = true;
     else if (a === "--tag") out.tag = argv[++i];
+    else if (a === "--platform") out.platform = argv[++i];
     else if (a === "--marker-begin") out.markerBegin = argv[++i];
     else if (a === "--marker-end") out.markerEnd = argv[++i];
-    else if (a === "--agents") out.agents = argv[++i];
     else if (a === "--cursorrules") out.cursorrules = argv[++i];
     else if (a === "--append-if-no-markers") out.appendIfNoMarkers = true;
     else if (a === "--workflow") out.workflowMode = argv[++i];
     else if (a === "--approval") out.approval = argv[++i];
+    else if (a === "--workspace") out.workspace = argv[++i];
+    else if (a === "--prompt") out.prompt = argv[++i];
+    else if (a === "--project") out.project = argv[++i];
+    else if (a === "--section") out.section = argv[++i];
     else if (a === "--json") out.json = true;
+    else if (a === "--path-only") out.pathOnly = true;
     else if (a === "--remote") out.remote = argv[++i];
     else if (a === "--kind" || a === "--workspace-kind") out.workspaceKind = argv[++i];
     else if (a === "--stack" || a === "--technical-surface") out.stack = argv[++i];
@@ -80,13 +116,14 @@ export function parseArgs(argv) {
     else if (a === "--no-sync") out.sync = false;
     else if (a === "--docs-language") out.docsLanguage = argv[++i];
     else if (a === "--compact") out.compact = true;
+    else if (a === "--session-id") out.sessionId = argv[++i];
     else if (a === "-h" || a === "--help") out.help = true;
   }
   return out;
 }
 
 export function parseSkillArgs(argv) {
-  const out = { cwd: process.cwd(), dryRun: false, nonInteractive: false };
+  const out: Record<string, any> = { cwd: process.cwd(), dryRun: false, nonInteractive: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--cwd") out.cwd = argv[++i];
@@ -100,7 +137,7 @@ export function parseSkillArgs(argv) {
 }
 
 export function parseUsageArgs(argv) {
-  const out = {
+  const out: Record<string, any> = {
     cwd: process.cwd(),
     json: false,
     platform: "",
@@ -137,7 +174,7 @@ export function parseUsageArgs(argv) {
 }
 
 export function parseTelemetryArgs(argv) {
-  const out = {
+  const out: Record<string, any> = {
     cwd: process.cwd(),
     tokens: 0,
     tdw: 0,

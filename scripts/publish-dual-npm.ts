@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { spawnSync } from "child_process";
 import { fileURLToPath } from "url";
+import { CliOpts, makePath } from "./cli-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = join(__dirname, "..");
-const aliasDir = join(rootDir, "packages", "deuk-agent-rule");
+const rootDir = makePath(__dirname, "..");
+const aliasDir = makePath(rootDir, "packages", "deuk-agent-rule");
 
-export function buildAliasPackageJson(rootPkg, currentAliasPkg = {}) {
+export function buildAliasPackageJson(rootPkg, currentAliasPkg: Record<string, any> = {}) {
   const version = rootPkg.version;
   return {
     ...currentAliasPkg,
@@ -32,7 +33,7 @@ export function buildAliasPackageJson(rootPkg, currentAliasPkg = {}) {
       "deuk-agent-rule": "./bin/deuk-agent-rule.js",
       deukagentrule: "./bin/deuk-agent-rule.js",
     },
-    engines: rootPkg.engines || currentAliasPkg.engines || { node: ">=18" },
+    engines: rootPkg.engines || currentAliasPkg.engines || { node: ">=20" },
     dependencies: {
       "deuk-agent-flow": version,
     },
@@ -56,9 +57,9 @@ function run(command, args, cwd) {
   }
 }
 
-export function syncAliasPackageJson(paths = {}) {
-  const rootPackagePath = paths.rootPackagePath || join(rootDir, "package.json");
-  const aliasPackagePath = paths.aliasPackagePath || join(aliasDir, "package.json");
+export function syncAliasPackageJson(paths: Record<string, any> = {}) {
+  const rootPackagePath = paths.rootPackagePath || makePath(rootDir, "package.json");
+  const aliasPackagePath = paths.aliasPackagePath || makePath(aliasDir, "package.json");
   const rootPkg = readJson(rootPackagePath);
   const aliasPkg = readJson(aliasPackagePath);
   const nextAliasPkg = buildAliasPackageJson(rootPkg, aliasPkg);
@@ -121,7 +122,7 @@ export function main(argv = process.argv.slice(2)) {
     run("npm", ["test"], rootDir);
   }
   if (!opts.skipSmoke) {
-    run("node", ["scripts/smoke-npm-local.mjs"], rootDir);
+    run("node", ["scripts/out/scripts/smoke-npm-local.js"], rootDir);
   }
 
   const args = publishArgs(opts);

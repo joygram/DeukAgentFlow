@@ -6,11 +6,293 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+
+## [5.0.2] - 2026-06-16
+
+### Fixed
+
+- **flow-ui:** 전체 티켓 카운트가 1로 표시되던 버그 — ticket list에 전체 카운트 동봉 ([#756](https://github.com/joygram/DeukAgentFlow/issues/756))
+
+## [5.0.1] - 2026-06-16
+
+### Fixed
+
+- **vsix:** vscode-extension 버전이 루트 버전 자동 추종하도록 수정
+
+### Changed
+
+- **readme:** 5.0 로드맵 갱신 + Flow UI 스샷 자리 정비 (en/ko)
+
+## [5.0.0] - 2026-06-16
+
+> **메이저 릴리스.** 스킬을 홈 디렉토리(`~/.deuk`)로 이전하고, XState 기반 티켓 워크플로 엔진과 VS Code Flow UI(첫 배포)를 도입한 내부 시스템 전면 개편입니다. 기존 `.deuk-agent/` 워크스페이스 데이터는 자동 마이그레이션됩니다 — 실패 시 복구 절차는 README의 마이그레이션 가이드를 참고하세요.
+
+### 🏠 홈 디렉토리 이동 · 마이그레이션
+
+- **ticket:** cwd write 박멸 — report/knowledge/defrag 제거, 마이그레이션이 .deuk 통째삭제·.deuk-agent 흡수 ([#727](https://github.com/joygram/DeukAgentFlow/issues/727))
+- .deuk-agent 하드코딩 에러메시지/스모크테스트 → .deuk 수정
+- **vscode:** .deuk-agent → .deuk 홈 경로 수정
+- remove workspace .deuk-agent/ dir, store PROJECT_RULE and memory in home ticket store
+- **#669:** workspace marker .deuk-agent/ → .deuk-workspace-id 단일 파일로 교체
+- **workspace:** 서브모듈 독립 등록 허용 — 자식에 .deuk-agent 직접 있으면 통과 ([#080](https://github.com/joygram/DeukAgentFlow/issues/080))
+- **skill:** home-only skills, no workspace spray, hash auto-sync
+- **ticket:** relocate ticket storage to home with self-healing registry
+
+### 🎭 스킬 시스템
+
+- **persona-maid:** 이모지 표현 풀·로테이션·분석모드 톤유지 규칙 추가
+- **webview:** workspace→skill→workspace 탭 복귀 시 스타일 깨짐 수정 ([#749](https://github.com/joygram/DeukAgentFlow/issues/749))
+- **webview:** SKILL탭→WORKSPACE 복귀 스타일 깨짐 수정 + 드롭다운 active/total 카운트 표기 ([#748](https://github.com/joygram/DeukAgentFlow/issues/748))
+- **#697:** ticket-status-surface 시스템 스킬 — 상태는 카드 한 줄(링크 항상 포함)
+- **#694:** 스킬 노드 영역 바인딩 + rules 출력 축소 + CLI 자체 메시지 제거
+- discard hint clarification + doc-sync v4.5.18 canonicalization
+- raise TOTAL_MAX_SKILLS 5→6 to allow doc-sync exposure
+- add doc-sync skill + fix executionEvidence phase2→3 blocking bug
+- **persona-maid:** 텍스트 기호 하트→컬러 이모지 통일 + 카오모지 규칙 추가
+- **persona-maid:** 단조로운 하트를 다양한 컬러 하트로 교체
+- **persona-maid:** 메이드 페르소나 애교 폭발 버전으로 강화
+- **skill:** native 스킬 노출을 <id>/SKILL.md 디렉토리 구조로 전환
+- **skill:** native platform에 daf- prefix flat 파일로 배포
+- **skill:** exposed/native-sync 전역 SSOT 통합
+- **skill:** claude platform -> native ~/.claude/commands/ mode
+- revert c4025da regressions — skill installed flag, quality gate bypass, emoji encoding
+- auto-cleanup quality gate bypass and inline skills for AI platforms
+
+### 🖥️ Flow UI (VS Code 확장 · 신규)
+
+- **webview:** 스킬 조회 JSON이 명령출력 박스 오염시키는 문제 수정 ([#750](https://github.com/joygram/DeukAgentFlow/issues/750))
+- **agentflow-ui:** 스킬 탭 복귀 시 티켓 뷰 깨짐 수정 + 카운트 active/total 표기 ([#747](https://github.com/joygram/DeukAgentFlow/issues/747))
+- **statusbar:** 세션 쿠키 기준 워크스페이스·티켓 표시 ([#737](https://github.com/joygram/DeukAgentFlow/issues/737))
+- **vscode:** UI 로딩 병목 전면 제거 — open 티켓만 파싱, 비선택 ws readdir 카운트만
+- **vscode:** statusbar 초기 text 비어있음 + 전 워크스페이스 본문 전수로딩 회귀 수정
+- **vscode-ext:** 앱 아이콘 agentflow-128.png 등록
+- **devinstall:** ~/.deuk/dev/ vsix 마스터 배포 + 전 프로젝트 연동
+- add code-server extensions dir to WSL vsix install targets
+- **#676:** install VSIX to Windows .vscode/extensions via WSL wslpath
+- agentflow UX 개선 — 티켓 표기 wp-id, UI 개선, Approval Gate 정밀화
+- **vscode:** compact status bar format — workspace #num phN
+- **vscode:** show active ticket in status bar
+- **ui:** resolveWebviewView/openPanel 초기 로딩 트리거 추가
+
+### 🌐 다국어 (i18n)
+
+- **i18n:** 영어 로케일에서 phase 안내·게이트가 한글로 나오던 문제 수정
+
+### 🎫 티켓 워크플로 엔진
+
+- **ticket:** entry-node를 세션 쿠키 기반 단일 워크스페이스 조회로 전환 ([#743](https://github.com/joygram/DeukAgentFlow/issues/743))
+- **ticket-link:** 파일 링크 회귀 수정 — 드라이브 경계서 안 열리던 절대경로 폴백 제거 ([#746](https://github.com/joygram/DeukAgentFlow/issues/746))
+- **rules:** cwd 의존 제거 — registry 전체 스캔으로 active ticket 감지 + 다줄 블록 출력 제거
+- **ticket-surface:** 카드 라벨 오조합·DocMeta 다줄·move 후 카드 미표시 버그 3종 수정
+- **ticket-close:** .md status/phase 갱신 안 되던 버그 수정 ([#736](https://github.com/joygram/DeukAgentFlow/issues/736))
+- **use:** ticket use 출력에 .md-aware 슬롯 현황 표기 ([#729](https://github.com/joygram/DeukAgentFlow/issues/729))
+- **verify:** phase3/4 verify 스테이지에 은폐금지 게이트 주입 ([#728](https://github.com/joygram/DeukAgentFlow/issues/728))
+- **ticketHome:** CLI resolveHomeTicketDirForWorkspace 로직과 통합 — 드리프트 제거
+- **#691:** XState 기반 LangGraph 상태머신으로 티켓 워크플로 전이 엔진 전환
+- getCloseWorkflowReasons accepts canonical Analysis/Direction headings
+- **#675:** unify flow-cookie+claim into single cookie-{wp}-{ticketId}-{sessionId} touch file
+- 에이전트 폭주 방지 — active ticket STOP 신호, Runaway Prevention 규칙 추가
+- **plan-body:** phase1 plan-body 7섹션 → 4섹션 슬림화 ([#654](https://github.com/joygram/DeukAgentFlow/issues/654)) v4.5.8
+- **ticket-create:** --plan-body 생략 시 summary 기반 auto-scaffold 생성 ([#653](https://github.com/joygram/DeukAgentFlow/issues/653)) v4.5.7
+- **workspace:** rules·ticket dispatch의 cwd 워크스페이스 추정 박멸 ([#652](https://github.com/joygram/DeukAgentFlow/issues/652)) v4.5.5
+- **workspace:** 세션 cookie를 홈 직속 저장으로 이전 — cwd 의존 완전 제거 (#871-followup) v4.5.2
+- **workspace:** 세션 cookie 기반 active 도출로 멀티세션 티켓 강탈 박멸 (#871-followup)
+- **ui:** 티켓 리뷰 링크 채팅 클릭 복원 + ticket --help 룰 오염 제거
+- **workspace:** registry.json 폐기 + cwd 자동등록/폴백 제거로 ghost 워크스페이스 박멸 ([#645](https://github.com/joygram/DeukAgentFlow/issues/645))
+- rules APC 서브헤딩 안내 추가 + ticket create Source 라인 출력 ([#644](https://github.com/joygram/DeukAgentFlow/issues/644))
+- **rules:** --workspace 플래그로 runRulesShow workspace 컨텍스트 교체 ([#643](https://github.com/joygram/DeukAgentFlow/issues/643))
+- **rules:** buildPhaseAdvanceHint 전체 transitions 표시 — 정방향·이탈·회귀·재오픈 라우트 모두 출력
+- **workflow:** assertTicketWorkflowTransition 차단 시 허용 전환 목록 에러 메시지 추가
+- **workflow:** FSM 에러 메시지에 허용 actions·전환·discard 이정표 추가, --to end named state 파싱 지원
+- **ticket-home:** 티켓 경로 중첩·ghost 워크스페이스 근절 ([#080](https://github.com/joygram/DeukAgentFlow/issues/080))
+- **ticket-gate:** cli/ui 타입 구분 제거 및 워크스페이스 유령 등록 방지 ([#080](https://github.com/joygram/DeukAgentFlow/issues/080))
+- **rules:** narrow ticket-exempt to block gate bypass (v100, #631)
+- **vscode:** 액티브 티켓을 claim-{id}.json에서 도출 ([#630](https://github.com/joygram/DeukAgentFlow/issues/630))
+- **ticket:** 워크스페이스 정규화 충돌 타이브레이크 + cli 9섹션 사전 노출
+- **ticket:** 타입 인지 Phase1 검증 + 확장 홈 티켓 경로 이전
+- **ticket:** per-ticket claim model replaces global active marker
+- **cli:** toSlug Hangul romanize fallback + rules-show section test
+- || true 폴백 제거, active 마커 다중파일 정리, --plan-body 직접 인자 안내 통일
+- **ticket:** active 마커 개념 제거 — status 폴백이 archived 거짓 노출하던 버그 수정
+- **ticket:** discard approval_required 허용·INDEX 미등록 폐기·help 템플릿 복원·workspace 이동
+- **ticket+ui:** INDEX 레거시 마이그레이션·ticket doctor·sanitize·archive lazy-load
+- cwd-matched workspace resolution + ticket gate template sync
+- **flow:** decouple active ticket marker logic from INDEX.json writer
+
+### 🔧 빌드 · 인프라
+
+- **707:** .mjs 44개 제거, .ts 단일 소스로 전환
+- **bin:** tsc 빌드 출력(scripts/out/scripts/cli.js)으로 bin 교체
+- **#707:** scripts/*.mjs → .ts 전환 — tsc 에러 0개 달성
+- WSL2에서 winShell 오판정으로 PowerShell 블록 출력되던 버그 수정
+- Windows PowerShell 호환 — isWindowsPlatform 분기, PS here-string 예시 출력
+
+### 기타
+
+- **#673:** multi-agent session isolation via per-agent env var detection
+
+## [4.4.54] - 2026-06-07
+
+### 추가됨 (Added)
+
+- **skills:** 서브컬처 메이드 페르소나(`persona-maid`) 스킬을 템플릿으로 추가했습니다.
+  - 정식 배포 시 기본적으로는 **비활성(opt-in)** 상태입니다.
+  - 사용자가 원할 경우 `deuk-agent-flow skill add --skill persona-maid` 명령으로 수동 장착할 수 있습니다.
+
+## [4.4.4] - 2026-05-19
+
+### 변경됨 (Changed)
+
+- **cli:** workspace 감지와 markdown lint 대상 탐색에서 런타임 git probe를 제거해 일반 AgentFlow CLI 명령이 더 이상 `git rev-parse`, `git diff`, `git ls-files`를 실행하지 않도록 했습니다.
+- **ticket:** lifecycle quality gate가 dirty git 파일 목록을 조회하지 않고 실제 lifecycle 대상만으로 rules audit 범위를 판단하도록 바꿨습니다.
+
+### 수정됨 (Fixed)
+
+- **lint:** `lint:md` 기본 대상 탐색이 `git`을 호출하지 않는다는 회귀 테스트를 추가했습니다.
+
+## [4.4.3] - 2026-05-19
+
+### 변경됨 (Changed)
+
+- **ticket:** workspace 접두어가 있는 Flow surface를 `flow:[workspace:상태]` 형식으로 렌더링해 승인, 조정, 종료, phase 라인에 워크스페이스명이 보이도록 했습니다.
+- **docs:** 버전 헤더와 사용 예시를 4.4.3 릴리스에 맞췄습니다.
+
+### 수정됨 (Fixed)
+
+- **commentary:** 하네스와 ticket command 테스트가 workspace-prefixed surface를 검증하도록 갱신했습니다.
+
+## [4.4.0] - 2026-05-18
+
+### 변경됨 (Changed)
+
+- **init:** 자동 마이그레이션을 단일 대상 워크스페이스 정리로 바꿔, 일반 CLI 사용 중 sibling 저장소까지 쓸어버리지 않도록 했습니다.
+- **rules:** source checkout을 포함해 AgentFlow 룰 SSoT를 `core-rules/AGENTS.md` 하나로 고정하고, 생성된 root `AGENTS.md` 포인터는 패키지 루트 예외 없이 제거하도록 했습니다.
+- **global:** 글로벌 룰 복사본 대신 `deuk-agent-flow rules path --path-only`로 현재 패키지 룰을 찾는 hash-marked thin pointer를 설치하도록 바꿨습니다.
+- **project:** 프로젝트별 규칙 위치를 `.deuk-agent/PROJECT_RULE.md`로 옮기고, consumer workspace root에는 로컬 포인터를 남기지 않도록 정리했습니다.
+
+### 수정됨 (Fixed)
+
+- **ticket:** `init`/자동 마이그레이션 중 ticket archive, auto-close, knowledge distill lifecycle 작업이 실행되지 않도록 막았습니다.
+- **workspace:** 티켓 명령이 엉뚱한 sibling workspace로 점프하지 않도록 workspace dispatch와 matching 동작을 강화했습니다.
+
+## [4.3.22] - 2026-05-18
+
+### 변경됨 (Changed)
+
+- **agent-flow:** 여러 로컬 설정으로 파편화되어 있던 AgentFlow 설정을 Windows/Linux 소비자 공통의 user-scoped global 설정으로 이관했습니다.
+- **init:** `/joy/workspace` 아래에서 초기화할 때 기존 로컬 AgentFlow 설정을 정리해, 오래된 로컬 설정이 user-level 설정을 계속 가리지 않도록 했습니다.
+
+### 수정됨 (Fixed)
+
+- **ticket:** CLI가 관리하는 티켓 markdown을 lifecycle lint 전에 자동 정규화해, archived ticket의 trailing whitespace 같은 무해한 포맷 흔들림이 새 티켓 생성/갱신을 막지 않도록 했습니다.
+- **ticket:** 티켓 활동 중 auto-archive와 auto-close maintenance를 best-effort로 처리해, 정리 실패가 현재 워크플로우를 중단하지 않으면서 stale open-limit row는 계속 정리되도록 했습니다.
+
+## [4.3.17] - 2026-05-17
+
+### 추가됨 (Added)
+
+- **vsix:** `npm run install:vscode` 공통 설치 경로를 추가해 bundled VSIX를 데스크톱 VS Code와 VS Code Server 확장 디렉터리에 함께 설치하고, 오래된 AgentFlow 확장 폴더와 stale webview workspace state를 정리하도록 했습니다.
+
+### 변경됨 (Changed)
+
+- **rules:** 실행 중 commentary를 한 단어로 강제하는 방식 대신, 승인 전 `Ticket start`, blocker, 최종 응답처럼 도구가 소유하는 workflow surface 중심으로 정리했습니다.
+- **ticket:** `ticket context`가 승인된 Phase 1 티켓을 durable Phase 2 `active`로 전환한 뒤 runtime `set_workflow_context`가 기록되도록 했습니다.
+
+### 수정됨 (Fixed)
+
+- **ticket:** `ticket create --json` 검증 실패 시 누락 섹션, 필수 heading, APC marker, compact skeleton을 포함한 구조화된 repair payload를 반환하도록 해 에이전트별 복구 비용을 줄였습니다.
+- **vsix:** checkbox 기반 티켓 멀티셀렉트를 제거하고 Shift 범위 선택과 Ctrl/Cmd 토글 방식으로 바꿨습니다.
+- **vsix:** 멀티셀렉트 상태에서는 handoff 컨트롤을 숨기고, 숨겨진 textarea 접근으로 webview가 멈추는 문제를 막았습니다.
+- **vsix:** preview/selection 변경 시 전체 티켓 재스캔을 피하고 webview state payload를 줄여 티켓 클릭 지연을 낮췄습니다.
+- **vsix:** 단일 티켓 모드에서 상태/lifecycle 컨트롤을 `copy handoff` 바로 아래로 이동했습니다.
+
+## [4.3.8] - 2026-05-17
+
+### 수정됨 (Fixed)
+
+- **init:** 기본 `init` 출력에서 Deuk AgentContext MCP 등록/상태 문구를 제거하고, git 저장소 내부에 잘못 생성된 중첩 `AGENTS.md` 포인터는 root 포인터를 보존한 채 정리하도록 했습니다.
+- **ticket:** `status: deprecated`를 실행 대상이 아닌 생명주기 상태로 처리해, `ticket status`가 deprecated 티켓을 Phase 1 계획 누락으로 오판하지 않고 그대로 보고하도록 했습니다.
+
+## [4.3.2] - 2026-05-16
+
+### 수정됨 (Fixed)
+
+- **ticket:** `ticket close`가 닫힌 티켓에 대해 클릭 가능한 archive 링크를 한 번만 출력하도록 정리해, 중복 파일 카드와 삭제된 경로 표면이 다시 나타나지 않게 했습니다.
+
+## [4.3.0] - 2026-05-14
+
+### 추가됨 (Added)
+
+- **vsix:** **DeukAgentFlow AgentFlow Panel** VS Code 확장(VSIX)을 도입했습니다. 터미널 전환 없이 에디터 사이드패널에서 티켓 기반 워크플로우를 바로 제어할 수 있습니다.
+  - 티켓 목록 컬럼: 파일명 · m/s · phase · priority · 본문 스니펫 · 날짜 — 1행 고밀도 표시.
+  - 툴바: 🔍 검색 | Open/Close/All 필터 | 활성 티켓 ID(강조) | 티켓 수.
+  - 전문(id·title·summary·body) 실시간 검색 팝업.
+  - 미리보기 패널: 파일명 + phase/priority pill + `open` 버튼을 1줄로 표시 (워드랩·스크롤바 없음).
+  - **Copy handoff** 버튼: textarea 옆에 고정되어 `id / title / phase·status·priority / summary / continue ticket`을 클립보드에 즉시 복사.
+  - 멀티루트 워크스페이스 셀렉터; 중첩 워크스페이스 탐지는 agent-rule 경계에서 자동 중단.
+
+### 수정됨 (Fixed)
+
+- **vsix:** 상태 필터에서 레거시 `active` 값을 `open`으로 backward 매핑; 기본 필터를 `active`에서 `all`로 변경.
+- **vsix:** 필터 변경 후 저장된 미리보기 티켓이 목록에 없으면 첫 번째 티켓으로 자동 fallback 처리.
+- **vsix:** 티켓 선택 강조를 `outline` 기반(목록 좌우가 잘리는 문제)에서 border-color + background-color tinting으로 교체.
+- **cli:** `discoverAllWorkspaces`에서 `.deuk-agent` 루트 발견 시 하위 재귀를 중단해 중첩 워크스페이스 오탐지를 방지.
+
 ## [Unreleased]
 
 ### 수정됨 (Fixed)
 
+- **ticket:** 티켓 템플릿의 APC 마커를 추가 설명문 없이 제목형으로 정리해, 에이전트가 마커 본문을 다음 줄에 쓰도록 유도했습니다.
+- **ticket:** APC create 입력을 마커별로 자르지 않고 APC 섹션 전체 기준으로 검증해, 제목형·단독형·inline 마커 스타일 호환성을 유지했습니다.
+- **rules:** `Ticket start` 링크가 이미 노출된 티켓은 완료 응답에서 같은 클릭 링크를 다시 내보내지 않도록 했습니다.
+- **skills:** 공용 skill 요약과 ownership 문구에서 DeukAgentFlow 전용 표현을 제거해 소비자 표면을 일반화했습니다.
+
+## [4.4.6] - 2026-05-26
+
+### 수정됨 (Fixed)
+
+- **ticket:** 티켓 템플릿의 APC 마커를 추가 설명문 없이 제목형으로 정리해, 에이전트가 마커 본문을 다음 줄에 쓰도록 유도했습니다.
+- **ticket:** APC create 입력을 마커별로 자르지 않고 APC 섹션 전체 기준으로 검증해, 제목형·단독형·inline 마커 스타일 호환성을 유지했습니다.
+- **rules:** `Ticket start` 링크가 이미 노출된 티켓은 완료 응답에서 같은 클릭 링크를 다시 내보내지 않도록 했습니다.
+- **skills:** 공용 skill 요약과 ownership 문구에서 DeukAgentFlow 전용 표현을 제거해 소비자 표면을 일반화했습니다.
+
+## [4.2.27] - 2026-05-13
+
+### 수정됨 (Fixed)
+
+- **ticket:** 티켓 템플릿의 APC 마커를 추가 설명문 없이 제목형으로 정리해, 에이전트가 마커 본문을 다음 줄에 쓰도록 유도했습니다.
+- **ticket:** APC create 입력을 마커별로 자르지 않고 APC 섹션 전체 기준으로 검증해, 제목형·단독형·inline 마커 스타일 호환성을 유지했습니다.
+- **rules:** `Ticket start` 링크가 이미 노출된 티켓은 완료 응답에서 같은 클릭 링크를 다시 내보내지 않도록 했습니다.
+- **skills:** 공용 skill 요약과 ownership 문구에서 DeukAgentFlow 전용 표현을 제거해 소비자 표면을 일반화했습니다.
+
+## [4.2.27] - 2026-05-13
+
+### 수정됨 (Fixed)
+
+- **ticket:** 티켓 템플릿의 APC 마커를 추가 설명문 없이 제목형으로 정리해, 에이전트가 마커 본문을 다음 줄에 쓰도록 유도했습니다.
+- **ticket:** APC create 입력을 마커별로 자르지 않고 APC 섹션 전체 기준으로 검증해, 제목형·단독형·inline 마커 스타일 호환성을 유지했습니다.
+- **rules:** `Ticket start` 링크가 이미 노출된 티켓은 완료 응답에서 같은 클릭 링크를 다시 내보내지 않도록 했습니다.
+- **skills:** 공용 skill 요약과 ownership 문구에서 DeukAgentFlow 전용 표현을 제거해 소비자 표면을 일반화했습니다.
+
+## [4.2.2] - 2026-05-10
+
+### 수정됨 (Fixed)
+
+- **release:** 버전 bump 시 `Unreleased`에 남은 항목이 유실되지 않도록 누적 릴리스 이월 처리를 보강했습니다.
+
+## [4.2.1] - 2026-05-10
+
+### 수정됨 (Fixed)
+
 - **cli:** 티켓 탐색이 상위 워크스페이스를 상속하지 않고 현재 agent-rule 경계에서 멈추도록 수정했습니다.
+- **ticket:** `status`, `guard`, `move`의 Phase 1 검증을 동일하게 적용해, 미완성 상태 티켓이 숨김 없이 걸러지도록 수정했습니다.
+- **ticket:** `move` 단계에서 문자열 phase 값이 문자열 결합으로 오동작하는 것을 방지하기 위해 숫자 변환 후 산술 처리하도록 수정했습니다.
+
+## [4.0.38] - 2026-05-10
+
+### 수정됨 (Fixed)
+
+- **rules:** 승인 대기 상태의 최종 응답도 compact `Ticket start` 표면을 반복하도록 강제해, 최종 승인 대기 문구만 남아 활성 티켓 링크가 숨겨지는 문제를 막았습니다.
 
 ## [4.0.37] - 2026-05-09
 

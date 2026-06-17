@@ -42,7 +42,64 @@ CLI(`deuk-agent-flow`, 호환 명령 `deuk-agent-rule`)는 **소스 주권(Sourc
 | `templates/` | 티켓, 규칙, 스킬 템플릿의 패키지 소유 단일 진실 공급원 |
 | `bin/deuk-agent-flow.js` | 글로벌 실행 프록시 |
 
-## 5. 엄격한 Phase 기반 티켓 워크플로우 (TDW)
+## 5. Ticket Workflow: CLI가 소유하는 상태 테이블
+
+DeukAgentFlow는 티켓 생명주기를 느슨한 help 문구와 phase flag 묶음이 아니라 로컬 상태 테이블로 다룹니다. 이것은 범용 workflow runtime이 아닙니다. CLI가 state, transition, recipe assembly, DocMeta validation을 소유합니다.
+
+이 소유권은 선언적 문구가 아니라 end-to-end 런타임 책임을 뜻합니다. 에이전트가 보는 prompt를 CLI가 출력하고, registry/ticket-store context를 해석하고, project/RAG context를 붙이고, 어떤 approval gate와 다음 state가 유효한지 CLI가 결정합니다. ticket markdown과 registry 저장소는 런타임을 위한 durable artifact이지, 병렬적인 워크플로우 진실 공급원이 아닙니다.
+
+| 계층 | 진실 공급원 | 런타임 역할 |
+|---|---|---|
+| Lifecycle 선언 | `scripts/ticket-workflow.mjs` | state, phase/status 메타, 허용 transition, recipe id, template id, project policy role 선언 |
+| State prompt | `docs/cli-surfaces/state/*.md` | 현재 state가 에이전트에게 무엇을 의미하는지 안내 |
+| State template | `docs/cli-surfaces/state-template/*.md` | 해당 state에서 작성해야 할 슬롯과 종료 조건 제시 |
+| Project policy | `.deuk-agent/project-guardrails/*.md` | analysis, coding, debugging, approval, completion 같은 역할별 프로젝트 제약 추가 |
+| Durable record | `.deuk-agent/tickets/**/*.md` | scoped ticket record, evidence, 본문 `## DocMeta` 계약, compact frontmatter summary 저장 |
+
+에이전트가 state에 진입하거나 상태를 확인하면 CLI는 이 조각들을 하나의 DocMeta state surface로 구성합니다.
+
+```text
+Ticket workflow state
+  -> localized state recipe
+  -> project policy metadata
+  -> source contract
+  -> compact flow:[workspace:state] action line
+```
+
+그래서 `deuk-agent-flow rules ticket --workspace <workspace-id>`는 여러 파일을 에이전트가 따로 읽게 하지 않고 조합된 ticket rule surface를 출력합니다. `ticket use`, `ticket status`, `ticket move`, `ticket guard`도 일반 help가 아니라 state-machine command로 봐야 합니다.
+
+### 전이 엔진
+
+티켓 상태 변경은 workflow transition resolver가 계산합니다.
+
+1. 현재 티켓 frontmatter의 `phase/status`를 읽습니다.
+2. 이를 `phase1`, `phase2`, `phase3`, `phase4` 같은 workflow state로 매핑합니다.
+3. `--next`, `--phase`, 또는 `phase2` 같은 명시 gate에서 target state를 계산합니다.
+4. workflow state table에 선언되지 않은 transition이면 차단합니다.
+5. target `phase/status`를 반환하고, 명령이 ticket file과 index를 갱신합니다.
+
+예:
+
+| 현재 | 명령 의도 | Workflow transition | 결과 |
+|---|---|---|---|
+| `phase1/open` | 승인된 실행 | `phase1 -> phase2` | `phase=2`, `status=active` |
+| `phase2/active` | next | `phase2 -> phase3` | `phase=3`, `status=active` |
+| `phase3/active` | 종료 가능 | `phase3 -> phase4` | `phase=4`, `status=closed` |
+| `phase4/closed` | 재오픈 | `phase4 -> phase1` | `phase=1`, `status=open` |
+
+중요한 경계는 prompt text가 state를 결정하지 않는다는 점입니다. state는 lifecycle 선언과 CLI transition engine이 결정하고, recipe는 결정된 state 안에서 LLM 행동을 안내합니다.
+
+### 티켓 DocMeta 저장 구조
+
+티켓 frontmatter는 의도적으로 작게 유지합니다. `id`, `phase`, `status`, `docmetaStatus`, `docmetaValidation`, `docmetaTarget`, 짧은 error key처럼 사람과 index가 바로 읽는 필드만 둡니다. 전체 DocMeta 객체를 frontmatter에 저장하면 안 됩니다.
+
+전체 DocMeta 계약은 티켓 본문의 마지막 섹션인 `## DocMeta` 아래에 저장합니다. 이 하단 블록이 required slot, source map, validation detail, output status, adapter contract를 소유합니다. CLI 명령은 본문 계약을 먼저 갱신하고, 사람이 큰 YAML 헤더를 읽지 않아도 티켓 상태를 추적할 수 있도록 frontmatter에는 작은 요약만 mirror합니다.
+
+기본 command output은 compact projection만 렌더링해야 합니다. 전체 DocMeta는 `--status-detail`, `--verbose`, `--json`, audit output처럼 명시적인 상세 모드에서만 드러냅니다.
+
+이 경계는 디버깅과 리팩터링에도 그대로 적용됩니다. 이 워크플로우가 깨졌다면 기본 대응은 parser나 파일 배치 한 군데를 손보는 국소 패치가 아니라, visible command behavior, state transition wiring, context attachment, approval gate, regression coverage를 함께 복구하는 CLI 계약 수리입니다.
+
+## 6. 엄격한 Phase 기반 티켓 워크플로우 (TDW)
 
 1. **티켓 발행 (Phase 1)**: 사용자가 짧게 지시하면 에이전트가 맥락을 읽고 티켓을 만들거나 기존 티켓을 선택해 타겟 범위를 정의합니다. 메인테이너와 자동화 환경에서는 `ticket create`를 직접 사용할 수 있지만, 일상 협업은 명령이 아니라 요청에서 시작합니다.
 2. **APC 및 메인 티켓 기록**: 에이전트는 코드를 수정하기 전, 메인 티켓에 명시된 APC(Agent Permission Contract)의 `[BOUNDARY]`, `[CONTRACT]`, `[PATCH PLAN]`을 채웁니다. 티켓은 스코프/계약/라이프사이클 체크/실행 계획/검증 결과를 맡고, 실행 로그, 명령 transcript, 완료 요약, 검증 결과를 계획 문구에 섞으면 안 됩니다.

@@ -5,40 +5,44 @@
 
 ## Agent Permission Contract (APC)
 
-[BOUNDARY]
-- 확인된 범위를 기준으로 정확한 수정 가능 모듈을 적습니다.
-- 생성물, 무관한 공용 영역, 외부 루트처럼 건드리면 안 되는 범위를 적습니다.
-- 이 범위를 지배하는 프로젝트 규칙과 코어 규칙을 적습니다.
+### [BOUNDARY]
+- 수정 가능:
+- 보호 범위:
+- 적용 규칙:
 
-[CONTRACT]
-- 이 티켓이 의존하는 실제 입력, 근거, 아티팩트를 적습니다.
-- 이 티켓이 만들어야 하는 실제 결과를 적습니다.
-- 허용되는 부작용과 명시적으로 제외할 항목을 적습니다.
-- 사용자가 명시적으로 요청한 경우가 아니면 테스트 작성/확장은 넣지 않습니다.
+### [CONTRACT]
+- 입력/근거:
+- 기대 결과:
+- 허용 부작용:
+- 제외:
 
-[PATCH PLAN]
-- 확인된 로컬 맥락을 기준으로 정확한 구현 경로를 적습니다.
+### [PATCH PLAN]
+- 구현 경로:
 
 ## Compact Plan
 
-- 실제로 확인한 문제, 선택한 접근, 가장 작은 검증 대상을 적습니다.
+- Problem:
+- Approach:
+- Verification:
 
 ## Problem Analysis
 
-- 확인된 관측을 바탕으로 실제 불일치, 실패, 요청 내용을 적습니다.
+- 
 
 ## Source Observations
 
-- 파일, 명령, diff, 문서, 이전 티켓 기록에서 확인한 실제 근거를 적습니다.
+- 
 
 ## Cause Hypotheses
 
-- 현재 가장 유력한 설명과 아직 경쟁 중인 다른 가설을 적습니다.
+- 
 
 ## Improvement Direction
 
-- 선택한 방향, 범위 경계, 이 경로를 택한 이유를 적습니다.
+- 
 
 ## Audit Evidence
 
-- 승인 전과 실행 전까지 확인한 사실과 명령을 적습니다.
+- Core rules:
+- Project rules:
+- Commands/evidence:
