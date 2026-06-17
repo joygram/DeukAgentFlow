@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
   <br />
-  <h1>Deuk Agent Flow v4.0.0</h1>
+  <h1>Deuk Agent Flow v4.0.34</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmaster%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="deuk-flow combined npm downloads" /></a>
@@ -119,12 +119,31 @@ The next step is to make this flow even easier to see and adopt: clearer first-r
 ### 📚 Detailed Documentation
 | Doc | Purpose |
 |---|---|
+| [docs/usage-guide.ko.md](docs/usage-guide.ko.md) | **Recommended:** practical rollout and step-by-step usage guide |
 | [docs/architecture.md](docs/architecture.md) | High-level system structure and visual infographics |
 | [docs/how-it-works.md](docs/how-it-works.md) | Detailed CLI mechanics, initialization lifecycle, and file roles |
 | [docs/principles.md](docs/principles.md) | Design philosophy: Hub-Spoke, Zero-Legacy, and Source Sovereignty |
-| **Korean Docs** | [README.ko.md](README.ko.md) · [docs/architecture.ko.md](docs/architecture.ko.md) |
+| **Korean Docs** | [README.ko.md](README.ko.md) · [docs/architecture.ko.md](docs/architecture.ko.md) · [docs/how-it-works.ko.md](docs/how-it-works.ko.md) |
 
 ---
+
+## 🚀 Quick Start
+
+The fastest way to add Deuk Agent Flow to your current project:
+
+```bash
+# 1. Install globally
+npm install -g deuk-agent-flow
+
+# 2. Initialize the repo or workspace
+deuk-agent-flow init
+```
+
+After that, day-to-day work starts through plain agent requests, not memorized commands. Say things like "continue", "next", or "inspect the cause".
+
+For a single repo, run `deuk-agent-flow init` from that repo root. For a root workspace that contains multiple DeukAgentFlow projects, run the same command from the workspace root; `init` refreshes the root pointer and discovered child workspaces that own their own `PROJECT_RULE.md` / `.deuk-agent/` state.
+
+For practical rollout details, see [docs/usage-guide.ko.md](docs/usage-guide.ko.md).
 
 ## 🛠️ Installation & Setup
 

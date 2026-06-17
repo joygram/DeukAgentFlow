@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
   <br />
-  <h1>Deuk Agent Flow v4.0.0</h1>
+  <h1>Deuk Agent Flow v4.0.34</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjoygram%2FDeukAgentFlow%2Fmaster%2Fdocs%2Fbadges%2Fnpm-downloads.json" alt="deuk-flow combined npm downloads" /></a>
@@ -140,7 +140,7 @@ deuk-agent-flow init
 
 이후 일상 작업은 명령을 직접 치기보다 에이전트에게 짧게 말합니다. 예: "진행", "다음", "원인 다시 파악".
 
-여러 프로젝트를 한 `~/workspace` 아래에서 관리한다면 각 프로젝트 루트에서 `deuk-agent-flow init`을 실행합니다. workspace 루트는 공통 포인터 역할을 할 수 있지만, 실제 작업 티켓과 로컬 규칙은 보통 각 프로젝트의 `.deuk-agent/`와 `PROJECT_RULE.md`가 소유합니다.
+단일 저장소라면 해당 저장소 루트에서 `deuk-agent-flow init`을 실행합니다. 여러 DeukAgentFlow 프로젝트를 포함한 루트 워크스페이스라면 그 워크스페이스 루트에서 같은 명령을 실행합니다. `init`은 루트 포인터와 자체 `PROJECT_RULE.md` / `.deuk-agent/` 상태를 가진 하위 워크스페이스를 함께 갱신합니다.
 
 이렇게 사용하면 효과가 극대화됩니다. workspace 루트는 공통 진입점, 각 프로젝트 루트는 독립 티켓/규칙/검증 단위로 나누고, 중첩 서버나 앱은 필요할 때 별도 프로젝트로 초기화하세요.
 
