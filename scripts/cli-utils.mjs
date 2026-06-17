@@ -144,6 +144,16 @@ export function stringifyFrontMatter(meta, content) {
   return `---\n${yamlStr}\n---\n\n${content.trim()}\n`;
 }
 
+export function semverGt(a, b) {
+  const pa = String(a || "0").replace(/[^0-9.]/g, "").split(".").map(Number);
+  const pb = String(b || "0").replace(/[^0-9.]/g, "").split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const na = pa[i] ?? 0, nb = pb[i] ?? 0;
+    if (na !== nb) return na < nb;
+  }
+  return false;
+}
+
 export async function checkUpdateNotifier() {
   try {
     const { fileURLToPath } = await import("url");
@@ -155,7 +165,8 @@ export async function checkUpdateNotifier() {
     });
     if (res.ok) {
       const data = await res.json();
-      if (data.version && data.version !== currentVersion) {
+      // Only notify when registry version is strictly newer than local (handles local dev symlink case)
+      if (data.version && semverGt(currentVersion, data.version)) {
         console.warn(`\n\x1b[33m💡 Update available! ${currentVersion} → ${data.version}\x1b[0m`);
         console.warn(`\x1b[36mRun 'npm install -g deuk-agent-rule' to update.\x1b[0m\n`);
       }

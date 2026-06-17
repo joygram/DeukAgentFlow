@@ -494,9 +494,9 @@ export function getHostnameSlug() {
  */
 export function computeNextTicketNumber(existingEntries) {
   const hostname = getHostnameSlug();
-  // Legacy: ticket_NNN_*  |  New: NNN-*
-  const legacyRe = /^ticket_(\d{3,})_/;
-  const newRe = /^(\d{3,})-/;
+  // Legacy: ticket_NNN_*  |  New: NNN-* (NNN is strictly 3-4 digits, NOT a unix timestamp)
+  const legacyRe = /^ticket_(\d{3,4})_/;
+  const newRe = /^(\d{3,4})-/;
   let max = 0;
   for (const e of (existingEntries || [])) {
     const id = String(e.id || '');

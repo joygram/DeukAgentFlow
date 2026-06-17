@@ -6,6 +6,13 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [2.4.6] - 2026-04-19
+
+### 수정됨 (Fixed)
+
+- **cli:** 로컬 버전이 registry 버전 이상일 경우 업데이트 알림을 표시하지 않도록 수정 (로컬 개발 symlink 환경에서의 역방향 스팸 알림 해소)
+- **ticket:** `NNN` 정규식을 최대 4자리로 제한하여 유닉스 타임스탬프가 티켓 순번으로 잘못 파싱되는 버그 수정 — 올바른 `NNN-topic-hostname` 포맷 생성 복원
+
 ## [2.4.4] - 2026-04-19
 
 ### 변경됨 (Changed)

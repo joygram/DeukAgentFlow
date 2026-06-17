@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.6] - 2026-04-19
+
+### Fixed
+
+- **cli:** suppress update notifier when local version is greater than or equal to registry version (fixes false-positive spam in local dev symlink environments)
+- **ticket:** cap `NNN` regex to 4 digits to prevent unix timestamps being incorrectly parsed as ticket sequential numbers, restoring correct `NNN-topic-hostname` format generation
+
 ## [2.4.5] - 2026-04-18
 
 
