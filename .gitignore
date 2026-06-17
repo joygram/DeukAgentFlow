@@ -5,7 +5,5 @@ node_modules/
 
 # deuk-agent-rule: ticket directory (local, not committed by default)
 
-.deuk-agent/docs/scratch/
 
 # deuk-agent-rule: agent hub directory (local, not committed by default)
-.deuk-agent/
