@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, join, relative } from "path";
-import YAML from "../node_modules/yaml/dist/index.js";
+import YAML from "yaml";
 
 export const INIT_CONFIG_FILENAME = ".deuk-agent-rule.config.json";
 export const INIT_CONFIG_VERSION = 1;

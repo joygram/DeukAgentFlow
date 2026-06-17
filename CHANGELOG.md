@@ -2,7 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+**한글:** [CHANGELOG.ko.md](CHANGELOG.ko.md)
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.3.2] - 2026-04-17
+
+
+### Fixed
+
+- **cli:** resolve `ERR_MODULE_NOT_FOUND` in distributed environments by fixing hardcoded `yaml` dependency path
+- **dependencies:** add `yaml` to explicit dependencies list
 
 ## [2.3.1] - 2026-04-17
 
@@ -16,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
--  AI 파이프라인 연동 기반 및 선택적 동기화 시스템 고도화
+- Advance AI pipeline integration and optional synchronization system
 - **cli:** add --submodule filter to ticket list command
 - **cli:** restore ticket archive and reports workflows to modular architecture
 - **rules:** advance rules for Unity Client, WebApp, and C++ Server hybrid environment
@@ -27,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - **ticket:** deprecate LATEST.md, unify pointer to ACTIVE_TICKET.md
-- **ticket:** DeukAgentRules 현재 진행중인 티켓 안나오던 문제 해결
+- **ticket:** resolve issue where active tickets were not listed for DeukAgentRules repo
 
 
 ### Changed
@@ -35,7 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **readme:** clarify YAML front matter preservation and distributed ticket workflow for v2.2.2
 - **readme:** restore count headers and npm badges
 - **rules:** enforce CLI usage for ticket reading to prevent manual JSON parsing
--  update CLI reference with close and migrate commands
+- Update CLI reference with close and migrate commands
 
 ## [1.0.18] - 2026-04-12
 
@@ -74,36 +84,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
--  migrate and rename handoff terminology to ticket in CLI and templates
+- Migrate and rename handoff terminology to ticket in CLI and templates
 
 
 ### Changed
 
--  Add strict rule for DeukPack namespace requirement
--  completely eradicate legacy Handoff references from AGENTS.md, templates, and mdc rules
--  Enforce DeukPack code format and API strictly as a hard rule
--  refactor README usage guide and workflow
+- Add strict rule for DeukPack namespace requirement
+- Completely eradicate legacy Handoff references from AGENTS.md, templates, and mdc rules
+- Enforce DeukPack code format and API strictly as a hard rule
+- Refactor README usage guide and workflow
 
 ## [1.0.14] - 2026-04-02
 
 
-### Added / 추가됨
+### Added
 
-- **cli:** extend merge tooling and sync publish docs / 병합 도구 및 배포 문서 동기화 스크립트 확장
-- **rules:** forbid 'sync' word in commit titles in agent rules / 커밋 제목 내 'sync' 금지 구문 룰 추가
-- **handoff:** add indexed handoff workflow and CLI / 인덱스 기반 Handoff 워크플로 및 CLI 신설
-- **architecture:** migrate template architecture to zero-touch NPM bundle scaffolding / 제로-터치 NPM 스캐폴딩으로 템플릿 아키텍처 개편
-
-
-### Fixed / 수정됨
-
-- **cli:** resolve html entity syntax error in template generator / 템플릿 생성기(init) 내부의 HTML 엔티티 문법 에러 핫픽스
+- **cli:** extend merge tooling and sync publish docs
+- **rules:** forbid 'sync' word in commit titles in agent rules
+- **handoff:** add indexed handoff workflow and CLI
+- **architecture:** migrate template architecture to zero-touch NPM bundle scaffolding
 
 
-### Changed / 변경됨
+### Fixed
 
-- **docs:** public-facing RELEASING and changelog wording; sync-bundle comment / 외부 공개용 릴리즈 가이드 및 동기화 스크립트 주석 갱신
-- **docs:** update README with token efficiency mechanism and zero-touch template scaffolding / 리드미(README)에 토큰 비용 차단 메커니즘 설정 및 제로 터치 스캐폴딩 문서 개편
+- **cli:** resolve html entity syntax error in template generator
+
+
+### Changed
+
+- **docs:** public-facing RELEASING and changelog wording; sync-bundle comment
+- **docs:** update README with token efficiency mechanism and zero-touch template scaffolding
 
 ## [1.0.13] - 2026-03-28
 

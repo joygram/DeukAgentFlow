@@ -1,6 +1,6 @@
 {
   "name": "deuk-agent-rule",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "DeukAgentRules: generic AGENTS.md + .cursor rule templates with init/merge CLI (npm name: deuk-agent-rule).",
   "keywords": [
     "agents-md",
@@ -29,7 +29,8 @@
     "scripts/**/*.mjs",
     "README.md",
     "README.ko.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "CHANGELOG.ko.md"
   ],
   "scripts": {
     "sync": "node scripts/sync-bundle.mjs",
@@ -42,6 +43,7 @@
     "deuk-agent-rule": "./scripts/cli.mjs"
   },
   "dependencies": {
-    "ejs": "^5.0.2"
+    "ejs": "^5.0.2",
+    "yaml": "^2.8.3"
   }
 }
