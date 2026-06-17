@@ -173,7 +173,7 @@ AI는 `AGENTS.md`에 정의된 **[TICKET VERIFICATION RULE]**에 따라 즉시 3
 
 | 커맨드 | 설명 / 자연어 프롬프트 지시 예시 |
 |--------|------|
-| `deuk-agent-rule ticket create ...` | 신규 티켓 문서 생성 (`--group`, `--project`, `--submodule` 지정 가능) <br>💬 *"새 티켓 만들어 (주제: refactor, 타겟: sub1)"* |
+| `deuk-agent-rule ticket create ...` | 신규 티켓 문서 생성 (`--group`, `--project`, `--submodule`, `--chain` 지정 가능) <br>💬 *"새 티켓 만들어 (주제: refactor, 타겟: sub1)"* |
 | `deuk-agent-rule ticket list` | 활성 티켓의 현재 상태 및 리스트업 (`--archived`, `--all`, `--json` 지원) <br>💬 *"티켓 리스트"* |
 | `deuk-agent-rule ticket use --latest ...` | 빌드 파이프라인 연동을 위해 최근 티켓의 파일 경로만 반환 <br>💬 *"최근 티켓 경로"* |
 | `deuk-agent-rule ticket close ...` | 파일을 물리적으로 이동시키지 않고 상태만 완료로 잠금(Soft-close) <br>💬 *"현재 티켓 상태 닫아 (완료)"* |

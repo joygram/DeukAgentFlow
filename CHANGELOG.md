@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.15] - 2026-04-23
+
+
+### Added
+
+-  add Codex CLI support (.codexrules) and apply globally
+-  implement ticket chaining (--chain) for automated ticket linkage
+-  replace .codexrules with global ~/.codex/AGENTS.md support
+
+
+### Fixed
+
+- **cli:** enforce posix path normalization and harden ticket discovery protocol
+- **cli:** implement recursive cleanup for rule duplicates, enforce MCP tool name, and improve UX
+-  enforce anti-shoveling rule against manual JSON modification
+
+
+### Changed
+
+-  complete ticket 059 and update implementation plan
+
 ## [2.5.14] - 2026-04-22
 
 

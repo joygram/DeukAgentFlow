@@ -25,6 +25,7 @@ export function parseTicketArgs(argv) {
     else if (a === "--remote") out.remote = argv[++i];
     else if (a === "--sync") out.sync = true;
     else if (a === "--no-sync") out.sync = false;
+    else if (a === "--chain") out.chain = true;
   }
   return out;
 }

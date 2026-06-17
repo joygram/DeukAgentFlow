@@ -1,6 +1,12 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync } from "fs";
 import { basename, dirname, join, relative } from "path";
+import { pathToFileURL } from "url";
 import YAML from "yaml";
+
+/** Converts an absolute path to a clickable file:/// URI */
+export function toFileUri(absPath) {
+  return pathToFileURL(absPath).href;
+}
 
 export const AGENT_ROOT_DIR = ".deuk-agent";
 export const TICKET_SUBDIR = "tickets";
@@ -171,8 +177,20 @@ export function parseFrontMatter(content) {
 }
 
 export function stringifyFrontMatter(meta, content) {
-  const yamlStr = YAML.stringify(meta).trim();
-  return `---\n${yamlStr}\n---\n\n${content.trim()}\n`;
+  const cleanMeta = { ...meta };
+  // Remove redundant or default fields to keep frontmatter slim
+  delete cleanMeta.topic;
+  if (cleanMeta.project === 'global') delete cleanMeta.project;
+  if (!cleanMeta.submodule) delete cleanMeta.submodule;
+  
+  // Normalize date format if it looks like an ISO string
+  if (typeof cleanMeta.createdAt === 'string' && cleanMeta.createdAt.includes('T')) {
+    cleanMeta.createdAt = cleanMeta.createdAt.replace('T', ' ').split('.')[0];
+  }
+
+  const yamlStr = YAML.stringify(cleanMeta).trim();
+  // Double newline after frontmatter to ensure markdown rendering integrity
+  return `---\n${yamlStr}\n---\n\n\n${content.trim()}\n`;
 }
 
 /**

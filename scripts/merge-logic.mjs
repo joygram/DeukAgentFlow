@@ -122,6 +122,32 @@ export function applyAgents(opts) {
   return handleAgentAppend(opts, existing);
 }
 
+export function pruneAppendedDuplicates(content, begin, end) {
+  const i = content.indexOf(begin);
+  if (i === -1) return content;
+  
+  const j = content.indexOf(end, i + begin.length);
+  if (j === -1) return content;
+  
+  const blockEnd = j + end.length;
+  const keepPart = content.slice(0, blockEnd);
+  let restPart = content.slice(blockEnd);
+  
+  // Recursively remove any duplicate begin markers and their contents
+  let nextI = restPart.indexOf(begin);
+  while (nextI !== -1) {
+    let nextJ = restPart.indexOf(end, nextI + begin.length);
+    if (nextJ !== -1) {
+      restPart = restPart.slice(0, nextI) + restPart.slice(nextJ + end.length);
+    } else {
+      restPart = restPart.slice(0, nextI);
+    }
+    nextI = restPart.indexOf(begin);
+  }
+  
+  return keepPart + restPart;
+}
+
 function handleAgentOverwrite(opts) {
   const { targetPath, bundleContent, dryRun, backup } = opts;
   const prev = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : "";
@@ -136,7 +162,9 @@ function handleAgentOverwrite(opts) {
 }
 
 function handleAgentInject(opts, existing, region) {
-  const { targetPath, bundleContent, markers, dryRun, backup } = opts;
+  let { targetPath, bundleContent, markers, dryRun, backup } = opts;
+  // Prune any duplicate marker blocks that might have been appended at the bottom of the source template
+  bundleContent = pruneAppendedDuplicates(bundleContent, markers.begin, markers.end);
   // Strip any internal begin/end markers from bundle content to prevent nesting
   const cleanContent = stripInternalMarkers(bundleContent, markers.begin, markers.end);
   const inner = cleanContent.trimEnd() + "\n";

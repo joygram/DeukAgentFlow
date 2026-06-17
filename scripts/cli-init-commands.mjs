@@ -1,4 +1,5 @@
 import { join, dirname, basename } from "path";
+import { homedir } from "os";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, unlinkSync, rmSync, renameSync } from "fs";
 import { resolveMarkers, resolveCursorrulesMarkers, applyAgents, applyRules, applyCursorrules, readBundleAgents } from "./merge-logic.mjs";
 import { ensureTicketDirAndGitignore } from "./cli-init-logic.mjs";
@@ -112,6 +113,31 @@ function syncTemplates(cwd, bundleRoot, dryRun) {
   }
 }
 
+function syncGlobalCodexInstructions(dryRun) {
+  const codexDir = join(homedir(), ".codex");
+  if (!existsSync(codexDir)) return;
+
+  const target = join(codexDir, "AGENTS.md");
+  const content = `<!-- deuk-agent-rule:begin -->
+# Global DeukAgentRules Pointer
+
+This environment is configured to use DeukAgentRules.
+When working in a repository, always look for a local \`AGENTS.md\` or \`.deuk-agent/\` directory for project-specific rules.
+
+## Core Directives
+- Follow TDD (Ticket-Driven Development) workflow.
+- Use \`npx deuk-agent-rule ticket create\` for new tasks.
+- Prioritize RAG search via \`mcp_deukrag_search_*\` tools.
+- Never refactor without a ticket or explicit instruction.
+<!-- deuk-agent-rule:end -->
+`;
+
+  if (!dryRun) {
+    writeFileSync(target, content, "utf8");
+    console.log(`global codex instructions synced: ${target}`);
+  }
+}
+
 const SPOKE_REGISTRY = [
   {
     id: "cursor",
@@ -158,11 +184,14 @@ const SPOKE_REGISTRY = [
 ];
 
 function generateSpokeContent(spoke) {
+  const depth = spoke.target.split('/').length - 1;
+  const prefix = depth > 0 ? '../'.repeat(depth) : './';
+  
   const commonContent = `# Deuk Agent Rules
 
 This project follows the Deuk Agent Rules framework.
-- Read the full rules: [AGENTS.md](../../AGENTS.md)
-- Module-specific rules: [.deuk-agent/rules/](../../.deuk-agent/rules/)
+- Read the full rules: [AGENTS.md](${prefix}AGENTS.md)
+- Module-specific rules: [.deuk-agent/rules/](${prefix}.deuk-agent/rules/)
 
 ## Critical Rules
 - Use \`.deuk-agent/templates/TICKET_TEMPLATE.md\` for multi-step tasks.
@@ -217,6 +246,10 @@ function deploySpokePointers(cwd, dryRun) {
 export async function runInit(opts, bundleRoot) {
   const savedConfig = loadInitConfig(opts.cwd) || {};
   const ignoreDirs = savedConfig.ignoreDirs;
+
+  // 0. Sync Global Codex Instructions
+  syncGlobalCodexInstructions(opts.dryRun);
+
   const submodules = discoverAllSubmodules(opts.cwd, ignoreDirs);
   if (!submodules.includes(opts.cwd)) submodules.push(opts.cwd);
 
@@ -237,8 +270,14 @@ export async function runInit(opts, bundleRoot) {
     deploySpokePointers(subCwd, opts.dryRun);
 
     // 4. Agents Setup (AGENTS.md)
+    let cleanBundleAgents = bundleAgents;
+    const firstRuleIdxAgents = cleanBundleAgents.indexOf("<!-- RULE MODULE: ");
+    if (firstRuleIdxAgents !== -1) {
+      cleanBundleAgents = cleanBundleAgents.substring(0, firstRuleIdxAgents).trimEnd();
+    }
+    
     const compiledAgentsAdditions = compileDynamicRules(subCwd, bundleRoot, "AGENTS.md");
-    const fullBundleAgents = bundleAgents + "\n\n" + compiledAgentsAdditions;
+    const fullBundleAgents = cleanBundleAgents + "\n\n" + compiledAgentsAdditions;
 
     const agentsResult = applyAgents({
       targetPath: join(subCwd, "AGENTS.md"),
@@ -264,7 +303,12 @@ export async function runInit(opts, bundleRoot) {
     const geminiBundle = join(bundleRoot, "gemini.md");
     const geminiDest = join(subCwd, "gemini.md");
     if (existsSync(geminiBundle)) {
-      const baseGemini = readFileSync(geminiBundle, "utf8");
+      let baseGemini = readFileSync(geminiBundle, "utf8");
+      // Prune any dynamically appended rule modules that might already be at the bottom
+      const firstRuleIdx = baseGemini.indexOf("<!-- RULE MODULE: ");
+      if (firstRuleIdx !== -1) {
+        baseGemini = baseGemini.substring(0, firstRuleIdx).trimEnd();
+      }
       const compiledGeminiAdditions = compileDynamicRules(subCwd, bundleRoot, "gemini.md");
       if (!opts.dryRun) {
         writeFileSync(geminiDest, baseGemini + "\n\n" + compiledGeminiAdditions, "utf8");

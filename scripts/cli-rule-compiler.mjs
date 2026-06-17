@@ -30,24 +30,29 @@ export function compileDynamicRules(cwd, bundleRoot, targetFileName) {
   let compiledContent = "";
 
   for (const filePath of allRuleFiles) {
-    const rawContent = readFileSync(filePath, "utf8");
-    const { meta, content } = parseFrontMatter(rawContent);
-    
-    // Check if this rule is intended for the current target file (e.g., AGENTS.md)
-    if (meta.inject_target && !meta.inject_target.includes(targetFileName)) {
-      continue;
-    }
+    try {
+      const rawContent = readFileSync(filePath, "utf8");
+      const { meta, content } = parseFrontMatter(rawContent);
+      
+      // Check if this rule is intended for the current target file (e.g., AGENTS.md)
+      if (meta.inject_target && !meta.inject_target.includes(targetFileName)) {
+        continue;
+      }
 
-    // Evaluate conditions
-    let shouldInclude = true;
-    if (meta.condition) {
-      shouldInclude = evaluateCondition(meta.condition, cwd);
-    }
-    
-    if (shouldInclude) {
-      const sourceId = meta.id || basename(filePath);
-      compiledContent += `\n<!-- RULE MODULE: ${sourceId} -->\n`;
-      compiledContent += content.trim() + "\n";
+      // Evaluate conditions
+      let shouldInclude = true;
+      if (meta.condition) {
+        shouldInclude = evaluateCondition(meta.condition, cwd);
+      }
+      
+      if (shouldInclude) {
+        const sourceId = meta.id || basename(filePath);
+        compiledContent += `\n<!-- RULE MODULE: ${sourceId} -->\n`;
+        compiledContent += content.trim() + "\n";
+      }
+    } catch (err) {
+      console.warn(`[WARNING] Skipping malformed rule file at ${filePath}:`, err.message);
+      continue;
     }
   }
 

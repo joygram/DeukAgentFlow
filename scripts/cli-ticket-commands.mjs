@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, copyFil
 import { hostname } from "os";
 import { basename, join, dirname, relative, resolve } from "path";
 import { 
-  toSlug, toRepoRelativePath, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath, stringifyFrontMatter,
+  toSlug, toRepoRelativePath, toFileUri, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath, stringifyFrontMatter,
   AGENT_ROOT_DIR, TICKET_SUBDIR, TEMPLATE_SUBDIR, TICKET_DIR_NAME
 } from "./cli-utils.mjs";
 import { 
@@ -62,25 +62,30 @@ export async function runTicketCreate(opts) {
     const planAbs = join(plansDir, planFileName);
     const planLink = `[${planFileName}](file://${planAbs})`;
     
+    let prevTicketEntry = null;
+    if (opts.chain) {
+      prevTicketEntry = pickTicketEntry({ latest: true }, indexJson);
+    }
+
     const meta = {
       id: ticketId,
       title,
-      topic,
       status: "open",
       submodule: opts.submodule || "",
       project: opts.project || "global",
       planLink: planLink,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString().replace('T', ' ').split('.')[0],
+      prevTicket: prevTicketEntry ? prevTicketEntry.id : "",
     };
 
     const ejsFrontMatter = `---
 id: <%= meta.id %>
 title: "<%- meta.title.replace(/"/g, '\\"') %>"
-topic: <%= meta.topic %>
 status: open
-submodule: <%= meta.submodule %>
-project: <%= meta.project %>
-createdAt: <%= meta.createdAt %>
+<% if (meta.submodule) { %>submodule: <%= meta.submodule %>
+<% } %><% if (meta.project && meta.project !== 'global') { %>project: <%= meta.project %>
+<% } %><% if (meta.prevTicket) { %>prevTicket: <%= meta.prevTicket %>
+<% } %>createdAt: <%= meta.createdAt %>
 ---
 
 `;
@@ -88,12 +93,27 @@ createdAt: <%= meta.createdAt %>
     writeFileSync(abs, finalContent, "utf8");
     source = "ticket-create";
     
+    if (prevTicketEntry) {
+      const prevAbsPath = join(opts.cwd, prevTicketEntry.path);
+      if (existsSync(prevAbsPath)) {
+        let prevContent = readFileSync(prevAbsPath, "utf8");
+        prevContent = prevContent.replace(/^---\n([\s\S]*?)\n---/, (match, fm) => {
+          if (!fm.includes('nextTicket:')) {
+            return `---\n${fm.trim()}\nnextTicket: ${ticketId}\n---`;
+          }
+          return match;
+        });
+        writeFileSync(prevAbsPath, prevContent, "utf8");
+        console.log(`Linked to previous ticket: ${prevTicketEntry.id}`);
+      }
+    }
+
     // Write Plan Document
     if (planTplText) {
       mkdirSync(plansDir, { recursive: true });
       const planContent = ejs.render(planTplText, { meta });
       writeFileSync(planAbs, planContent, "utf8");
-      console.log(`Plan scaffolded: ${toRepoRelativePath(opts.cwd, planAbs)}`);
+      console.log(`Plan scaffolded: ${toFileUri(planAbs)}`);
     }
     
     // Remote Sync Hook
@@ -227,9 +247,11 @@ export async function runTicketUse(opts) {
   const found = opts.latest ? index.entries[0] : index.entries.find(e => e.topic.includes(targetTopic));
   if (!found) throw new Error("No matching ticket found");
   
-  if (opts.pathOnly) console.log(found.path);
+  const posixPath = toPosixPath(found.path);
+  const absPath = toPosixPath(join(opts.cwd, found.path));
+  if (opts.pathOnly) console.log(absPath);
   else {
-    console.log(`Path: ${found.path}`);
+    console.log(`Path: [${posixPath}](file://${absPath})`);
     if (opts.printContent) console.log("\n" + readFileSync(join(opts.cwd, found.path), "utf8"));
   }
 }
@@ -295,7 +317,7 @@ export async function runTicketArchive(opts) {
     
     const reportDest = join(reportDir, `REPORT-${fileName}`);
     if (!opts.dryRun) copyFileSync(reportSrc, reportDest);
-    console.log("ticket archive: copied report to " + toRepoRelativePath(opts.cwd, reportDest));
+    console.log("ticket archive: copied report to " + toFileUri(reportDest));
     
     bodyLines.push("");
     bodyLines.push("## 📄 Attached Report");
@@ -310,7 +332,7 @@ export async function runTicketArchive(opts) {
 
   writeFileSync(newAbsPath, bodyLines.join("\n") + "\n", "utf8");
   rmSync(absPath);
-  console.log("ticket archive: moved ticket to " + toRepoRelativePath(opts.cwd, newAbsPath));
+  console.log("ticket archive: moved ticket to " + toFileUri(newAbsPath));
 
   const entryIdx = indexJson.entries.findIndex(e => e.id === found.id);
   if (entryIdx >= 0) {
@@ -344,7 +366,7 @@ export async function runTicketReports(opts) {
   });
   
   sorted.slice(0, opts.limit || 30).forEach(f => {
-    console.log(`  - [${f}]`);
+    console.log(`  - [${f}](${toFileUri(join(reportDir, f))})`);
   });
   console.log("");
 }
