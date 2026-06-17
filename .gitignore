@@ -4,6 +4,8 @@ node_modules/
 .DS_Store
 
 # deuk-agent-rule: ticket directory (local, not committed by default)
-.deuk-agent-ticket/
 
 .deuk-agent/docs/scratch/
+
+# deuk-agent-rule: agent hub directory (local, not committed by default)
+.deuk-agent/
