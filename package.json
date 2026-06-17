@@ -1,8 +1,7 @@
 {
   "name": "deuk-agent-rule",
-  "version": "2.2.1",
-  "type": "module",
-  "description": "DeukAgentRules",
+  "version": "2.2.2",
+  "description": "DeukAgentRules: generic AGENTS.md + .cursor rule templates with init/merge CLI (npm name: deuk-agent-rule).",
   "keywords": [
     "agents-md",
     "cursor-rules",

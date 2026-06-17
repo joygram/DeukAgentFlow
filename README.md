@@ -1,123 +1,123 @@
-<div align="center">
-  <br />
-  <h1>DeukAgentRules</h1>
-  <p>High-Signal Encoding & Rule Standardization Engine</p>
-  <p>Part of the <a href="https://deukpack.app">Deuk Family</a> ecosystem.</p>
-</div>
+# DeukAgentRules
 
-<div align="center">
-  <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/v/deuk-agent-rule.svg?color=black&style=flat-square" alt="NPM Version" /></a>
-  <a href="https://www.npmjs.com/package/deuk-agent-rule"><img src="https://img.shields.io/npm/dm/deuk-agent-rule.svg?color=blue&style=flat-square" alt="NPM Downloads" /></a>
-  <a href="https://github.com/joygram/DeukAgentRules"><img src="https://img.shields.io/github/stars/joygram/DeukAgentRules.svg?style=flat-square&color=orange" alt="GitHub Stars" /></a>
-  <a href="https://github.com/joygram/DeukAgentRules/blob/master/LICENSE"><img src="https://img.shields.io/npm/l/deuk-agent-rule.svg?style=flat-square" alt="License" /></a>
-  <br /><br />
-  <a href="https://github.com/joygram/DeukAgentRules/blob/master/README.ko.md">한국어 (Korean)</a>
-</div>
+> A core module of the **Deuk Family**. Maximizes collaboration efficiency of AI agents through structured rules.
 
-***
+**npm package:** `deuk-agent-rule` · **CLI:** `deuk-agent-rule`
 
-## Abstract
+**Korean:** [README.ko.md](https://github.com/joygram/DeukAgentRules/blob/master/README.ko.md)
 
-DeukAgentRules defines a project-agnostic rule architecture for AI engineering agents (Cursor, GitHub Copilot, Gemini/Antigravity, Claude, Windsurf, JetBrains AI). It separates persistent workflow memory from session context, reducing recurring prompt loads per session.
+A **submodule-isolated collaborative framework** designed to be used alongside various coding agents such as Cursor, GitHub Copilot, Gemini / Antigravity, Claude, Windsurf, and JetBrains AI Assistant.
+It standardizes project rules (`AGENTS.md`, `.cursor/rules`) and strongly prevents wasteful prompt token consumption and AI context hallucination through a **ticket-based workflow**.
 
-> Why DeukAgentRules?
-> The Ticket-First Workflow reduces recurring context loads into a single focused topic file per session, enabling handovers between different AI tools without re-explaining the repository.
+> **🚀 Core Value:**
+> Compresses the mandatory loaded context of approx. 1,500~2,000 tokens per session down to a mere 200~300 tokens. By isolating the AI to a specific **"Target Submodule"** using exact tickets (work orders), it prevents the AI from wandering through an entire monolithic repository.
 
 ---
 
-## Quick Start
+## 🛠️ Getting Started (Workspace Initialization)
 
-Initialize the rule system and set up the local workspace in one step:
+Install and initialize the package once at the project root.
 
 ```bash
+npm install deuk-agent-rule
 npx deuk-agent-rule init
 ```
 
-- Interactive Setup: On the first run, the CLI guides you to select your primary stack and the AI agents you use. (See the System Selection Guide for a detailed list of available stacks and tools). 
-- Safe Updates: Subsequent runs safely append necessary templates without touching your custom extensions. Use --interactive to reconfigure.
+Upon initialization, interactive questions will ask for the project's **tech stack** and **agent tools in use**. Based on your selections, optimized markdown templates and rule files (`.cursor/rules/*`) will be automatically generated and synchronized.
+- If you don't need to change the tech stack later, simply run `npx deuk-agent-rule init` to refresh the rules.
+- Suppress interactive prompts in CI or script environments by appending the `--non-interactive` flag.
 
----
-
-## The Ticket-First Workflow
-
-Multiple AI agents share context through a single Markdown ticket, reducing per-session prompt overhead.
-
-### The 6-Phase Workflow
-
-| Phase | Actor | Action |
-|---|---|---|
-| 1. Explore & Plan | Reasoning AI | Analyze codebase, propose implementation plan |
-| 2. Decide | User | Review and approve the plan |
-| 3. Ticket (Registration) | Reasoning AI | Write approved plan to .deuk-agent-ticket/ |
-| 4. Execute | IDE Agent | Read ticket, code strictly within scope |
-| 5. Post-Test Risk Analysis | IDE Agent | Mandatory artifact risk analysis after testing |
-| 6. Report & Close | User + Agent | Review risk report, then npx deuk-agent-rule ticket close --latest |
-
----
-
-### Detailed Workflow Walkthrough
-
-Phase 1: Explore & Plan
-```
-[User]   "Analyze storage module"
-[Agent]  (Analyzes codebase, proposes direction)
-[User]   "Plan and design for the analyzed content."
-[Agent]  (Saves ticket to .deuk-agent-ticket/main/storage-20260406.md)
-```
-
-Phase 2: Execution & Verification
-```
-[User]   "Proceed" (or "Proceed with [Ticket #]")
-[Agent]  (Reads the ticket, implements changes, self-checks, and reports)
-[User]   "Verify issues, defects, and potential errors."
-[Agent]  (Runs tests, confirms compliance and finds defects)
+### 🔄 Updating the Rules Package
+When a new version of the agent rules or templates is released, you can sync the latest instructions to your project by updating the package and re-running `init`.
+Since your previous configurations are saved (`.deuk-agent-rule.config.json`), using the `--non-interactive` flag will quietly and cleanly overwrite the obsolete rules with the latest ones without asking any questions.
+```bash
+npm install deuk-agent-rule@latest
+npx deuk-agent-rule init --non-interactive
 ```
 
 ---
 
-### Keyword-Based Prompt Examples
+## 🎯 The Ticket Workflow
 
-| Intent | Keyword Input |
-|---|---|
-| Analysis | Analyze [Topic/Module] |
-| Plan | Plan and design for the analyzed content. |
-| Proceed | Proceed [Ticket #] (or latest if omitted) |
-| Verify | Verify issues, defects, and potential errors. |
-| Check | /ticket |
+Running `npx deuk-agent-rule init` deploys a **zero-touch scaffolding sandbox** at your workspace root, spawning two essential directories:
 
----
+1. **`.deuk-agent-templates/` (Agent Templates)**: Houses the official blueprint (`TICKET_TEMPLATE.md`) dictating how AIs must process and report tasks. Committed alongside your source code to serve as the team's rulebook.
+2. **`.deuk-agent-ticket/` (Ticket Execution Space)**: The covert space where volatile instructions (`TICKET-XXX.md`) are exchanged between agents and workers. (Automatically hidden by `.gitignore` to prevent security leaks and repository bloat).
 
-### CLI Reference (Optional)
+The optimal **3-Step AI Coding Sequence** utilizing these sandbox folders is as follows.
+
+### [Step 1] Ticket Creation & Submodule Isolation
+Do not issue scattered, unbounded commands to your AI. Narrowing the **context** via a clear ticket is strictly required to prevent astronomical costs and accidental code corruption.
 
 ```bash
-npx deuk-agent-rule ticket create --topic login-api --project MyProject --content "## Task: ..."
+npx deuk-agent-rule ticket create --topic ui-refactoring --group frontend --project DeukUI --content "## Task: Plugin UI Refactoring"
+```
+This command instantly creates a templated `TICKET-ui-refactoring.md` file within the `.deuk-agent-ticket/` directory.
+The developer must simply specify the exact isolated directory path (e.g., `src/client`) inside the `[Target Submodule]` attribute at the top of the generated file.
+
+### [Step 2] Agent Execution & Handoff (Ticket Session)
+Provide a single line of instruction to your AI chatbot (Cursor, Gemini, etc.):
+> *"Open the recently issued `.deuk-agent-ticket/TICKET-ui-refactoring.md` ticket and strictly follow the checklist within the specified target submodule."*
+
+The AI will faithfully read the defined Phases in the ticket and write optimized code while **completely blocking out unnecessary computations for unrelated server logic or sibling modules**. (This mechanism drastically reduces token costs).
+
+### [Step 3] Status Review & Closure
+As the AI writes the code, it will simultaneously update the markup checkboxes (`[x]`) inside the ticket. If the agent's session memory limit is approaching, simply leave the ticket file saved, turn off the chat window, open a fresh session, and issue [Step 2] again. The handoff (session transfer) is seamlessly completed.
+Once all steps are accomplished, promote the Phase status to `[Phase Complete]`. Instead of manually typing terminal commands, **you can simply tell your AI chatbot via natural language prompt: "Show me the list of active tickets" or "Archive the completed tickets with reports"**, and the AI will autonomously invoke the CLI to manage them for you.
+To track tickets manually from the terminal, run:
+
+```bash
 npx deuk-agent-rule ticket list
-npx deuk-agent-rule ticket close --latest
+```
+```text
+📦 Agent Tickets (Direct System Scan):
+  ✅ [TICKET-DEUKUI-Button.md]
+     Title: Add Button Component
+     Target: DeukUI
+     Status: [Complete]
+  🔨 [TICKET-ui-refactoring.md]
+     Title: Plugin UI Refactoring
+     Target: DeukUI
+     Status: [In Progress]
 ```
 
-(Ticket Tutorial: docs/ticket-tutorial.md)
+---
 
+## 🤖 AI Agent Prompting Guide
 
+Even after installing and initializing the package, some AI agents (Cursor, Gemini, etc.) might not actively read the rule file (`AGENTS.md`) in a fresh session. **Whenever you start a new chat session, copy and paste the following prompts to force the AI to align with the rules. This effectively eliminates hallucination and accidental scope-creep.**
+
+### 1. Force Rule Familiarization (Mandatory)
+> *"Before starting any work, please read the `AGENTS.md` (DeukAgentRules) file at the workspace root from top to bottom. Make sure you fully understand your Identity, the core project rules, and the ticket workflow. Once you have read and understood them, do NOT summarize them; simply reply 'Rules Acknowledged' and await my first instruction."*
+
+### 2. Ticket Execution (Recommended)
+> *"Open the recently issued `.deuk-agent-ticket/TICKET-XXX.md` ticket. Restrict all your file exploration, analysis, and modifications STRICTLY to the target submodule path explicitly specified in the ticket. Do not wander into other submodules or accidentally modify unrelated files."*
 
 ---
 
-## Architecture & Configuration (How It Works)
+## ⚙️ CLI Reference & Advanced Options
 
-The CLI supports advanced parameters for CI environments and explicit structural control, utilizing a non-destructive injection mechanism to avoid user conflicts. 
-For a detailed technical overview of how we safely sandbox injected rules, see the How It Works Guide (docs/how-it-works.md).
+Advanced commands for workflow automation and target control.
 
-### Core Configuration
+### Ticket-based Commands
+Instead of manually typing the CLI commands below into the terminal, you can **delegate their execution to your AI chatbot by giving natural language prompt instructions**.
 
-| Flag | Purpose |
-|------|---------|
-| --non-interactive | CI/Headless mode; applies defaults/saved config without prompting |
-| --tag <id> | Overrides the default marker region (<!-- <id>:begin -->) |
-| --agents inject | Smart injection into existing AGENTS.md (or skip, overwrite) |
-| --rules prefix | Updates .cursor/rules via intelligent file prefixing |
+| Command | Description / Natural Language Prompt Example |
+|--------|------|
+| `npx deuk-agent-rule ticket create ...` | Generates a new ticket document (accepts `--group`, `--project`) <br>💬 *"Create new ticket (topic: refactor)"* |
+| `npx deuk-agent-rule ticket list` | Lists and displays active tickets (`--archived`, `--all` supported) <br>💬 *"Ticket list"* |
+| `npx deuk-agent-rule ticket use --latest ...` | Returns only the file path of the most recent ticket <br>💬 *"Recent ticket path"* |
+| `npx deuk-agent-rule ticket archive ...` | Securely moves completed tickets to `archive/` and updates INDEX <br>💬 *"Archive this ticket (attach report)"* |
+| `npx deuk-agent-rule ticket reports` | Lists structurally preserved agent work reports (`reports/`) <br>💬 *"List archived reports"* |
 
----
+### Advanced Init Options
+| Flag | Default | Description |
+|--------|--------|------|
+| `--non-interactive` | Off | For CI/Scripts. Disables interactive UI and adopts existing `.config.json` |
+| `--interactive` | Off | Forces the interactive setup to reappear even if config already exists |
+| `--cwd <path>` | Current dir | Adjust target workspace root (absolute/relative path) |
+| `--dry-run` | Off | Simulates the execution text in the console without generating/altering files |
+| `--backup` | Off | Safely creates `*.bak` copies of `AGENTS.md` and rule files before overwriting |
 
-## License & Ecosystem
-
-Part of the DeukPack Ecosystem. Licensed under Apache-2.0.
-For issues, contributions, and community discussions, visit the GitHub Repository (https://github.com/joygram/DeukAgentRules).
+## Versioning Policy
+Before pushing any core updates/feature changes to this package (`DeukAgentRules`), strictly bump the `version` inside `package.json` and publish it (`npm run sync:oss`).
