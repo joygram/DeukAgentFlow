@@ -73,7 +73,7 @@ export function formatTimestampForFile(d = new Date()) {
 }
 
 export function makeEntryId() {
-  return `ticket_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `000-fallback-${Date.now().toString(36)}`;
 }
 
 export function detectProjectFromBody(body) {

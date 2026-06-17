@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.3] - 2026-04-18
+
+### Changed
+
+- **ticket:** new ID format `NNN-topic-hostname` (e.g. `001-add-feature-joy-nucb`) replacing legacy `ticket_NNN_hostname_topic` format
+- **ticket:** backward-compatible parsing supports both old and new formats in INDEX.json
+
 ## [2.4.2] - 2026-04-18
 
 

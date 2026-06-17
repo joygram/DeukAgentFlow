@@ -6,6 +6,12 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [2.4.3] - 2026-04-18
+
+### 변경됨 (Changed)
+- **ticket:** 티켓 ID 포맷을 `NNN-topic-hostname` (예: `001-add-feature-joy-nucb`)으로 변경. 레거시 `ticket_NNN_hostname_topic` 형식 대체
+- **ticket:** INDEX.json 파싱 시 기존 포맷과 신규 포맷 모두 역호환 지원
+
 ## [2.4.2] - 2026-04-18
 
 ### 수정됨 (Fixed)

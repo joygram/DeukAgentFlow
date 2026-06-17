@@ -190,7 +190,7 @@ export function performUpgradeMigration(cwd, opts = {}) {
     const project = meta.project || detectProjectFromBody(content);
     
     const newMeta = {
-      id: meta.id || `ticket_${statSync(abs).mtimeMs}`,
+      id: meta.id || `000-legacy-${statSync(abs).mtimeMs}`,
       title,
       status,
       submodule: meta.submodule || (content.includes("DeukPack") ? "DeukPack" : ""),
@@ -486,20 +486,23 @@ export function getHostnameSlug() {
 
 /**
  * Computes next sequential 3-digit ticket number by scanning all entries
- * in the current INDEX.json for IDs matching `ticket_NNN_*`.
- * Safe to call cross-device: each hostname produces an independent sequence,
- * but the number is always calculated from the current local INDEX state.
+ * in the current INDEX.json. Parses both legacy (`ticket_NNN_*`) and
+ * new (`NNN-topic-hostname`) formats for backward compatibility.
  *
  * @param {object[]} existingEntries - entries array from INDEX.json
  * @returns {{ num: number, hostname: string }}
  */
 export function computeNextTicketNumber(existingEntries) {
   const hostname = getHostnameSlug();
-  // Match both old format `ticket_NNN_hostname_*` and new `ticket_NNN_*`
-  const numRe = /^ticket_(\d{3,})_/;
+  // Legacy: ticket_NNN_*  |  New: NNN-*
+  const legacyRe = /^ticket_(\d{3,})_/;
+  const newRe = /^(\d{3,})-/;
   let max = 0;
   for (const e of (existingEntries || [])) {
-    const m = String(e.id || '').match(numRe);
+    const id = String(e.id || '');
+    const mLegacy = id.match(legacyRe);
+    const mNew = id.match(newRe);
+    const m = mLegacy || mNew;
     if (m) {
       const n = parseInt(m[1], 10);
       if (n > max) max = n;
@@ -510,7 +513,8 @@ export function computeNextTicketNumber(existingEntries) {
 
 /**
  * Sequential hostname-aware ticket ID.
- * Format: ticket_NNN_<hostname>_<topic-slug>
+ * Format: NNN-<topic-slug>-<hostname>
+ * Example: 001-add-feature-joy-nucb
  * NNN starts at 001 and increments per local INDEX.json state.
  *
  * @param {string} topicSlug
@@ -520,7 +524,7 @@ export function generateTicketId(topicSlug, existingEntries) {
   const { num, hostname } = computeNextTicketNumber(existingEntries);
   const numStr = String(num).padStart(3, '0');
   const slug = toSlug(topicSlug || 'ticket').slice(0, 32);
-  return `ticket_${numStr}_${hostname}_${slug}`;
+  return `${numStr}-${slug}-${hostname}`;
 }
 
 /**
