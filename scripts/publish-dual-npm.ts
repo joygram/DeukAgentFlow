@@ -6,7 +6,8 @@ import { fileURLToPath } from "url";
 import { CliOpts, makePath } from "./cli-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = makePath(__dirname, "..");
+const rootDir = makePath(__dirname, "..", "..", "..");
+const npmShell = process.platform === "win32";
 const aliasDir = makePath(rootDir, "packages", "deuk-agent-rule");
 
 export function buildAliasPackageJson(rootPkg, currentAliasPkg: Record<string, any> = {}) {
@@ -51,7 +52,7 @@ function writeJson(path, value) {
 function run(command, args, cwd) {
   const shown = [command, ...args].join(" ");
   console.log(`\n$ ${shown}`);
-  const result = spawnSync(command, args, { cwd, stdio: "inherit" });
+  const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: npmShell });
   if (result.status !== 0) {
     process.exit(result.status || 1);
   }

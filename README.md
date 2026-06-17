@@ -270,13 +270,6 @@ Before publishing, run the Docker consumer smoke test. It installs the packed pa
 npm run smoke:npm:docker
 ```
 
-After publish, refresh the combined downloads badge when needed:
-
-```bash
-npm run badge:downloads
-```
-
-The badge should display `deuk-flow` while still summing downloads from both `deuk-agent-flow` and `deuk-agent-rule`.
 
 ---
 

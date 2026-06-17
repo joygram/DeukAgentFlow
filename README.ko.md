@@ -266,13 +266,6 @@ npm run publish:dry
 npm run smoke:npm:docker
 ```
 
-배포 후 필요하면 통합 다운로드 배지를 갱신합니다.
-
-```bash
-npm run badge:downloads
-```
-
-이 배지는 표기상 `deuk-flow`를 사용하되, `deuk-agent-flow`와 `deuk-agent-rule` 다운로드 수를 같은 total에 합산합니다.
 
 ---
 
