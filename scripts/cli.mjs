@@ -6,8 +6,10 @@ import { parseArgs, parseTicketArgs } from "./cli-args.mjs";
 import { runInit, runMerge } from "./cli-init-commands.mjs";
 import { runTicketCreate, runTicketList, runTicketUse, runTicketClose, runTicketArchive, runTicketReports, runTicketMeta, runTicketConnect } from "./cli-ticket-commands.mjs";
 import { performUpgradeMigration } from "./cli-ticket-logic.mjs";
-import { loadInitConfig, writeInitConfig } from "./cli-utils.mjs";
+import { loadInitConfig, writeInitConfig, checkUpdateNotifier } from "./cli-utils.mjs";
 import { runInteractive } from "./cli-prompts.mjs";
+
+const updatePromise = checkUpdateNotifier();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(__dirname, "..");
@@ -118,7 +120,10 @@ Ticket Options:
 `);
 }
 
-main().catch(err => {
+main().then(async () => {
+  await updatePromise;
+}).catch(async err => {
+  await updatePromise;
   console.error(err.message || err);
   process.exit(1);
 });

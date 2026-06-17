@@ -143,3 +143,24 @@ export function stringifyFrontMatter(meta, content) {
   const yamlStr = YAML.stringify(meta).trim();
   return `---\n${yamlStr}\n---\n\n${content.trim()}\n`;
 }
+
+export async function checkUpdateNotifier() {
+  try {
+    const { fileURLToPath } = await import("url");
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    const currentVersion = pkg.version;
+    const res = await fetch("https://registry.npmjs.org/deuk-agent-rule/latest", {
+      signal: AbortSignal.timeout(800)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.version && data.version !== currentVersion) {
+        console.warn(`\n\x1b[33m💡 Update available! ${currentVersion} → ${data.version}\x1b[0m`);
+        console.warn(`\x1b[36mRun 'npm install -g deuk-agent-rule' to update.\x1b[0m\n`);
+      }
+    }
+  } catch(e) {
+    // Ignore timeout or network errors silently
+  }
+}
