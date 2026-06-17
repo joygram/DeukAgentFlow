@@ -1,7 +1,7 @@
 import { createInterface } from "readline";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { WORKSPACE_KINDS, STACKS, AGENT_TOOLS, DOC_LANGUAGE_CHOICES, resolveDocsLanguage, normalizeWorkflowMode, WORKFLOW_MODE_EXECUTE, WORKFLOW_MODE_PLAN } from "./cli-utils.mjs";
+import { WORKSPACE_KINDS, AGENT_TOOLS, resolveDocsLanguage, normalizeWorkflowMode, WORKFLOW_MODE_EXECUTE } from "./cli-utils.mjs";
 
 export async function ask(rl, question) {
   return new Promise((resolve) => rl.question(question, resolve));
@@ -39,7 +39,37 @@ export async function selectMany(rl, prompt, choices) {
   }
 }
 
+function hasAny(cwd, names) {
+  return names.some((name) => existsSync(join(cwd, name)));
+}
 
+export function inferInitDefaults(cwd, opts = {}) {
+  const packageJsonPath = join(cwd, "package.json");
+  const packageJson = existsSync(packageJsonPath)
+    ? readFileSync(packageJsonPath, "utf8")
+    : "";
+
+  const stack = opts.stack
+    || (hasAny(cwd, ["pyproject.toml", "requirements.txt", "notebooks"]) ? "data" : null)
+    || (hasAny(cwd, ["Dockerfile", "docker-compose.yml", "docker-compose.yaml", "k8s", "terraform"]) ? "infra" : null)
+    || (hasAny(cwd, ["Cargo.toml", "go.mod", "pom.xml", "build.gradle"]) ? "backend" : null)
+    || (packageJson && /"(@vitejs\/|vite|next|react|vue|svelte|astro)"/i.test(packageJson) ? "web" : null)
+    || (packageJson ? "backend" : null)
+    || "none";
+
+  const tools = AGENT_TOOLS.map((tool) => tool.value);
+
+  return {
+    stack,
+    agentTools: opts.agentTools ?? tools,
+    docsLanguage: resolveDocsLanguage(opts.docsLanguage ?? "auto"),
+    workflowMode: normalizeWorkflowMode(opts.workflowMode ?? opts.workflow ?? opts.approval ?? WORKFLOW_MODE_EXECUTE),
+    shareTickets: opts.shareTickets ?? false,
+    contextMcp: opts.contextMcp ?? "skip",
+    remoteSync: opts.remoteSync ?? false,
+    pipelineUrl: opts.pipelineUrl || ""
+  };
+}
 
 export async function runInteractive(opts) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -47,20 +77,7 @@ export async function runInteractive(opts) {
     console.log("\nDeukAgentFlow init — let's configure your workspace.\n");
 
     const workspaceKind = await selectOne(rl, "What kind of workspace is this?", WORKSPACE_KINDS);
-    const stack = await selectOne(rl, "What technical surface should tickets assume?", STACKS);
-    const tools = await selectMany(
-      rl,
-      "Which AI clients should receive thin workflow pointers? You can rerun init later to add more.",
-      AGENT_TOOLS
-    );
-    const docsLanguage = await selectOne(rl, "What document language should generated tickets/plans use?", DOC_LANGUAGE_CHOICES);
-    const workflowMode = opts.workflowMode
-      ? normalizeWorkflowMode(opts.workflowMode)
-      : await selectOne(rl, "What workflow mode should be saved?", [
-          { label: "Plan mode (prepare only)", value: WORKFLOW_MODE_PLAN },
-          { label: "Execute mode (apply changes)", value: WORKFLOW_MODE_EXECUTE },
-        ]);
-    const shareTickets = await askYesNo("Do you want to share (git-track) tickets for this repository?", false);
+    const defaults = inferInitDefaults(opts.cwd, opts);
 
     const targetAgents = join(opts.cwd, "AGENTS.md");
     let agentsDefault = "inject";
@@ -71,47 +88,30 @@ export async function runInteractive(opts) {
       const content = readFileSync(targetAgents, "utf8");
       const hasMarkers = content.includes("deuk-agent-rule:begin") || content.includes("## DeukAgentFlow");
       if (!hasMarkers) {
-        const choice = await selectOne(rl, "AGENTS.md exists but has no markers. How to apply?", [
-          { label: "Append managed block at the end (safe)", value: "inject" },
-          { label: "Overwrite entire AGENTS.md", value: "overwrite" },
-          { label: "Skip AGENTS.md", value: "skip" },
-        ]);
-        agentsDefault = choice;
+        agentsDefault = "inject";
+        console.log("\n  AGENTS.md exists without managed markers — will append a managed block.");
       }
-    }
-
-    const contextMcp = opts.contextMcp || await selectOne(rl, "Deuk AgentContext memory MCP connection?", [
-      { label: "Skip for now (Flow works without memory MCP)", value: "skip" },
-      { label: "Already configured in this client/workspace", value: "configured" },
-      { label: "Plan to configure later", value: "later" },
-    ]);
-    const remoteSync = opts.remoteSync !== undefined
-      ? opts.remoteSync
-      : (await askYesNo("Configure an external workflow sync endpoint? (Experimental; not Deuk AgentContext MCP)", false));
-    let pipelineUrl = opts.pipelineUrl || "";
-    if (remoteSync && !pipelineUrl) {
-      pipelineUrl = (await ask(rl, "Enter external workflow sync endpoint URL: ")).trim();
     }
 
     opts.agents = opts.agents ?? agentsDefault;
     opts.workspaceKind = workspaceKind;
     opts.kind = workspaceKind;
-    opts.stack = stack;
-    opts.agentTools = tools;
-    opts.docsLanguage = resolveDocsLanguage(docsLanguage);
-    opts.workflowMode = normalizeWorkflowMode(opts.workflowMode || workflowMode);
-    opts.shareTickets = shareTickets;
-    opts.contextMcp = contextMcp;
-    opts.remoteSync = remoteSync;
-    opts.pipelineUrl = pipelineUrl;
+    opts.stack = defaults.stack;
+    opts.agentTools = defaults.agentTools;
+    opts.docsLanguage = defaults.docsLanguage;
+    opts.workflowMode = defaults.workflowMode;
+    opts.shareTickets = defaults.shareTickets;
+    opts.contextMcp = defaults.contextMcp;
+    opts.remoteSync = defaults.remoteSync;
+    opts.pipelineUrl = defaults.pipelineUrl;
 
     console.log("\n  Workspace Kind: " + workspaceKind);
-    console.log("  Technical Surface: " + stack);
-    console.log("  AI Clients: " + (tools.join(", ") || "none"));
+    console.log("  Technical Surface: " + opts.stack);
+    console.log("  AI Clients: " + (opts.agentTools.join(", ") || "all supported clients"));
     console.log("  Docs Language: " + opts.docsLanguage);
     console.log("  Workflow Mode: " + opts.workflowMode);
     console.log("  Share Tickets: " + (opts.shareTickets ? "Yes (Shared)" : "No (Private)"));
-    console.log("  Deuk AgentContext MCP: " + opts.contextMcp);
+    console.log("  Deuk AgentContext MCP: hidden during init");
     console.log("  External Sync: " + (opts.remoteSync ? "Enabled" : "Disabled"));
     if (opts.remoteSync) console.log("  Sync URL: " + opts.pipelineUrl);
     console.log("  AGENTS: " + opts.agents + "\n");

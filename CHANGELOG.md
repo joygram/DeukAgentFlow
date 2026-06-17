@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **cli:** stop ticket discovery at the current agent-rule boundary instead of inheriting the parent workspace.
 
+## [4.0.36] - 2026-05-09
+
+### Fixed
+
+- **init:** reduce first-run interactive setup to the workspace-purpose choice, infer the remaining defaults from the project directory, hide the Deuk AgentContext MCP choice, and avoid the post-choice stall that prevented setup completion.
+- **rules:** require the clickable `Ticket start` line to stay visible after first ticket creation/use, preventing approval-only replies from hiding the active ticket.
+
 ## [4.0.35] - 2026-05-09
 
 ### Fixed
