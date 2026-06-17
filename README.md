@@ -8,58 +8,68 @@ Versioned templates for `AGENTS.md` and `.cursor/rules` for Cursor, Copilot, Gem
 
 ## Initialize a workspace
 
-Install does nothing until you run the CLI from the **target repository root** (or pass `--cwd`).
-
 ```bash
 npm install deuk-agent-rule
 npx deuk-agent-rule init
 ```
 
-Typical first run:
+Running `init` without `--non-interactive` starts a short setup flow:
 
-1. `cd` into your project root (where `AGENTS.md` should live).
-2. `npm install deuk-agent-rule` (devDependency is fine).
-3. `npx deuk-agent-rule init` — appends `<!-- deuk-agent-rule:begin -->` … `<!-- deuk-agent-rule:end -->` if missing, fills the inner region with the bundled template, and copies `.mdc` files under `.cursor/rules/` (default **prefix** on name clash).
+```
+$ npx deuk-agent-rule init
+
+DeukAgentRules init — let's configure your workspace.
+
+? What is your primary tech stack?
+  1) Unity / C#
+  2) Next.js + C#
+  3) Web (React / Vue / general)
+  4) Java / Spring Boot
+  5) Other / skip
+  Choice [1-5]: 3
+
+? Which agent tools do you use? (comma-separated numbers, or 'all')
+  1) Cursor
+  2) GitHub Copilot
+  3) Gemini / Antigravity
+  4) All of the above
+  5) Other / skip
+  Choices: all
+
+  Stack : web
+  Tools : cursor, copilot, gemini, all
+
+AGENTS.md: injected (inject)
+rule copied: .cursor/rules/deuk-agent-rule-multi-ai-workflow.mdc
+rule copied: .cursor/rules/deuk-agent-rule-git-commit.mdc
+```
+
+To skip questions (CI or scripted use):
+
+```bash
+npx deuk-agent-rule init --non-interactive
+```
 
 After a package upgrade:
 
 ```bash
 npm update deuk-agent-rule
-npx deuk-agent-rule init
+npx deuk-agent-rule init --non-interactive
 ```
 
-Only the **marker region** in `AGENTS.md` is replaced again; your text outside the markers stays.
+Only the **marker region** in `AGENTS.md` is replaced; your text outside stays.
 
-### `init` parameters
+### Key options
 
-All flags go **after** `init` (e.g. `npx deuk-agent-rule init --cwd ../other-repo --dry-run`).
-
-| Flag | Default (init) | Description |
-|------|----------------|-------------|
-| `--cwd <path>` | current directory | Root of the repo to modify (`AGENTS.md`, `.cursor/rules/`). |
-| `--dry-run` | off | Print planned actions; do not write files. |
-| `--backup` | off | Write `*.bak` next to any file that would be overwritten. |
-| `--tag <id>` | `deuk-agent-rule` | HTML comment markers: `<!-- <id>:begin -->` … `<!-- <id>:end -->`. |
-| `--marker-begin <s>` / `--marker-end <s>` | (use `--tag` instead) | Custom marker strings; **both** required if either is set. |
-| `--agents <mode>` | `inject` | `inject` — update only inside markers (or append block if no markers). `skip` — do not change `AGENTS.md`. `overwrite` — replace entire `AGENTS.md` with the bundle (use with care). |
-| `--rules <mode>` | `prefix` | `prefix` — if `foo.mdc` exists, write `deuk-agent-rule-foo.mdc`. `skip` — skip existing names. `overwrite` — replace on clash. |
-| `--append-if-no-markers` | off | Rare for `init` (init already appends when markers are missing). Same flag is mainly for `merge`. |
-
-Examples:
-
-```bash
-npx deuk-agent-rule init --cwd /path/to/repo
-npx deuk-agent-rule init --dry-run
-npx deuk-agent-rule init --tag mycompany --rules overwrite
-npx deuk-agent-rule init --agents skip --rules prefix
-npx deuk-agent-rule init --backup
-```
-
-### Product model
-
-- **Managed block in `AGENTS.md`**: Between `<!-- deuk-agent-rule:begin -->` and `<!-- deuk-agent-rule:end -->` (or your `--tag`) — `init` / `merge` replace **only** that inner content with the bundled template.
-- **Updates**: Re-run `init` after `npm update` to refresh the managed block idempotently.
-- **`.mdc`**: Copied as **separate files**; default `prefix` avoids overwriting your existing rules.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--non-interactive` | off | Skip questions; use flag defaults |
+| `--cwd <path>` | current directory | Target repo root |
+| `--dry-run` | off | Print actions without writing |
+| `--tag <id>` | `deuk-agent-rule` | Marker id: `<!-- <id>:begin/end -->` |
+| `--agents <mode>` | `inject` | `inject` \| `skip` \| `overwrite` |
+| `--rules <mode>` | `prefix` | `prefix` \| `skip` \| `overwrite` |
+| `--backup` | off | Write `*.bak` before overwrite |
 
 ### Bundled rules
 
@@ -68,11 +78,11 @@ npx deuk-agent-rule init --backup
 
 ### `merge` (stricter)
 
-Same flags; **`AGENTS.md` `inject` fails if markers are missing** unless `--append-if-no-markers`. Default **`--rules skip`**.
+Same flags; `AGENTS.md` inject fails without markers unless `--append-if-no-markers`. Default `--rules skip`.
 
 ### Caveats
 
-- Multiple `alwaysApply: true` rule files (yours + prefixed copies) all apply — trim duplicates if context grows too large.
+- Multiple `alwaysApply: true` rules all apply — trim duplicates if context grows too large.
 - Do **not** run `init` from `postinstall` without an explicit team decision.
 
 ## Versioning

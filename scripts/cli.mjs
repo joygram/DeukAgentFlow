@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
+import { createInterface } from "readline";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import {
@@ -13,9 +14,122 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(__dirname, "..");
 const bundleRoot = join(pkgRoot, "bundle");
 
+// ---------------------------------------------------------------------------
+// Interactive prompt helpers (no external deps)
+// ---------------------------------------------------------------------------
+
+function isNonInteractive(opts) {
+  return opts.nonInteractive || process.env.CI || !process.stdin.isTTY;
+}
+
+async function ask(rl, question) {
+  return new Promise((resolve) => rl.question(question, resolve));
+}
+
+async function selectOne(rl, prompt, choices) {
+  console.log("\n" + prompt);
+  choices.forEach((c, i) => console.log(`  ${i + 1}) ${c.label}`));
+  while (true) {
+    const ans = (await ask(rl, `  Choice [1-${choices.length}]: `)).trim();
+    const idx = parseInt(ans, 10) - 1;
+    if (idx >= 0 && idx < choices.length) return choices[idx].value;
+    console.log("  Please enter a number between 1 and " + choices.length);
+  }
+}
+
+async function selectMany(rl, prompt, choices) {
+  console.log("\n" + prompt + " (comma-separated numbers, or 'all')");
+  choices.forEach((c, i) => console.log(`  ${i + 1}) ${c.label}`));
+  while (true) {
+    const ans = (await ask(rl, `  Choices: `)).trim().toLowerCase();
+    if (ans === "all" || ans === "") return choices.map((c) => c.value);
+    const parts = ans.split(/[,\s]+/).map((s) => parseInt(s, 10) - 1);
+    if (parts.every((i) => i >= 0 && i < choices.length)) {
+      return parts.map((i) => choices[i].value);
+    }
+    console.log("  Invalid selection, try again.");
+  }
+}
+
+const STACKS = [
+  { label: "Unity / C#", value: "unity" },
+  { label: "Next.js + C#", value: "nextjs-dotnet" },
+  { label: "Web (React / Vue / general)", value: "web" },
+  { label: "Java / Spring Boot", value: "java" },
+  { label: "Other / skip", value: "other" },
+];
+
+const AGENT_TOOLS = [
+  { label: "Cursor", value: "cursor" },
+  { label: "GitHub Copilot", value: "copilot" },
+  { label: "Gemini / Antigravity", value: "gemini" },
+  { label: "All of the above", value: "all" },
+  { label: "Other / skip", value: "other" },
+];
+
+async function runInteractive(opts) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    console.log("\nDeukAgentRules init — let's configure your workspace.\n");
+
+    const stack = await selectOne(rl, "What is your primary tech stack?", STACKS);
+    const tools = await selectMany(rl, "Which agent tools do you use?", AGENT_TOOLS);
+
+    const targetAgents = join(opts.cwd, "AGENTS.md");
+    let agentsDefault = "inject";
+    if (!existsSync(targetAgents)) {
+      agentsDefault = "inject"; // will append markers
+      console.log("\n  No AGENTS.md found — will create with markers.");
+    } else {
+      const content = readFileSync(targetAgents, "utf8");
+      const hasMarkers = content.includes("deuk-agent-rule:begin");
+      if (!hasMarkers) {
+        const choice = await selectOne(rl, "AGENTS.md exists but has no markers. How to apply?", [
+          { label: "Append managed block at the end (safe)", value: "inject" },
+          { label: "Overwrite entire AGENTS.md", value: "overwrite" },
+          { label: "Skip AGENTS.md", value: "skip" },
+        ]);
+        agentsDefault = choice;
+      }
+    }
+
+    opts.agents = opts.agents ?? agentsDefault;
+    opts.stack = stack;
+    opts.agentTools = tools;
+
+    console.log("\n  Stack : " + stack);
+    console.log("  Tools : " + (tools.join(", ") || "none"));
+    console.log("  AGENTS: " + opts.agents + "\n");
+  } finally {
+    rl.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Help / arg parsing
+// ---------------------------------------------------------------------------
+
 function printHelp() {
   console.log(
-    "DeukAgentRules (npm: deuk-agent-rule) — AGENTS.md + .cursor/rules templates\n\nUsage:\n  npx deuk-agent-rule init   [options]\n  npx deuk-agent-rule merge  [options]\n\nPrimary flow:\n  npm install deuk-agent-rule\n  npx deuk-agent-rule init\n\nOptions:\n  --cwd <path>\n  --dry-run\n  --backup\n  --tag <id>\n  --marker-begin <string>\n  --marker-end <string>\n\ninit defaults: agents inject (append markers if missing), rules prefix\nmerge defaults: agents inject (fail if no markers unless --append-if-no-markers), rules skip\n\nAlso:\n  --agents skip|overwrite|inject\n  --rules skip|overwrite|prefix\n  --append-if-no-markers\n\nKorean: package README.ko.md\n",
+    `DeukAgentRules (npm: deuk-agent-rule) — AGENTS.md + .cursor/rules templates
+
+Usage:
+  npx deuk-agent-rule init   [options]   # interactive by default
+  npx deuk-agent-rule merge  [options]
+
+Options:
+  --cwd <path>          Target repo root (default: current directory)
+  --dry-run             Print actions; do not write files
+  --non-interactive     Skip questions; use defaults/flags directly
+  --tag <id>            Marker id (default: deuk-agent-rule)
+  --agents <mode>       inject | skip | overwrite
+  --rules <mode>        prefix | skip | overwrite
+  --backup              Write *.bak before overwrite
+  --append-if-no-markers
+  --marker-begin / --marker-end  Custom marker strings (both required)
+
+Korean: package README.ko.md
+`,
   );
 }
 
@@ -30,6 +144,7 @@ function parseArgs(argv) {
     agents: undefined,
     rules: undefined,
     appendIfNoMarkers: false,
+    nonInteractive: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -38,6 +153,7 @@ function parseArgs(argv) {
       if (!out.cwd) throw new Error("--cwd requires a path");
     } else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--backup") out.backup = true;
+    else if (a === "--non-interactive") out.nonInteractive = true;
     else if (a === "--tag") {
       out.tag = argv[++i];
       if (out.tag == null) throw new Error("--tag requires a value");
@@ -69,6 +185,10 @@ function validateMode(name, v, allowed) {
     throw new Error("Invalid " + name + ": " + v + " (allowed: " + allowed.join(", ") + ")");
   }
 }
+
+// ---------------------------------------------------------------------------
+// init / merge runners
+// ---------------------------------------------------------------------------
 
 function runInit(opts) {
   const markers = resolveMarkers({
@@ -150,7 +270,11 @@ function runMerge(opts) {
   }
 }
 
-function main() {
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+async function main() {
   const argv = process.argv.slice(2);
   const sub = argv[0];
   if (!sub || sub === "-h" || sub === "--help") {
@@ -175,13 +299,16 @@ function main() {
 
   if (!existsSync(bundleRoot)) {
     console.error(
-      "Missing bundle/ (run from published package or run npm run sync in deuk-agent-rule when developing in the monorepo).",
+      "Missing bundle/ (run from published package or run npm run sync in DeukAgentRules when developing).",
     );
     process.exit(1);
   }
 
   try {
     if (sub === "init") {
+      if (!isNonInteractive(opts)) {
+        await runInteractive(opts);
+      }
       runInit(opts);
     } else if (sub === "merge") {
       runMerge(opts);
