@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.4] - 2026-06-18
+
+## [5.0.3] - 2026-06-17
+
+
+### Added
+
+-  add build script and typescript devDep to public package via sync
+-  sync bundled VSIX to OSS and restore prepack with tsc step
+-  sync scripts/out to OSS and fix prepack to skip tsc step
+
+
+### Fixed
+
+-  include vscode-extension in sync, adjust tsconfig and compile script for public release
+-  publish script uses --skip-tests, sync publish scripts to simple npm publish for public release
+-  strip prepack from public package, remove scripts/out from sync
+-  strip vscode and badge scripts from OSS package.json
+
+
+### Changed
+
+-  add CONTRIBUTING.md with build pipeline and VSIX install target guide
+-  include tsc in build:vscode, unify build pipeline across repos
+
 ## [5.0.2] - 2026-06-16
 
 

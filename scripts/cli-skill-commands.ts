@@ -297,7 +297,9 @@ export function getActiveSkillsSurface(cwd = process.cwd(), platform = null, are
   const contents = ids.map(id => {
     try {
       const raw = readFileSync(sourceSkillPath(cwd, id), "utf8").trimEnd();
-      const truncated = raw.length > SKILL_BODY_LIMIT
+      // 역할 레이어(category: role)는 행동 계약이라 잘리면 의미가 없다 — truncate 면제.
+      const isRole = readSkillMeta(cwd, id).category === "role";
+      const truncated = (!isRole && raw.length > SKILL_BODY_LIMIT)
         ? raw.slice(0, SKILL_BODY_LIMIT) + "\n… (truncated)"
         : raw;
       return `### Skill: ${id}\n\n${truncated}`;

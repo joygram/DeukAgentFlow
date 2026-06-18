@@ -423,6 +423,56 @@ export function buildTicketCreateGuide(opts: CliOpts = {}) {
   });
 }
 
+// 티켓의 tags/summary에서 작업 도메인을 뽑아 역할 프롬프트에 주입할 한 줄 지시로 변환.
+// 매칭 규칙은 작게 시작해 확장한다(설계 §4.2). 매칭 없으면 빈 문자열(역할 기본 문안만).
+const DOMAIN_FOCUS_RULES: Array<{ keys: string[]; focus: string }> = [
+  { keys: ["codegen", "idl", "generate", "생성물"], focus: "[DOMAIN_FOCUS: codegen] 코드 생성물 관련. 생성물(generated/·idl)을 직접 수정하지 말고 소스→재생성 경로로만. 빌드타임 타입 확정을 런타임 registry/convention 우회로 대체 금지." },
+  { keys: ["refactor", "리팩터", "리팩토링"], focus: "[DOMAIN_FOCUS: refactor] 리팩터. 동작 보존이 최우선 — 변경 전후 동치성을 검증으로 보이고, 스코프를 최소·국소로 유지." },
+  { keys: ["ui", "webview", "widget", "css", "레이아웃", "디자인"], focus: "[DOMAIN_FOCUS: ui/design] UI/디자인 산출물. 일관성·정보위계·재사용·접근성을 1급 기준으로. \"동작하니 됐다\" 금지." },
+  { keys: ["bug", "fix", "버그", "수정"], focus: "[DOMAIN_FOCUS: bugfix] 버그 수정. 근본 원인을 먼저 특정하고, 재현 → 수정 → 회귀 방지 순서. 증상만 가리는 땜질 금지." },
+];
+
+function deriveDomainFocus(entry): string {
+  if (!entry) return "";
+  const tags = Array.isArray(entry.tags) ? entry.tags.map(t => String(t).toLowerCase()) : [];
+  const hay = `${tags.join(" ")} ${String(entry.summary || "")} ${String(entry.title || "")}`.toLowerCase();
+  for (const rule of DOMAIN_FOCUS_RULES) {
+    if (rule.keys.some(k => hay.includes(k))) return rule.focus;
+  }
+  return "";
+}
+
+// 워크스페이스별 기술 스택/관습 프로필 SSOT: <workspace>/.deuk-agent/workspace-profile.md.
+// 있으면 역할 프롬프트에 주입, 없으면 빈 문자열(역할 기본 문안만).
+function readWorkspaceProfile(cwd, workspace, platform = null): string {
+  // 워크스페이스 프로필 SSOT = PROJECT_RULE.md (홈 스토어, reconcile이 보존하는 알려진 파일).
+  // 별도 파일을 만들지 않는다 — 설계상 PROJECT_RULE.md가 워크스페이스 규칙+내부기준문서
+  // 포인터를 겸한다.
+  //
+  // 중복 회피: non-claude 플랫폼은 surface가 이미 `## Project Rules`로 PROJECT_RULE.md
+  // 전문을 보여주므로(readProjectRuleSurface) 여기선 프로필을 다시 싣지 않는다. claude는
+  // `## Project Rules`를 스킵(CLAUDE.md 중복 방지)하므로 ROLE_CONTEXT가 프로필을 담당한다.
+  const detectedPlatform = platform || detectCurrentPlatform();
+  if (detectedPlatform !== "claude") return "";
+  if (!cwd) return "";
+  try {
+    const p = makePath(resolveHomeTicketDirForWorkspace(cwd), "PROJECT_RULE.md");
+    if (existsSync(p)) {
+      const raw = stripLeadingFrontMatter(readFileSync(p, "utf8")).trim();
+      if (raw) return `[WORKSPACE_PROFILE: ${workspace || "local"}]\n${raw}`;
+    }
+  } catch { /* ignore */ }
+  return "";
+}
+
+// 역할 동적 컨텍스트 블록. 도메인/프로필 중 있는 것만 모아 한 섹션으로 낸다.
+// 둘 다 없으면 빈 문자열(템플릿에서 빈 줄로 흡수).
+function buildRoleContextBlock(domainFocus, workspaceProfile): string {
+  const parts = [domainFocus, workspaceProfile].map(s => String(s || "").trim()).filter(Boolean);
+  if (parts.length === 0) return "";
+  return `## Role Context (이번 작업 동적 컨텍스트)\n\n현재 페이즈 역할 레이어에 다음을 함께 적용한다:\n\n${parts.join("\n\n")}`;
+}
+
 export function buildTicketRulesGuide(opts: CliOpts = {}) {
   const surface = String(opts.ruleSurface || "ticket").trim() || "ticket";
   if (surface === "ticket") {
@@ -430,12 +480,14 @@ export function buildTicketRulesGuide(opts: CliOpts = {}) {
     // 없으면 진입 영역 rules. 스킬은 이 영역에 바인딩된 것만 노출(노드별 도구 바인딩).
     let activePolicyRole = null;
     let area = "rules";
+    let activeEntry = null;
     try {
       const index = readTicketIndexJson(opts.cwd);
       const activeId = index?.activeTicketId || null;
       if (activeId) {
         const entry = (index?.entries || []).find(e => e.id === activeId);
         if (entry) {
+          activeEntry = entry;
           const runtimeState = resolveTicketWorkflowRuntimeState(entry, entry.status);
           activePolicyRole = runtimeState?.state?.policyRole ?? "analysis";
           area = runtimeState?.name || `phase${entry.phase || 1}`;
@@ -445,6 +497,11 @@ export function buildTicketRulesGuide(opts: CliOpts = {}) {
 
     const guardrailsOpts = { ...opts, activePolicyRole };
 
+    // 역할 동적 컨텍스트: 티켓 APC/도메인 + 워크스페이스 프로필. 네이티브 플랫폼(claude)은
+    // 스킬 본문을 정적 파일로 깔아 본문 치환이 안 통하므로, 동적 컨텍스트는 rules surface의
+    // 별도 인라인 블록(ROLE_CONTEXT)으로 항상 출력한다(NEXT_ACTION과 동일 방식).
+    const roleContext = buildRoleContextBlock(deriveDomainFocus(activeEntry), readWorkspaceProfile(opts.cwd, opts.workspace, opts.platform));
+
     // #685: PROJECT_MEMORY 제거(.md가 state SSOT). PROJECT_RULES는 도메인 케이스만.
     // #694: TICKET_WORKFLOW 표 덤프 제거 — 워크플로 노드/전이는 XState 머신(SSOT)이고
     // 표를 매번 쏟는 건 노이즈다. 스킬은 현재 area 바인딩분만 노출.
@@ -453,6 +510,7 @@ export function buildTicketRulesGuide(opts: CliOpts = {}) {
       PROJECT_RULES: readProjectRuleSurface(opts.cwd, opts.platform),
       PROJECT_GUARDRAILS: readProjectPolicySurface(opts.cwd, { ...guardrailsOpts, platform: opts.platform }),
       AGENT_SKILLS: getActiveSkillsSurface(opts.cwd, opts.platform, area),
+      ROLE_CONTEXT: roleContext,
       NEXT_ACTION: buildNextActionBlock(opts)
     });
   }

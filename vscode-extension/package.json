@@ -2,7 +2,7 @@
   "name": "deuk-agent-flow",
   "displayName": "Deuk Agent Flow",
   "description": "VS Code extension for the Deuk Agent Flow command center and ticket workspace controls.",
-  "version": "5.0.2",
+  "version": "5.0.4",
   "publisher": "deukpack",
   "engines": {
     "vscode": "^1.85.0"

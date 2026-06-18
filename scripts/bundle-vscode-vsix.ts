@@ -38,7 +38,7 @@ try {
     process.exit(1);
   }
   const q = (s) => (s.includes(' ') ? `"${s.replace(/"/g, '\\"')}"` : s);
-  execSync(`${q(vsceBin)} package --no-dependencies --out ${q(vsixPath)}`, { cwd: extDir, stdio: 'inherit', shell: true } as any);
+  execSync(`${q(vsceBin)} package --no-dependencies --out ${q(vsixPath)}`, { cwd: extDir, input: 'y\n', stdio: ['pipe', 'inherit', 'inherit'], shell: true } as any);
   if (!fs.existsSync(vsixPath)) {
     console.error('[deuk-agent-flow] bundle-vscode: expected VSIX missing:', vsixPath);
     process.exit(1);
