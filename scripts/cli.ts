@@ -472,9 +472,18 @@ async function handleInit(opts, saved, sub = "init") {
     return;
   }
 
-  runWorkspaceMaintenance(opts.cwd, opts.dryRun, pkgRoot, opts);
+  const maintenanceResult = runWorkspaceMaintenance(opts.cwd, opts.dryRun, pkgRoot, opts);
   if (opts.clean && !opts.dryRun) {
     removeClaudeUserPromptSubmitHook({ homeDir: opts.homeDir });
+  }
+  // #776: init이 실패하면 [DONE]을 출력하지 않고 종료코드를 세운다. 과거엔 워크스페이스
+  // maintenance가 throw해도 내부 catch가 삼키고 무조건 [DONE]+EXIT0을 찍어, 신규
+  // 워크스페이스가 등록 안 됐는데도 "성공"으로 위장됐다(사용자가 ID 손수 생성 등 위험
+  // 우회로 빠지는 2차 피해).
+  if (maintenanceResult?.initFailed) {
+    process.exitCode = 1;
+    console.error(`[FAILED] init did not complete for: ${(maintenanceResult.failures || []).map(f => f.workspace).join(", ")}. Workspace not registered. Fix the error above and re-run.`);
+    return;
   }
   if (sub === "init") console.log(formatInitCompletionMessage(opts.cwd, opts.dryRun));
 }

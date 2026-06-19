@@ -76,9 +76,54 @@ export function parseTicketArgs(argv) {
     else if (a === "--verbose") out.verbose = true;
     else if (a === "-h" || a === "--help") out.help = true;
     else if (a === "--session-id") out.sessionId = argv[++i];
-    else if (!a.startsWith("-")) out.ticketId = out.ticketId || a;
+    else if (a.startsWith("-")) {
+      // #775: unknown 플래그를 조용히 무시하지 않는다. 에이전트가 흔히 쓰는
+      // --description/--body 등을 no-op으로 삼키면, 그 뒤 본문이 positional로
+      // ticketId에 둔갑 흡수되고(아래 분기) plan-body 없음으로 모호하게 실패해
+      // 원인을 못 짚고 반복 실패한다. 결정적 에러로 즉시 알린다.
+      const hint = UNKNOWN_FLAG_HINTS[a];
+      throw new Error(
+        `unknown flag: ${a}` +
+        (hint ? ` (did you mean ${hint}?)` : "") +
+        `. Run \`deuk-agent-flow ticket --help\` for supported flags.`
+      );
+    }
+    // #775: positional 토큰은 selector(ticketId) 후보. 단, title/plan-body/summary가
+    // 이미 있는 create 컨텍스트에서 떠도는 본문 문자열을 ticketId로 흡수하면
+    // 본문이 거대한 ID로 둔갑한다. 이미 selector가 있거나 본문 입력이 잡혔으면 거부.
+    else if (out.ticketId !== undefined) {
+      throw new Error(
+        `unexpected extra argument: "${truncateArg(a)}". ` +
+        `A ticket selector is already set ("${truncateArg(String(out.ticketId))}"). ` +
+        `Pass free-form text via --plan-body/--summary, not as a positional argument.`
+      );
+    }
+    else if (out.title !== undefined || out.summary !== undefined || out.planBody !== undefined || out.planBodyFile !== undefined) {
+      throw new Error(
+        `unexpected positional argument: "${truncateArg(a)}". ` +
+        `Use --plan-body or --summary for descriptive text; positional input is only the ticket id/selector.`
+      );
+    }
+    else out.ticketId = a;
   }
   return out;
+}
+
+// #775: 흔히 오타·타 CLI 관습으로 들어오는 미지원 플래그를 올바른 플래그로 안내.
+const UNKNOWN_FLAG_HINTS: Record<string, string> = {
+  "--description": "--plan-body or --summary",
+  "--desc": "--plan-body or --summary",
+  "--body": "--plan-body",
+  "--message": "--summary",
+  "-m": "--summary",
+  "--name": "--title",
+  "--ws": "--workspace",
+};
+
+// 에러 메시지에 긴 본문이 통째로 찍히지 않도록 길이를 자른다.
+function truncateArg(value: string, max = 60): string {
+  const s = String(value ?? "").replace(/\s+/g, " ").trim();
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
 export function parseArgs(argv) {

@@ -179,6 +179,14 @@ export function writeTicketIndexJson(cwd, indexJson, opts: CliOpts = {}) {
     return;
   }
   const dir = detectConsumerTicketDir(cwd, { createIfMissing: true });
+  // #776: dir이 null이면(워크스페이스 마커 미존재 등) 조용히 mkdirSync(null)로 throw하던
+  // 것을 막는다. 정상 흐름에선 init이 마커를 먼저 민팅하므로 여기 도달 시 dir은 non-null.
+  // 그래도 도달하면 ticket index는 .md에서 재도출 가능한 얇은 포인터일 뿐이라, 명확히
+  // 알리고 skip한다(치명적 throw로 상위 init 전체를 위장 실패시키지 않는다).
+  if (!dir) {
+    console.warn(`[TICKET-INDEX] skipped: no ticket dir resolved for ${cwd} (workspace marker missing?)`);
+    return;
+  }
   const p = makePath(dir, TICKET_INDEX_FILENAME);
   if (opts.dryRun) return;
   mkdirSync(dir, { recursive: true });

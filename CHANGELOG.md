@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.7] - 2026-06-19
+
+## [5.0.6] - 2026-06-19
+
+
+### Fixed
+
+- **cli:** ticket 명령에 결정적 실패 피드백 — unknown 플래그·positional 흡수·매치실패 광역폴백 차단 ([#775](https://github.com/joygram/DeukAgentFlow/issues/775))
+
+## [5.0.5] - 2026-06-19
+
+
+### Added
+
+- **rules:** 페이즈별 역할 레이어 + 동적 ROLE_CONTEXT 주입 (v104)
+
+
+### Fixed
+
+- **oss:** auto-answer vsce LICENSE prompt with stdin y to unblock headless publish
+- **oss:** restore prepack + full PUBLIC_SCRIPTS for clean npm publish from OSS mirror
+- **sync-oss:** auto-sync packages/*/version and deuk-agent-flow dep to root version on sync
+
 ## [5.0.4] - 2026-06-18
 
 ## [5.0.3] - 2026-06-17

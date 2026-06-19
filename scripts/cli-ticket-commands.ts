@@ -3013,8 +3013,16 @@ export function pickTicketEntry(opts, indexJson) {
       const durableLocalMatch = findTicketEntryInWorkspaceBySelector(opts.cwd, key, opts);
       if (durableLocalMatch) return durableLocalMatch;
 
-      const siblingMatch = findSiblingTicketEntryBySelector(opts, key);
-      if (siblingMatch) return siblingMatch;
+      // #775: 사용자가 --workspace를 명시했으면 그 워크스페이스가 SSOT 경계다.
+      // 거기서 못 찾았는데 형제 워크스페이스 9개를 디스크 전수탐색으로 뒤지면
+      // (1) "워크스페이스는 --workspace로만 해석"(#633/#652) 원칙을 폴백이 위반하고
+      // (2) 에이전트엔 "저장소를 직접 뒤지는" 모호한 동작으로 보여 헤맴의 근원이 된다.
+      // 명시 워크스페이스 밖으로는 자동 폴백하지 않고 null을 돌려, 호출부가
+      // "해당 워크스페이스 없음 + 후보"를 결정적으로 안내하게 한다.
+      if (!opts.workspace) {
+        const siblingMatch = findSiblingTicketEntryBySelector(opts, key);
+        if (siblingMatch) return siblingMatch;
+      }
     }
     return null;
   }
