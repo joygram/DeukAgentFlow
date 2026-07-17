@@ -94,7 +94,7 @@ export function runPersonaJournalAdd(opts: CliOpts = {}) {
   const content = readFileOrEmpty(path);
   const next = insertAfterHeading(content, JOURNAL_PENDING_HEADING, sense);
   writeFileSync(path, next, "utf8");
-  console.log(`persona: journal sense recorded -> ${path}`);
+  console.log(`persona: 감각 기록됨 -> ${path}`);
 }
 
 // Moves a pending sense line into the absorbed section, stamped with the date the
@@ -117,7 +117,7 @@ export function runPersonaJournalAbsorb(opts: CliOpts = {}) {
   const absorbedLine = `${date}: ${sense}`;
   const next = insertAfterHeading(withoutPending, JOURNAL_ABSORBED_HEADING, absorbedLine);
   writeFileSync(path, next, "utf8");
-  console.log(`persona: sense absorbed into core -> ${path}`);
+  console.log(`persona: 감각이 코어에 흡수됨 -> ${path}`);
 }
 
 export function runPersonaJournalShow(opts: CliOpts = {}) {
@@ -143,7 +143,7 @@ export function runPersonaVocabAdd(opts: CliOpts = {}) {
     const next = `${content.trimEnd()}\n\n${heading}\n- ${entry}\n`;
     writeFileSync(path, next, "utf8");
   }
-  console.log(`persona: vocabulary entry added under "${category}" -> ${path}`);
+  console.log(`persona: "${category}" 아래 어휘 추가됨 -> ${path}`);
 }
 
 export function runPersonaVocabShow(opts: CliOpts = {}) {
@@ -362,6 +362,16 @@ function writeRenderCache(cache: RenderCache, opts: CliOpts = {}) {
     main: cache.main.slice(-MAIN_CACHE_N),
   };
   writeFileEnsuringDir(path, JSON.stringify(trimmed, null, 0) + "\n");
+}
+
+// #968: 오염된 render-cache.json(예: #966 언어 필터 도입 전에 다른 언어 항목이 섞여 쌓인
+// 상태)을 사용자가 직접 확인·삭제할 수 있게 CLI 명령을 준다. 코드 로직상 이 캐시는 후보 풀
+// 자체가 아니라 freshness 판정에만 쓰여 안전하지만(#966에서 실측 확인), 그래도 사용자가
+// 오래된 잔재를 발견했을 때 파일을 손으로 지우는 것 말고 다른 대응 수단이 없었다.
+export function runPersonaCacheClear(opts: CliOpts = {}) {
+  const path = renderCachePath(opts);
+  writeFileEnsuringDir(path, JSON.stringify({ parts: [], main: [] }, null, 0) + "\n");
+  console.log(`persona 캐시 초기화됨: ${path}`);
 }
 
 // #922: derive one fresh persona instruction. `--mood <category>` biases toward that
@@ -1086,6 +1096,7 @@ Usage:
   deuk-agent-flow persona vocab show
   deuk-agent-flow persona vocab add --category "<emotion category>" --entry "<expression>"
   deuk-agent-flow persona render [--mood "<category>"] [--with "<identity>"]
+  deuk-agent-flow persona cache clear
 
 persona render derives ONE fresh persona instruction each turn (persona-design.md §2.4):
 it reads vocabulary.md, ranks by fit + un-usedness, and excludes recently-emitted lines

@@ -270,6 +270,16 @@
 - **rules:** `Ticket start` 링크가 이미 노출된 티켓은 완료 응답에서 같은 클릭 링크를 다시 내보내지 않도록 했습니다.
 - **skills:** 공용 skill 요약과 ownership 문구에서 DeukAgentFlow 전용 표현을 제거해 소비자 표면을 일반화했습니다.
 
+## [5.2.3] - 2026-07-17
+
+### 추가됨 (Added)
+
+- **persona:** `persona cache clear` 명령을 신설했습니다 — 언어 필터 적용 전에 쌓인 캐시 잔재를 손으로 파일을 지우지 않고도 초기화할 수 있습니다.
+
+### 수정됨 (Fixed)
+
+- **persona:** journal add/absorb, vocab add 명령의 성공 로그가 영어였던 것을 한국어로 정정했습니다.
+
 ## [5.2.2] - 2026-07-17
 
 ### 수정됨 (Fixed)

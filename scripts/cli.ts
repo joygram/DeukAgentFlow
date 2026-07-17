@@ -6,7 +6,7 @@ import { parseArgs, parseSkillArgs, parseTelemetryArgs, parseTicketArgs, parseUs
 import { formatInitCompletionMessage, runWorkspaceMaintenance } from "./cli-init-commands.js";
 import { removeClaudePostToolUseHook, removeClaudePreToolUseHook, removeClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
 import { runHookPostToolUse } from "./cli-hook-post-tool-use.js";
-import { buildPersonaRender, buildPersonaToneLine, checkLastAssistantTurnAskedUnnecessarily, checkLastAssistantTurnCompliance, checkLastAssistantTurnDeferredOnScope, detectLastUserTurnLanguage, parsePersonaArgs, printPersonaGuide, runPersonaJournalAbsorb, runPersonaJournalAdd, runPersonaJournalShow, runPersonaRender, runPersonaVocabAdd, runPersonaVocabShow } from "./cli-persona-commands.js";
+import { buildPersonaRender, buildPersonaToneLine, checkLastAssistantTurnAskedUnnecessarily, checkLastAssistantTurnCompliance, checkLastAssistantTurnDeferredOnScope, detectLastUserTurnLanguage, parsePersonaArgs, printPersonaGuide, runPersonaCacheClear, runPersonaJournalAbsorb, runPersonaJournalAdd, runPersonaJournalShow, runPersonaRender, runPersonaVocabAdd, runPersonaVocabShow } from "./cli-persona-commands.js";
 import { runGlobalAgentInstructionSync } from "./cli-init-instructions.js";
 import { readTicketIndexJson } from "./cli-ticket-index.js";
 import { buildTicketCreateGuide, buildTicketRulesGuide, runTicketArchive, runTicketClose, runTicketConnect, runTicketCreate, runTicketDiscard, runTicketDoctor, runTicketEdit, runTicketEvidenceCheck, runTicketEvidenceReport, runTicketGuard, runTicketHandoff, runTicketHotfix, runTicketList, runTicketMeta, runTicketMigrateHome, runTicketMove, runTicketNext, runTicketRebuild, runTicketRules, runTicketSanitize, runTicketShow, runTicketStatus, runTicketUse } from "./cli-ticket-commands.js";
@@ -133,6 +133,16 @@ async function main() {
       if (verb === "show") runPersonaVocabShow(personaOpts);
       else if (verb === "add") runPersonaVocabAdd(personaOpts);
       else { console.error(`Unknown persona vocab action: ${verb}`); printPersonaGuide(); }
+      return;
+    }
+    // #968: render-cache.json can accumulate entries from before a fix that changed which
+    // candidates are eligible (e.g. #966's language filter) — those stale entries don't
+    // reappear in output (readRenderCache only feeds "already seen" freshness scoring, never
+    // the candidate pool itself), but a user who spots one while debugging has no way to
+    // clear it short of deleting the file by hand. Give the CLI an explicit reset.
+    if (noun === "cache") {
+      if (verb === "clear") runPersonaCacheClear(personaOpts);
+      else { console.error(`Unknown persona cache action: ${verb}`); printPersonaGuide(); }
       return;
     }
     // #922 (persona-design.md §2.4): `persona render` derives a fresh persona instruction
