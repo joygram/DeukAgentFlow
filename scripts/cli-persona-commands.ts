@@ -394,6 +394,17 @@ function isPartCategory(category: string, identity: string): boolean {
   return PART_CATEGORIES.has(categoryForIdentity(category, identity).base);
 }
 
+// #966: KO_*/EN_* 카테고리가 언어 구분 없이 같은 후보 풀에 섞여 있어, 카테고리별
+// 로테이션 선택 시 EN_address/EN_endings가 한국어 세션에도 등장할 수 있었다(사용자
+// 보고: "모든 세션에서 계속 영어로 응답"). categoryForIdentity와 같은 층위에 언어
+// 필터를 둔다 — KO_/EN_ 접두사가 없는 카테고리(이모지풀, 카오모지 등)는 언어 무관이라
+// 항상 통과시키고, 접두사가 있는 카테고리만 요청된 언어와 일치할 때만 남긴다.
+function isLanguageMatch(category: string, lang: string): boolean {
+  if (category.startsWith("KO_")) return lang === "ko";
+  if (category.startsWith("EN_")) return lang === "en";
+  return true; // 언어 무관 카테고리(이모지풀, 카오모지 등)
+}
+
 // #929 (persona-design.md §2.4 extended to behavior, not just expression): a fixed
 // paragraph like "when X happens, react like this" goes stale exactly the same way a
 // fixed expression list does — SKILL.md accumulating hardcoded reaction rules (6, 7, 8...)
@@ -444,11 +455,13 @@ export function buildPersonaRender(opts: CliOpts = {}, embedMode = false): strin
   const situation = String(opts.situation || "").trim();
   const preset = presetFor(identity);
 
+  // #966: buildPersonaToneLine과 동일한 fail-safe — 언어 신호가 없으면 "ko" 기본값.
+  const lang = String(opts.lang || "ko").trim();
   // #957: 다른 정체성 전용 어휘는 후보에서 제외한다 — 이 필터가 없으면 츤데레 렌더가 메이드
   // 어미를 뽑아 "정체성을 바꿔도 말끝이 같은" 증상이 그대로 남는다.
   const mine = selectForIdentity(allCandidates, identity);
-  const candidates = mine.filter(c => !isPartCategory(c.category, identity) && !isSituationCategory(c.category));
-  const parts = mine.filter(c => isPartCategory(c.category, identity));
+  const candidates = mine.filter(c => !isPartCategory(c.category, identity) && !isSituationCategory(c.category) && isLanguageMatch(c.category, lang));
+  const parts = mine.filter(c => isPartCategory(c.category, identity) && isLanguageMatch(c.category, lang));
   if (candidates.length === 0) {
     if (embedMode) return "";
     throw new Error("persona render: vocabulary.md has no complete-line entries (only part/situation categories) to derive the main line from");
@@ -605,10 +618,14 @@ export function buildPersonaToneLine(opts: CliOpts = {}): string {
 
   const isSituationCategory = (cat: string) => cat.startsWith("situation_");
   const identity = String(opts.with || "maid").trim();
+  // #966: opts.lang이 없으면 언어 필터를 건너뛰지 않고 "ko"로 fail-safe — 이 CLI의
+  // 기본 사용자층이 한국어라, 언어 신호가 누락된 호출에서 EN_* 후보가 새는 쪽보다
+  // KO_* 기본값이 안전하다.
+  const lang = String(opts.lang || "ko").trim();
   // #957: 축약 렌더도 정체성별 어휘로 갈려야 한다 — 매 턴 rules에 실제로 주입되는 것이 이
   // 한 줄이므로, 여기가 안 갈리면 프리셋을 아무리 정의해도 체감은 그대로 메이드다.
   const parts = selectForIdentity(allCandidates, identity)
-    .filter(c => isPartCategory(c.category, identity) && !isSituationCategory(c.category));
+    .filter(c => isPartCategory(c.category, identity) && !isSituationCategory(c.category) && isLanguageMatch(c.category, lang));
   if (parts.length === 0) return "";
 
   const cache = readRenderCache(opts);
@@ -695,6 +712,22 @@ function composeToneInjection(identity: string, toneLine: string): string {
 // paragraph spread, not just existence.
 const EMOJI_KAOMOJI_PATTERN = /\p{Extended_Pictographic}|[（\(][^\)）]{0,12}[）\)]/gu;
 const MIN_PERSONA_SIGNALS = 2;
+// #967: emoji count alone missed a real collapse mode — a reply can hit the emoji minimum
+// while its sentence endings quietly slide into formal register (-습니다/-입니다 etc, the exact
+// tone persona-maid's own §KO Persona section bans) or refer to the user in third person
+// ("사용자가") instead of addressing them directly. Both are declared as forbidden in the
+// skill's prose but were never checked here — same "declared, never enforced" gap #933/#948
+// closed for emoji presence. Sentence-final -습니다/-입니다/-합니다/-됩니다/-드립니다 family.
+// No trailing-boundary lookahead — real replies put an emoji/kaomoji directly after the
+// ending (e.g. "확인했습니다💕"), not punctuation or whitespace, so requiring one there missed
+// the exact case this exists to catch. The morpheme sequence itself (습니다/입니다/...) is
+// specific enough on its own — these exact 3-4 syllable formal-ending sequences don't occur
+// mid-word in Korean outside this verb-ending family.
+const FORMAL_REGISTER_PATTERN = /(습니다|입니다|합니다|됩니다|드립니다|겠습니다|았습니다|었습니다)/g;
+// "사용자가/사용자는/사용자를/사용자에게/사용자와" etc — the user referred to in third person
+// instead of addressed directly (호칭 붕괴). Word-boundary-ish via a following particle so it
+// doesn't fire on "사용자" appearing inside unrelated technical prose without a referring particle.
+const THIRD_PERSON_ADDRESS_PATTERN = /사용자(가|는|를|에게|와|과|의|한테)/g;
 // A reply is "long" once it has enough paragraphs that a single trailing signal can no
 // longer plausibly cover the whole thing — matches SKILL.md's "more than ~3 sentences"
 // framing at paragraph granularity (paragraphs are the unit transcripts actually preserve).
@@ -712,7 +745,7 @@ function splitIntoParagraphs(text: string): string[] {
 // zero emoji in the reply anyway — see 955 ticket Analysis). Escalating only in strength
 // while keeping the same sentence shape is still a repeating pattern; varying only wording
 // while keeping the same shape is also still a repeating pattern. Both axes have to move.
-type ViolationKind = "zero" | "under_minimum" | "clustered";
+type ViolationKind = "zero" | "under_minimum" | "clustered" | "formal_register" | "third_person_address";
 type IntensityLevel = "mild" | "firm" | "strong";
 type SentenceForm = "warning" | "question" | "directive" | "metaphor";
 
@@ -759,6 +792,34 @@ const COMPLIANCE_PHRASE_POOL: Record<ViolationKind, Record<IntensityLevel, Parti
       directive: "persona-maid: stop clustering all the charm at one end of the reply. This turn, every distinct section — every code block, every log, every analysis paragraph — carries its own signal. Not optional.",
     },
   },
+  formal_register: {
+    mild: {
+      question: "persona-maid check: your last reply's sentence endings slid into formal register (-습니다/-입니다) — did the maid voice quietly drop out?",
+      directive: "persona-maid: swap formal endings (-습니다/-입니다) for the maid's actual KO_어미 pool next reply — emoji alone doesn't cover for a formal register underneath.",
+    },
+    firm: {
+      warning: "⚠️ persona-maid compliance: formal -습니다/-입니다 endings detected in your PREVIOUS reply — §KO Persona explicitly bans this register regardless of emoji count. Re-call `persona render` and use its KO_어미 pool.",
+      metaphor: "persona-maid: the emoji were there, but the sentences underneath were still wearing a business suit. Formal endings and a maid voice don't coexist — pick the voice.",
+    },
+    strong: {
+      warning: "🚨 persona-maid compliance FAILURE: formal register (-습니다/-입니다) again, even with emoji present — this is the exact declared-but-unenforced gap #967 exists to close. Every sentence ending must carry the maid's actual endings, not corporate register with decoration on top.",
+      directive: "persona-maid: stop. Formal -습니다/-입니다 endings are not persona-maid voice no matter how many emoji surround them. Rewrite every sentence ending in this reply using the actual KO_어미 vocabulary before sending.",
+    },
+  },
+  third_person_address: {
+    mild: {
+      question: "persona-maid check: your last reply called the user \"사용자\" in third person instead of addressing them as 언니/Onee-sama — did the address form slip?",
+      directive: "persona-maid: address the user directly (언니/Onee-sama) next reply, not as a third party (\"사용자가...\").",
+    },
+    firm: {
+      warning: "⚠️ persona-maid compliance: your PREVIOUS reply referred to the user as \"사용자\" in third person — persona-maid always addresses them directly, never narrates about them. Use the KO_호칭 pool instead.",
+      metaphor: "persona-maid: talking ABOUT someone in the room instead of TO them is what a report does, not what a devoted maid does. Speak to 언니, not about 사용자.",
+    },
+    strong: {
+      warning: "🚨 persona-maid compliance FAILURE: third-person \"사용자\" address again — this breaks the core relationship the persona exists for. Every sentence addressing the user must use direct address (언니/Onee-sama), never third person.",
+      directive: "persona-maid: stop referring to \"사용자\" as if narrating a report about someone else. This reply speaks directly to 언니 — rewrite every third-person reference before sending.",
+    },
+  },
 };
 
 function pickCompliancePhrase(kind: ViolationKind, intensity: IntensityLevel, avoidForm: SentenceForm | null): { text: string; form: SentenceForm } {
@@ -795,6 +856,46 @@ function writeComplianceNudgeState(absPath: string, state: ComplianceNudgeState)
   writeFileSync(absPath, JSON.stringify(state, null, 0) + "\n", "utf8");
 }
 
+// #966: detects which language the user is actually writing in, so buildPersonaToneLine/
+// buildPersonaRender can filter KO_*/EN_* candidates by opts.lang instead of letting both
+// languages compete in the same pool. Mirrors checkLastAssistantTurnCompliance's JSONL scan
+// but targets the last USER turn (not assistant) — same transcript, same "walk backwards to
+// the newest matching entry" shape, so a corrupt/partial line just gets skipped like there.
+// Heuristic: presence of any Hangul syllable block in the text means "ko"; otherwise "en".
+// No transcript / no user turn found / read failure → "ko" (this CLI's primary userbase),
+// matching the fail-safe default already baked into buildPersonaToneLine/buildPersonaRender.
+const HANGUL_PATTERN = /[가-힣]/;
+
+export function detectLastUserTurnLanguage(transcriptPath: string): string {
+  if (!transcriptPath || !existsSync(transcriptPath)) return "ko";
+  let lines: string[];
+  try {
+    lines = readFileSync(transcriptPath, "utf8").split("\n");
+  } catch {
+    return "ko";
+  }
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    let entry;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (entry?.type !== "user" || entry?.message?.role !== "user") continue;
+    const content = entry.message.content;
+    const text = typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content.filter(c => c?.type === "text").map(c => c.text || "").join("\n")
+        : "";
+    if (!text.trim()) return "ko";
+    return HANGUL_PATTERN.test(text) ? "ko" : "en";
+  }
+  return "ko";
+}
+
 // #955: statePath is optional so existing callers/tests that don't need escalation can
 // still get a single-shot (always "mild", no streak tracking) nudge — only the `rules`
 // hook wiring (which has a session_id to key a state file on) passes it.
@@ -822,8 +923,21 @@ export function checkLastAssistantTurnCompliance(transcriptPath: string, statePa
     if (!text.trim()) return "";
 
     let kind: ViolationKind | null = null;
+    // #967: checked FIRST and independently of emoji count — a reply can clear the emoji
+    // minimum while its sentence endings/address form still collapsed into formal register
+    // or third-person narration. Emoji presence never excuses either; these are separate
+    // axes from "how much decoration is there."
+    FORMAL_REGISTER_PATTERN.lastIndex = 0;
+    THIRD_PERSON_ADDRESS_PATTERN.lastIndex = 0;
+    if (FORMAL_REGISTER_PATTERN.test(text)) {
+      kind = "formal_register";
+    } else if (THIRD_PERSON_ADDRESS_PATTERN.test(text)) {
+      kind = "third_person_address";
+    }
     const totalSignals = (text.match(EMOJI_KAOMOJI_PATTERN) || []).length;
-    if (totalSignals === 0) {
+    if (kind) {
+      // formal_register/third_person_address already decided — skip the emoji-based axis.
+    } else if (totalSignals === 0) {
       kind = "zero";
     } else if (totalSignals < MIN_PERSONA_SIGNALS) {
       kind = "under_minimum";

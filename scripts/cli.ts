@@ -6,7 +6,7 @@ import { parseArgs, parseSkillArgs, parseTelemetryArgs, parseTicketArgs, parseUs
 import { formatInitCompletionMessage, runWorkspaceMaintenance } from "./cli-init-commands.js";
 import { removeClaudePostToolUseHook, removeClaudePreToolUseHook, removeClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
 import { runHookPostToolUse } from "./cli-hook-post-tool-use.js";
-import { buildPersonaRender, buildPersonaToneLine, checkLastAssistantTurnAskedUnnecessarily, checkLastAssistantTurnCompliance, checkLastAssistantTurnDeferredOnScope, parsePersonaArgs, printPersonaGuide, runPersonaJournalAbsorb, runPersonaJournalAdd, runPersonaJournalShow, runPersonaRender, runPersonaVocabAdd, runPersonaVocabShow } from "./cli-persona-commands.js";
+import { buildPersonaRender, buildPersonaToneLine, checkLastAssistantTurnAskedUnnecessarily, checkLastAssistantTurnCompliance, checkLastAssistantTurnDeferredOnScope, detectLastUserTurnLanguage, parsePersonaArgs, printPersonaGuide, runPersonaJournalAbsorb, runPersonaJournalAdd, runPersonaJournalShow, runPersonaRender, runPersonaVocabAdd, runPersonaVocabShow } from "./cli-persona-commands.js";
 import { runGlobalAgentInstructionSync } from "./cli-init-instructions.js";
 import { readTicketIndexJson } from "./cli-ticket-index.js";
 import { buildTicketCreateGuide, buildTicketRulesGuide, runTicketArchive, runTicketClose, runTicketConnect, runTicketCreate, runTicketDiscard, runTicketDoctor, runTicketEdit, runTicketEvidenceCheck, runTicketEvidenceReport, runTicketGuard, runTicketHandoff, runTicketHotfix, runTicketList, runTicketMeta, runTicketMigrateHome, runTicketMove, runTicketNext, runTicketRebuild, runTicketRules, runTicketSanitize, runTicketShow, runTicketStatus, runTicketUse } from "./cli-ticket-commands.js";
@@ -812,7 +812,14 @@ function emitPersonaSurface(opts: CliOpts, hookInput?: any) {
     const skillsConfig = readJsonFile(getUserSkillsConfigPath(opts));
     const exposedToClaude: string[] = skillsConfig?.exposed?.claude || [];
     if (exposedToClaude.includes("persona-maid")) {
-      const personaBlock = personaShouldRenderFull ? buildPersonaRender(opts, true) : buildPersonaToneLine(opts);
+      // #966: KO_*/EN_* vocabulary candidates used to compete in the same pool regardless
+      // of what language the user is actually writing in, so an EN_* pick could surface in
+      // a Korean session (observed: "모든 세션에서 계속 영어로 응답"). Detect the last user
+      // turn's language from the same transcript already used for compliance checks, and
+      // pass it through opts.lang so both render paths filter to the matching language.
+      const detectedLang = hookInput?.transcript_path ? detectLastUserTurnLanguage(hookInput.transcript_path) : "ko";
+      const personaOpts = { ...opts, lang: opts.lang || detectedLang };
+      const personaBlock = personaShouldRenderFull ? buildPersonaRender(personaOpts, true) : buildPersonaToneLine(personaOpts);
       if (personaBlock && personaBlock.trim()) console.log("\n" + personaBlock.trimEnd());
       if (hookInput) {
         // #955: escalate intensity + vary sentence form across consecutive violations
