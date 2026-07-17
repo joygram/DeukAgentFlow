@@ -63,7 +63,9 @@ export function inferInitDefaults(cwd, opts: CliOpts = {}) {
     stack,
     agentTools: opts.agentTools ?? tools,
     docsLanguage: resolveDocsLanguage(opts.docsLanguage ?? "auto"),
-    workflowMode: normalizeWorkflowMode(opts.workflowMode ?? opts.workflow ?? opts.approval ?? WORKFLOW_MODE_EXECUTE),
+    // init 설정 조립: 입력 미지정 시 execute가 init 기본 모드다(설계 명시 기본값).
+    // 정본 입력은 workflowMode(←--workflow)·approval(←--approval)뿐 — 죽은 별칭 opts.workflow 제거.
+    workflowMode: normalizeWorkflowMode(opts.workflowMode ?? opts.approval ?? WORKFLOW_MODE_EXECUTE),
     shareTickets: opts.shareTickets ?? false,
     contextMcp: opts.contextMcp ?? "skip",
     remoteSync: opts.remoteSync ?? false,

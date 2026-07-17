@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
   <br />
-  <h1>Deuk Agent Flow v5.0.2</h1>
+  <h1>Deuk Agent Flow</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/dm/deuk-agent-flow.svg?label=downloads" alt="deuk-agent-flow npm downloads" /></a>
@@ -121,13 +121,13 @@ Karpathy식 skill은 한 작업 안에서 에이전트의 행동을 더 좋게 �
 ### 📚 상세 문서
 | 문서 | 용도 |
 |---|---|
-| [docs/usage-guide.ko.md](docs/usage-guide.ko.md) | **[추천]** 실전 배포 및 단계별 사용 가이드 |
+| [docs/public/guides/usage-guide.ko.md](docs/public/guides/usage-guide.ko.md) | **[추천]** 실전 배포 및 단계별 사용 가이드 |
 | [docs/skills-guide.ko.md](docs/skills-guide.ko.md) | **v5.0 신규:** 스킬 시스템·페르소나 사용법·Flow UI 가이드 |
 | [Flow UI 가이드](docs/skills-guide.ko.md#4-vs-code-flow-ui-agentflow-panel) | AgentFlow Panel — 워크스페이스·스킬 탭, 핸드오프, 활용 팁 |
-| [docs/architecture.ko.md](docs/architecture.ko.md) | 고수준 시스템 구조 및 시각적 인포그래픽 |
-| [docs/how-it-works.ko.md](docs/how-it-works.ko.md) | 상세 CLI 메커니즘, ticket workflow 런타임, 초기화 생명주기 및 파일 역할 |
+| [docs/public/architecture/architecture.ko.md](docs/public/architecture/architecture.ko.md) | 고수준 시스템 구조 및 시각적 인포그래픽 |
+| [docs/public/guides/how-it-works.ko.md](docs/public/guides/how-it-works.ko.md) | 상세 CLI 메커니즘, ticket workflow 런타임, 초기화 생명주기 및 파일 역할 |
 | [docs/principles.ko.md](docs/principles.ko.md) | 설계 철학: Hub-Spoke, Zero-Legacy, 소스 주권 |
-| **English Docs** | [README.md](README.md) · [docs/architecture.md](docs/architecture.md) |
+| **English Docs** | [README.md](README.md) · [docs/public/architecture/architecture.md](docs/public/architecture/architecture.md) |
 
 ---
 
@@ -202,7 +202,7 @@ deuk-agent-flow init
 
 이렇게 사용하면 효과가 극대화됩니다. workspace 루트는 공통 진입점, 각 프로젝트 루트는 독립 티켓/규칙/검증 단위로 나누고, 중첩 서버나 앱은 필요할 때 별도 프로젝트로 초기화하세요.
 
-자세한 실전 활용법은 **[실전 사용 가이드](docs/usage-guide.ko.md)**를 참조하세요.
+자세한 실전 활용법은 **[실전 사용 가이드](docs/public/guides/usage-guide.ko.md)**를 참조하세요.
 
 ## 🛠️ 설치 및 설정
 
@@ -302,11 +302,12 @@ npm run smoke:npm:docker
 
 워크플로우는 **티켓 기반 실행 계약(Ticket-Driven Execution Contract)**에 의해 통제됩니다.
 
-1. **스캐폴딩 (Scaffolding)**: `init` 명령어가 `AGENTS.md`와 `PROJECT_RULE.md` 같은 로컬 포인터를 배치합니다. 런타임 템플릿은 워크스페이스별 복사본이 아니라 패키지의 `templates/`를 단일 진실 공급원으로 사용합니다.
+1. **스캐폴딩 (Scaffolding)**: `init`은 워크스페이스에 **한 줄 포인터**(그리고 감지된 도구별 네이티브 룰 스포크)를 설치할 뿐, `AGENTS.md`를 레포에 복사하지 않습니다. 코어 룰은 agent-flow 홈에 한 번만 존재하는 단일 진실 공급원(SSOT)이며, 런타임 템플릿도 패키지 `templates/`를 SSOT로 사용합니다. 워크스페이스 루트에 `AGENTS.md`가 있다면 홈 기반 이전 이전(pre-home) 레이아웃의 레거시 잔재이지 현재 산출물이 아닙니다.
 2. **티켓팅 (Plan Phase)**: 사용자가 짧게 지시하면 에이전트가 맥락을 읽고 내부 작업 지시서를 생성합니다. 이때 에이전트는 Plan Mode로 동작하며 코드를 수정할 수 없고 계획 수립에만 집중합니다.
-3. **실행 (Execute Phase)**: 사용자의 승인을 받은 후, 에이전트는 **타겟 서브모듈**에 고정되어 실질적인 코드 작성을 수행합니다. MCP Soft Gate가 인가되지 않은 파일의 수정을 감시합니다.
-4. **검증 (Verify Phase)**: 개발 작업 종료 전 사이드 이펙트 감사(Audit) 및 컨벤션(DC-DUP 등 아키텍처 규칙) 체크를 수행합니다.
-5. **아카이빙 (Archive Phase)**: 완료된 티켓은 Zero-Token 지식 증류를 거쳐 `reports/`로 이동하며, 이 데이터는 DeukAgentContext 벡터 데이터베이스에 저장되어 영구적인 **엔지니어링 메모리 엔진**으로 작동합니다.
+3. **리뷰·승인 게이트 (Plan → Execute)**: 코드를 건드리기 전, phase 1 → 2 전환은 **코드로 하드 게이트**됩니다. `ticket move --phase 2`는 명시적 `--approval approved` 없이는 진행을 거부하므로, 에이전트가 계획을 스스로 실행 단계로 넘길 수 없습니다. 게이트는 승인이 *주어졌는지*를 검사할 뿐 계획을 *이해했는지*는 검사하지 못합니다 — 그건 에이전트의 의무로, 계획을 사용자에게 **리뷰로 제시**(무엇이 바뀌는지·판단 포인트·근거)해 사용자가 붙여넣은 텍스트 벽이 아니라 실제로 본 것을 승인하게 해야 합니다. CLI는 에이전트의 실행 계층이므로, 사용자는 채팅에서 리뷰·승인하고 명령은 에이전트가 실행합니다.
+4. **실행 (Execute Phase)**: 승인을 받은 후, 에이전트는 **타겟 서브모듈**에 고정되어 실질적인 코드 작성을 수행합니다. MCP Soft Gate가 인가되지 않은 파일의 수정을 감시합니다.
+5. **검증 (Verify Phase)**: 개발 작업 종료 전 사이드 이펙트 감사(Audit) 및 컨벤션(DC-DUP 등 아키텍처 규칙) 체크를 수행합니다.
+6. **아카이빙 (Archive Phase)**: 완료된 티켓은 Zero-Token 지식 증류를 거쳐 `reports/`로 이동하며, 이 데이터는 DeukAgentContext 벡터 데이터베이스에 저장되어 영구적인 **엔지니어링 메모리 엔진**으로 작동합니다. 종료 시 에이전트는 코드와 어긋난 문서/룰도 정본화합니다(`role-closer`의 doc-sync 의무).
 
 ---
 
@@ -332,7 +333,7 @@ npm run smoke:npm:docker
 
 메인테이너와 자동화 환경에서는 `deuk-agent-flow ticket create`, `ticket move`, `ticket archive` 같은 CLI 명령을 직접 사용할 수 있습니다.
 
-자세한 사용 예시는 [docs/usage-guide.ko.md](docs/usage-guide.ko.md)를 참고하세요.
+자세한 사용 예시는 [docs/public/guides/usage-guide.ko.md](docs/public/guides/usage-guide.ko.md)를 참고하세요.
 
 ---
 

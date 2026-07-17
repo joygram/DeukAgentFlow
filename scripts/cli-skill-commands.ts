@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync
 import { dirname, join, relative } from "path";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
-import { DEUK_ROOT_DIR, CliOpts, getUserSkillsConfigPath, getUserSkillsDir, makePath, parseFrontMatter, resolvePackageRoot } from "./cli-utils.js";
+import { DEUK_ROOT_DIR, CliOpts, getUserSkillsConfigPath, getUserSkillsDir, makePath, parseFrontMatter, resolvePackageRoot, toFileUri } from "./cli-utils.js";
 
 const SKILL_ROOT = "templates/skills";
 const CONFIG_FILE = `${DEUK_ROOT_DIR}/skills.json`;
@@ -37,12 +37,17 @@ function getPlatform(id) {
   return platform;
 }
 
-function safeReadJson(absPath, fallback = null) {
-  if (!existsSync(absPath)) return fallback;
+// #879 No-Fallback Gate: catch 삼킴 폴백 제거. 파일이 없으면 호출부가 넘긴 초기값을
+// 쓰되(최초 실행 정상 — 명시적 부재 처리), 파일이 있는데 JSON이 깨졌으면 던진다.
+// 조용히 초기값으로 갈음하면 손상된 config가 "없는 척" 통과해 상태가 유실된다
+// (hasPhase2ExecutionEvidence 폴백이 깨진 로직을 가린 것과 같은 함정).
+function readJsonIfExists(absPath, initial = null) {
+  if (!existsSync(absPath)) return initial;
+  const raw = readFileSync(absPath, "utf8");
   try {
-    return JSON.parse(readFileSync(absPath, "utf8"));
-  } catch {
-    return fallback;
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`corrupt JSON at ${absPath}: ${err.message} — fix or remove the file (No-Fallback Gate: not silently defaulted)`);
   }
 }
 
@@ -80,7 +85,7 @@ function sourceSkillPath(cwd, id) {
 }
 
 // listSkills 미리보기/충돌 판정을 위해 frontmatter(summary, category)와 origin 을 읽는다.
-function readSkillMeta(cwd, id) {
+export function readSkillMeta(cwd, id) {
   try {
     const path = sourceSkillPath(cwd, id);
     if (!existsSync(path)) return { summary: "", category: "", source: "bundled" };
@@ -109,7 +114,7 @@ function loadSkillSource(cwd, id) {
 
 // installed + exposed 모두 홈 전역 skills.json 의 SSOT.
 function loadGlobalConfig() {
-  const g = safeReadJson(getUserSkillsConfigPath(), { installed: [], exposed: {} });
+  const g = readJsonIfExists(getUserSkillsConfigPath(), { installed: [], exposed: {} });
   return {
     installed: Array.isArray(g.installed) ? g.installed : [],
     exposed: (g.exposed && typeof g.exposed === 'object') ? g.exposed : {},
@@ -126,7 +131,7 @@ function writeGlobalConfig(installed, exposed, dryRun) {
 function loadSkillConfig(cwd) {
   const global = loadGlobalConfig();
   // 워크스페이스 파일에 잔존하는 installed/exposed 는 마이그레이션 호환을 위해 전역으로 머지.
-  const ws = safeReadJson(makePath(cwd, CONFIG_FILE), { installed: [], exposed: {} });
+  const ws = readJsonIfExists(makePath(cwd, CONFIG_FILE), { installed: [], exposed: {} });
   const localInstalled = Array.isArray(ws.installed) ? ws.installed : [];
   const localExposed = (ws.exposed && typeof ws.exposed === 'object') ? ws.exposed : {};
   const installed = Array.from(new Set([...global.installed, ...localInstalled]));
@@ -183,7 +188,7 @@ function writeSkillConfig(cwd, config, dryRun) {
     const wsPath = makePath(cwd, CONFIG_FILE);
     if (existsSync(wsPath)) {
       try {
-        const ws = safeReadJson(wsPath, {});
+        const ws = readJsonIfExists(wsPath, {});
         if ('exposed' in ws || 'installed' in ws) {
           const { exposed: _e, installed: _i, ...rest } = ws;
           writeFileSync(wsPath, JSON.stringify({ version: 1, ...rest }, null, 2), "utf8");
@@ -261,6 +266,27 @@ export function detectCurrentPlatform() {
   return null;
 }
 
+// #935: 현재 area(phase)에 bind된 role 스킬(category:role)의 id 목록. role-header가
+// "이 스킬을 Skill 툴로 invoke하라"는 능동 강제 지시를 만들 때 정확한 skill id를 얻는
+// 유일 출처(DR-03). area→role skill 매핑은 스킬 프론트매터의 bind/category가 SSOT이므로
+// 별도 매핑 테이블을 중복 정의하지 않고 그 메타를 그대로 읽어 유도한다. getActiveSkillsSurface와
+// 동일한 install/expose/area 필터를 재사용해 "노출되는 스킬"과 "invoke 지시 대상"이 어긋나지
+// 않게 한다(어긋나면 없는 스킬을 호출하라고 시키는 드리프트).
+export function getActiveRoleSkillIds(cwd = process.cwd(), platform = null, area = null): string[] {
+  if (!area) return [];
+  const config = loadSkillConfig(cwd);
+  const detectedPlatform = platform || detectCurrentPlatform();
+  let ids = config.installed || [];
+  if (detectedPlatform) {
+    const exposed = config.exposed?.[detectedPlatform] || [];
+    ids = ids.filter(id => exposed.includes(id));
+  }
+  return ids.filter(id => {
+    const meta = readSkillMeta(cwd, id);
+    return meta.category === "role" && meta.bind === area;
+  });
+}
+
 // #694: area = 현재 노드 영역(rules/phase1/phase2/doc). 꽂힌 스킬 중 bind가 이 영역과
 // 일치하는 것만 노출한다(LangGraph 노드별 도구 바인딩). bind가 없는 스킬은 영역 무관으로
 // 항상 노출. area를 안 주면(null) 영역 필터를 적용하지 않는다(하위 호환).
@@ -270,26 +296,43 @@ export function getActiveSkillsSurface(cwd = process.cwd(), platform = null, are
   let ids = config.installed || [];
 
   if (detectedPlatform) {
+    // #853: skill exposure is managed via `skills.json` (config.exposed) — that IS the
+    // source of truth. The former `|| detectExposedPlatforms(...)` disk fallback re-derived
+    // exposure by scanning native SKILL.md / legacy flat / pointer files on disk, which
+    // silently overrode the manager's config and masked missing exposures. Trust exposed only;
+    // if a skill should show and doesn't, fix its exposure (ensureSystemSkills / expose), not
+    // by re-reading the disk here.
     ids = ids.filter(id => {
       const exposed = config.exposed?.[detectedPlatform] || [];
-      return exposed.includes(id) || detectExposedPlatforms(cwd, id).includes(detectedPlatform);
+      return exposed.includes(id);
     });
   }
 
   if (area) {
     ids = ids.filter(id => {
       const bind = readSkillMeta(cwd, id).bind;
-      return !bind || bind === area;
+      // #853: the phase(area) filter only governs PHASE-bound skills (role-planner=phase1,
+      // role-programmer=phase2, …) — those correctly show only in their phase. Skills
+      // bound to `rules` (or with no bind) are not phase-scoped and must show in every
+      // phase; previously they were dropped whenever bind != area, which hid always-on
+      // rule skills like ticket-status-surface. NOTE: system:true is NOT the discriminator
+      // here — role skills are system:true too but ARE phase-scoped; the bind kind is.
+      if (!bind || bind === "rules") return true;
+      return bind === area;
     });
   }
 
   if (ids.length === 0) return "";
 
-  // native 플랫폼(claude 등)은 스킬이 이미 플랫폼 컨텍스트에 로드됨 — summary 목록만 출력.
-  if (detectedPlatform && NATIVE_EMBED_SKIP_PLATFORMS.has(detectedPlatform)) {
+  // #777: 모든 활성 에이전트(native/pointer)에 대해 스킬 본문 인라인 대신 요약 및 파일 링크 목록만 출력하여 코어룰 비대화 방지.
+  if (detectedPlatform) {
     const lines = ids.map(id => {
       const meta = readSkillMeta(cwd, id);
-      return meta.summary ? `- **${id}**: ${meta.summary}` : `- **${id}**`;
+      const src = sourceSkillPath(cwd, id);
+      const fileUri = toFileUri(src);
+      return meta.summary
+        ? `- **${id}**: ${meta.summary} ([SKILL.md](${fileUri}))`
+        : `- **${id}** ([SKILL.md](${fileUri}))`;
     });
     return `## Active Skills\n\n${lines.join("\n")}`;
   }
@@ -298,10 +341,20 @@ export function getActiveSkillsSurface(cwd = process.cwd(), platform = null, are
     try {
       const raw = readFileSync(sourceSkillPath(cwd, id), "utf8").trimEnd();
       // 역할 레이어(category: role)는 행동 계약이라 잘리면 의미가 없다 — truncate 면제.
-      const isRole = readSkillMeta(cwd, id).category === "role";
-      const truncated = (!isRole && raw.length > SKILL_BODY_LIMIT)
+      // #926: persona-maid도 §2.4 render 호출 지시(행동 계약)를 담게 되면서 잘리면 그
+      // 지시 자체가 사라진다 — role과 같은 이유로 면제한다(19KB 전문에서 잘려나가면
+      // "persona render를 호출하라"는 지시가 rules에 아예 도달하지 못했던 것이 926의 실측 원인).
+      const meta = readSkillMeta(cwd, id);
+      const isRole = meta.category === "role";
+      const isPersona = meta.category === "persona";
+      const truncated = (!isRole && !isPersona && raw.length > SKILL_BODY_LIMIT)
         ? raw.slice(0, SKILL_BODY_LIMIT) + "\n… (truncated)"
         : raw;
+      // #926: the #925 approach (splicing a render block into the hook's rules output
+      // here) bypassed the skill manager's own load/expose path — the skill body itself
+      // never told the agent to call `persona render`. Reverted: the SKILL.md source is
+      // now the single place that carries the render-consumption instruction (§2.4), so
+      // it survives normal skill sync instead of a side-channel hook injection.
       return `### Skill: ${id}\n\n${truncated}`;
     } catch {
       return "";
@@ -566,6 +619,56 @@ export function ensureSystemSkills(cwd = process.cwd(), opts: CliOpts = {}) {
     }
   }
   return ensured;
+}
+
+// #949: "진짜 원본 소스"에 존재하는 스킬 id 집합. getAvailableSkills와 달리 installedRoot·
+// userSkillsDir를 제외한다 — installedRoot(설치본)를 소스로 치면 이미 설치된 유령이 스스로를
+// 소스로 잡아 영영 청소 대상에서 빠지고(자기참조 순환), userSkillsDir(사용자 fork)는 원본
+// 소스에 없어도 정당한 보존 대상이라 orphan 판정에서 빼야 한다. 그래서 여기선 오직 번들
+// 원본(templateRoot=리포 소스, PACKAGE_ROOT/SKILL_ROOT=설치된 패키지 소스)만 스캔한다.
+function getOriginSourceSkillIds(cwd) {
+  const ids = new Set();
+  const scanDir = (dir) => {
+    if (existsSync(dir)) {
+      readdirSync(dir, { withFileTypes: true })
+        .filter(d => d.isDirectory() && existsSync(makePath(dir, d.name, "SKILL.md")))
+        .forEach(d => ids.add(d.name));
+    }
+  };
+  scanDir(makePath(cwd, SKILL_PATHS.templateRoot));
+  scanDir(makePath(PACKAGE_ROOT, SKILL_ROOT));
+  return ids;
+}
+
+// #949: id가 rename/제거되면 옛 스킬이 설치·노출에 유령으로 남는다(role-qa-verifier 실측).
+// init/dev:install 경로에서 이 함수가 유령을 자동 청소해, id 변경이 재설치만으로 마이그레이션
+// 되게 한다. 유령 = 원본 소스(getOriginSourceSkillIds)에는 없는데 exposed/installed에 남은
+// 스킬. 사용자 fork(userSkillsDir에 있는 것)는 원본 소스에 없어도 보존한다 — 그 id가
+// userSkillsDir에 SKILL.md로 존재하면 청소 대상에서 뺀다. 조용한 정리이되 무엇을 지웠는지
+// 로그로 남긴다(은폐 아님, No-Fallback Gate 취지: 변경을 관측 가능하게).
+export function pruneOrphanedSystemSkills(cwd = process.cwd(), opts: CliOpts = {}) {
+  const origin = getOriginSourceSkillIds(cwd);
+  const forkDir = getUserSkillsDir();
+  const isUserFork = (id) => existsSync(makePath(forkDir, id, "SKILL.md"));
+
+  // exposed(전 플랫폼) ∪ installed 에서 원본 소스에 없고 fork도 아닌 id = 유령.
+  const config = loadSkillConfig(cwd);
+  const referenced = new Set(config.installed || []);
+  for (const platformId of SKILL_PLATFORM_IDS) {
+    for (const id of currentlyExposed(config, platformId)) referenced.add(id);
+  }
+  const orphans = [...referenced].filter(id => !origin.has(id) && !isUserFork(id));
+  const pruned = [];
+  for (const id of orphans) {
+    try {
+      removeSkill({ cwd, skill: id, dryRun: opts.dryRun });
+      pruned.push(id);
+    } catch { /* best-effort: 한 스킬 청소 실패가 init을 막지 않음 */ }
+  }
+  if (pruned.length > 0) {
+    console.log(`[skill-migrate] pruned orphaned skill(s) whose source id no longer exists: ${pruned.join(", ")}`);
+  }
+  return pruned;
 }
 
 export function unexposeSkills(opts: CliOpts = {}) {

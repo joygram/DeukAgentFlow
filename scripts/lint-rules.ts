@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "fs";
 import { cliText } from "./cli-locales.js";
 import { CliOpts, DEUK_ROOT_DIR, makePath } from "./cli-utils.js";
+import { PHASE_ROLE_LABEL } from "./ticket-workflow.js";
+import { readSkillMeta } from "./cli-skill-commands.js";
 
 function extractSection(rules, heading) {
   const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -97,6 +99,48 @@ const RULE_CHECKS = [
   }
 ];
 
+// #942: phase↔롤 명칭 SSOT 정합 검사. phase→롤은 두 곳에 독립 인코딩된다:
+// (1) PHASE_ROLE_LABEL(ticket-workflow.ts) — phase숫자 → 사람용 라벨,
+// (2) role-*/SKILL.md frontmatter의 bind — phaseN → skill-id.
+// 둘 사이엔 상호 참조가 없어 한쪽이 어긋나도 조용히 드리프트한다(사용자 관측:
+// qa-verifier vs QA/검증자 혼선). 여기서 두 SSOT가 서로 정합하는지 fail-loud로 검사한다.
+// 기대: PHASE_ROLE_LABEL의 라벨 안에 등장하는 롤 토큰이, 해당 phaseN에 bind된 role
+// 스킬 id(role-<token>)로 실제 존재해야 한다(DR-03: 매핑을 새로 정의하지 않고 대조만).
+const EXPECTED_ROLE_BINDINGS = [
+  { phase: 1, skillIds: ["role-planner", "role-architect", "role-ux-designer"] },
+  { phase: 2, skillIds: ["role-programmer"] },
+  { phase: 3, skillIds: ["role-qa"] },
+  { phase: 4, skillIds: ["role-closer"] }
+];
+
+function auditRoleSsot(cwd) {
+  const violations = [];
+  for (const { phase, skillIds } of EXPECTED_ROLE_BINDINGS) {
+    const label = PHASE_ROLE_LABEL[phase] || "";
+    for (const skillId of skillIds) {
+      const meta = readSkillMeta(cwd, skillId);
+      // 스킬이 존재하고 role 카테고리이며 기대 phase에 bind되어 있어야 한다.
+      if (meta.category !== "role" || meta.bind !== `phase${phase}`) {
+        violations.push({
+          code: "DR-ROLE-SSOT-01",
+          message: `Role skill '${skillId}' must be category:role bind:phase${phase} (found category:'${meta.category}' bind:'${meta.bind}').`
+        });
+        continue;
+      }
+      // skill id의 롤 토큰(role-<token>)이 PHASE_ROLE_LABEL 라벨에도 나타나야 한다
+      // — 라벨과 스킬 id가 같은 롤 이름을 가리키는지 대조.
+      const token = skillId.replace(/^role-/, "");
+      if (!label.includes(token)) {
+        violations.push({
+          code: "DR-ROLE-SSOT-02",
+          message: `PHASE_ROLE_LABEL[${phase}]='${label}' must reference role token '${token}' from skill '${skillId}'.`
+        });
+      }
+    }
+  }
+  return violations;
+}
+
 export function auditRules(cwd = process.cwd()) {
   const rulesPath = makePath(cwd, "core-rules", "AGENTS.md");
   if (!existsSync(rulesPath)) {
@@ -176,6 +220,8 @@ export function auditRules(cwd = process.cwd()) {
   if (!hasAny(rules, [/reading the output of `deuk-agent-flow rules`/i])) {
     violations.push({ code: "DR-RULES-01", message: cliText("lint.rules.printsCurrentBody") });
   }
+
+  violations.push(...auditRoleSsot(cwd));
 
   return { ok: violations.length === 0, path: rulesPath, violations };
 }

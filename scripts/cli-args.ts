@@ -1,3 +1,15 @@
+import { getEvidenceSlotFlagSpecs } from "./cli-ticket-evidence-slots.js";
+
+// #908: the evidence-slot flags (--reproduction … --follow-up) are derived from the slot
+// SSOT (EVIDENCE_SECTION_SLOTS) instead of hand-listed here, so a slot rename/addition can
+// never leave the parser surface out of lockstep with the slots (role-layer.md §3.0: slot
+// names appear once in the designer's output and every surface re-reads them; DR-03).
+const EVIDENCE_SLOT_FLAG_TO_OPTSKEY: Record<string, string> = (() => {
+  const map: Record<string, string> = {};
+  for (const { optsKey, flag } of getEvidenceSlotFlagSpecs()) map[flag] = optsKey;
+  return map;
+})();
+
 // Parse a phase token from --phase/--to. Accepts "2", "phase2", "phase 2", "end", "start".
 // Returns NaN when no digit is present and not a known named state so callers can detect
 // a malformed value (e.g. "--to phaseX") instead of silently advancing. (#635)
@@ -36,6 +48,15 @@ export function parseTicketArgs(argv) {
     else if (a === "--from") out.from = argv[++i];
     else if (a === "--plan-body") out.planBody = argv[++i];
     else if (a === "--plan-body-file") out.planBodyFile = argv[++i];
+    // #806: phase1 plan을 섹션별 플래그로 받는다. 에이전트가 마크다운 H2 헤딩을
+    // 손으로 정확히 짜맞출 필요 자체를 없애고, CLI가 정본 헤딩으로 조립한다.
+    else if (a === "--scope") out.scope = argv[++i];
+    // G1+G2: 설계기반흐름 phase1 신규 섹션 — Design(설계 산출물)·Environment(환경 계약).
+    else if (a === "--design") out.design = argv[++i];
+    else if (a === "--environment") out.environment = argv[++i];
+    else if (a === "--plan") out.planSection = argv[++i];
+    else if (a === "--analysis") out.analysis = argv[++i];
+    else if (a === "--direction") out.direction = argv[++i];
     else if (a === "--ref") out.ref = argv[++i];
     else if (a === "--limit") out.limit = Number(argv[++i]);
     else if (a === "--submodule") out.submodule = argv[++i];
@@ -49,6 +70,7 @@ export function parseTicketArgs(argv) {
     else if (a === "--status") out.status = argv[++i];
     else if (a === "--archived") out.archived = true;
     else if (a === "--priority") out.priority = argv[++i];
+    else if (a === "--type") out.type = argv[++i];
     else if (a === "--report") out.report = argv[++i];
     else if (a === "--json") out.json = true;
     else if (a === "--remote") out.remote = argv[++i];
@@ -68,6 +90,18 @@ export function parseTicketArgs(argv) {
     else if (a === "--next") out.next = true;
     else if (a === "--handoff") out.handoff = true;
     else if (a === "--reason") out.reason = argv[++i];
+    // #837: actor attribution + last-resort confirm gate. discard/rollback가 누가
+    // (사람/에이전트/자동정리) 실행했는지 telemetry에 남기고, 자동·서브에이전트 출처는
+    // 명시 confirm 없이는 거부하기 위한 입력들. forward 전환엔 영향 없음.
+    else if (a === "--agent" || a === "--agent-id") out.agentId = argv[++i];
+    else if (a === "--session-mode") out.sessionMode = argv[++i];
+    else if (a === "--source") out.source = argv[++i];
+    else if (a === "--confirm-discard") out.confirmDiscard = true;
+    else if (a === "--confirm-rollback") out.confirmRollback = true;
+    // #918: ticket edit이 phase2+에서 스코프 확장을 텍스트 스캔으로 추론하지 않고,
+    // 편집 주체(role-architect 모드)가 확장임을 명시 선언하게 하는 플래그. 게이트는
+    // 이 선언 유무만 본다(design-driven-flow.md §6.0.4 판정 계약).
+    else if (a === "--expand-scope") out.expandScope = true;
     else if (a === "--claim") out.claim = argv[++i];
     else if (a === "--require-filled") out.requireFilled = true;
     else if (a === "--allow-placeholder") out.allowPlaceholder = true;
@@ -76,6 +110,11 @@ export function parseTicketArgs(argv) {
     else if (a === "--verbose") out.verbose = true;
     else if (a === "-h" || a === "--help") out.help = true;
     else if (a === "--session-id") out.sessionId = argv[++i];
+    // #808/#908: move evidence-injection flags (--reproduction … --follow-up), derived
+    // from the slot SSOT so the parser surface can never drift from EVIDENCE_SECTION_SLOTS.
+    // Lets `move` write the phase3/phase4 close slots into the ticket .md from the CLI so
+    // the agent never hand-edits the .md to satisfy the phase transition gate.
+    else if (EVIDENCE_SLOT_FLAG_TO_OPTSKEY[a]) out[EVIDENCE_SLOT_FLAG_TO_OPTSKEY[a]] = argv[++i];
     else if (a.startsWith("-")) {
       // #775: unknown 플래그를 조용히 무시하지 않는다. 에이전트가 흔히 쓰는
       // --description/--body 등을 no-op으로 삼키면, 그 뒤 본문이 positional로
@@ -114,10 +153,18 @@ const UNKNOWN_FLAG_HINTS: Record<string, string> = {
   "--description": "--plan-body or --summary",
   "--desc": "--plan-body or --summary",
   "--body": "--plan-body",
+  "--plan-section": "--plan",
+  "--scope-section": "--scope",
   "--message": "--summary",
   "-m": "--summary",
   "--name": "--title",
   "--ws": "--workspace",
+  // #908: phase 지정에 인정되는 플래그는 --phase/--to 뿐. 에이전트가 자연어스럽게
+  // 지어내는 --to-phase 류를 무힌트로 튕기지 않고 올바른 플래그로 안내한다.
+  "--to-phase": "--phase or --to",
+  "--phase-to": "--phase or --to",
+  "--target-phase": "--phase or --to",
+  "--goto": "--phase or --to",
 };
 
 // 에러 메시지에 긴 본문이 통째로 찍히지 않도록 길이를 자른다.

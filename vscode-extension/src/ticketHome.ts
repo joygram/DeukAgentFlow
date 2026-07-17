@@ -17,6 +17,7 @@ import { execFile } from 'child_process';
 export interface CliTicketEntry {
   id: string;
   path: string;       // index-relative (main/x.md) — 표시용, 파일 접근에는 쓰지 않음
+  absPath?: string;   // #818: drive-prefixed posix 절대경로 — 파일 접근(열기)에 이걸 쓴다
   group?: string;
   status?: string;
   phase?: number;

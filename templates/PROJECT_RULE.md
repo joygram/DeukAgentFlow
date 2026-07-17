@@ -1,46 +1,13 @@
----
-architecture_docs: ""
----
-
 # Project Rules
 
-## Architecture Boundaries
+> Rule gate: every ticket's plan body MUST cite at least one rule id below (e.g. `[DR-01]`).
+> One rule per line: `- [ID] description`. Ids look like `[DR-01]`, `[SEC-12]`, `[DC-01]`.
 
-> [!NOTE] **To AI Agents**
-> If `architecture_docs` is empty and no rules are defined below,
-> this project has no architecture rules yet.
-> → Ask user to define them, or analyze codebase and propose a draft.
-> → Do NOT make assumptions about project architecture.
+## Rules (id-based)
 
-### Module Ownership
-<!-- Define which modules exist and who owns them -->
-| Module | Owner | Editable |
-|--------|-------|----------|
-| `src/` | Core source | Yes |
-
-### Dependency Direction
-<!-- Define allowed dependency directions between modules -->
-
-## DC-CODEGEN: Generated File Mapping
-
-> [!IMPORTANT] **REQUIRED**
-> Agents use this table to decide which files are safe to edit.
-> Files not listed here → agent MUST ask user before editing.
-
-| Generated (DO NOT EDIT) | Source (edit here) | Build command |
-|-------------------------|-------------------|---------------|
-| `dist/` | `src/` | `npm run build` |
-
-## DC-* Guards (project-specific)
-
-| Guard | Condition → Action |
-|-------|-------------------|
-| DC-HALT | Infrastructure error → stop, no bypass, report to user. |
-| DC-INFRA | Bootstrap/transport/DB/routing code → separate ticket + approval. |
-
-## Build & Test
-
-| Action | Command |
-|--------|---------|
-| Build | `npm run build` |
-| Lint | `npx deuk-agent-flow lint:md` |
+- [DR-01] 승인된 티켓 범위 안에서만 작업하고, 생성물은 소스에서 갱신한다.
+- [DR-02] 생성 파일(dist/, *.generated.*)은 직접 편집하지 않고 소스+빌드로 갱신한다.
+- [DR-03] 같은 개념·식별자·분기 기준은 한 곳에서만 정의한다(SSOT). 중복·내부 드리프트 금지.
+- [DR-04] 코드를 수정하기 전에 해당 동작을 규정하는 정본문서(SSOT)를 먼저 확인하고, 정본문서가 코드와 불일치하면 STOP·사용자 승인 후에만 정본문서를 최신화(정본화)한다.
+- [DC-HALT] 인프라 에러는 멈추고 우회 없이 사용자에게 보고한다.
+- [DC-INFRA] 부트스트랩/전송/DB/라우팅 코드는 별도 티켓+승인으로 다룬다.

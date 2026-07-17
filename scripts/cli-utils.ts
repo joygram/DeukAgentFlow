@@ -14,6 +14,75 @@ export type CliOpts = Record<string, any>;
 // circular import (home imports utils). detectConsumerTicketDir uses it when present.
 let _ticketHomeModule = null;
 export function registerTicketHomeModule(mod) { _ticketHomeModule = mod; }
+
+// #879 No-Fallback Gate SSOT: 흩어져 있던 `JSON.parse(readFileSync(...)) catch { 기본값 }`
+// 폴백을 한 곳으로 통합한다. 파일이 없으면 호출부가 넘긴 초기값(명시적 부재 처리)을
+// 쓰고, 파일이 있는데 JSON이 깨졌으면 **던진다** — 조용히 초기값으로 갈음해 손상 상태를
+// "없는 척" 통과시키지 않는다. 읽기 예외(권한 등)도 삼키지 않고 전파한다.
+export function readJsonFile(absPath, initial = null) {
+  if (!existsSync(absPath)) return initial;
+  const raw = readFileSync(absPath, "utf8");
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`corrupt JSON at ${absPath}: ${err.message} — fix or remove the file (No-Fallback Gate: not silently defaulted)`);
+  }
+}
+
+// #879: 텍스트 파일 읽기 SSOT. 없으면 "" (명시적 부재), 있으면 읽되 예외는 전파.
+export function readTextFile(absPath) {
+  if (!existsSync(absPath)) return "";
+  return readFileSync(absPath, "utf8");
+}
+
+// 턴 스로틀링 SSOT: always-게이트/persona 블록이 매 턴 풀사이즈로 재주입되는 비용을
+// 줄이기 위해, "이번이 몇 턴째인지"를 파일에 저장해 N턴 주기로만 풀 출력하고 그 사이는
+// 축약 리마인더만 내보낸다. CLI는 매번 새 프로세스라 in-memory 카운터가 불가능 — 반드시
+// 파일로 영속화해야 한다. hook stdin의 session_id로 세션 경계를 감지해 카운터를 리셋한다
+// (다른 세션의 turnCount를 이어받지 않기 위함). 손상된 상태 파일은 readJsonFile의
+// No-Fallback Gate에 따라 조용히 기본값으로 넘어가지 않고 던진다.
+//
+// 스코프는 세션이지 워크스페이스/티켓이 아니다 — 턴 카운터는 "이 세션이 몇 턴째인가"를
+// 추적하는 것이지 어떤 티켓이 진행 중인지와 무관하다. sessionStatePath(아래, DEUK_ROOT_DIR
+// 정의 이후로 옮겨 정의됨)가 실제 파일 경로를 만든다 — 티켓 디렉토리에 얹지 않는 이유는
+// 그 정의부의 주석 참고.
+export interface TurnState {
+  sessionKey: string;
+  turnCount: number;
+  lastFullAt: number;
+}
+
+export function readTurnState(absPath: string): TurnState {
+  const initial: TurnState = { sessionKey: "", turnCount: 0, lastFullAt: 0 };
+  return readJsonFile(absPath, initial) as TurnState;
+}
+
+// sessionKey가 바뀌면(새 세션) turnCount를 0에서 다시 시작한다. 반환값은 "이번 턴이
+// 몇 턴째인가"(1-based)와, 이번 턴에 풀 출력을 해야 하는지(shouldRenderFull)다.
+// 사용자 결정(2026-07-16): 풀 렌더는 세션당 딱 1번(첫 턴)만 — 이후로는 세션이
+// 끝날 때까지 계속 축약. "N턴마다 반복 풀렌더"는 안전게이트 노출을 늘리려는
+// 의도였지만, 실측 결과 장시간 세션에서 반복 풀렌더 자체가 도로 큰 비용으로
+// 돌아온다는 게 확인돼(74% 절감에 그침) 반복 주기를 없앤다.
+export function advanceTurnState(
+  absPath: string,
+  sessionKey: string,
+): { state: TurnState; shouldRenderFull: boolean } {
+  const prev = readTurnState(absPath);
+  const isNewSession = !sessionKey || prev.sessionKey !== sessionKey;
+  const turnCount = isNewSession ? 1 : prev.turnCount + 1;
+  // 새 세션의 첫 턴만 풀 출력(세션 진입 시 안전게이트/톤을 한 번은 보여준다).
+  // 이후 턴은 세션이 끝날 때까지 계속 축약 — lastFullAt은 "몇 턴째에 풀렌더했는지"
+  // 기록용으로만 남긴다(향후 재조정 대비, 현재 로직은 참조하지 않는다).
+  const shouldRenderFull = isNewSession;
+  const state: TurnState = {
+    sessionKey,
+    turnCount,
+    lastFullAt: shouldRenderFull ? turnCount : prev.lastFullAt,
+  };
+  mkdirSync(dirname(absPath), { recursive: true });
+  writeFileSync(absPath, JSON.stringify(state, null, 0) + "\n", "utf8");
+  return { state, shouldRenderFull };
+}
 function ticketHomeModule() {
   if (!_ticketHomeModule) throw new Error("ticket home module not registered");
   return _ticketHomeModule;
@@ -55,6 +124,19 @@ export const WORKFLOW_MODE_EXECUTE = "execute";
 // baked the root into SSOT and forced double-assembly across call sites (708 design).
 export function deukRel(...segments: string[]): string {
   return makePath(DEUK_ROOT_DIR, ...segments);
+}
+
+// 턴 스로틀링 상태 파일 경로: session_id 자체를 파일명으로 쓰는 독립 디렉토리
+// (~/.deuk/sessions/)에 저장한다. 티켓 디렉토리(tickets/{uuid}/)에 얹지 않는 이유 —
+// 턴 카운터는 "이 세션이 몇 턴째인가"를 추적하는 것이지 어떤 티켓이 진행 중인지와
+// 무관하다: (a) 티켓이 없는 세션(entry phase, 워크스페이스 미등록)엔 저장할 곳이 없고
+// (b) 세션 도중 티켓이 바뀌면 같은 세션인데 다른 파일을 보게 되는 오결합이 생긴다.
+// 티켓·워크스페이스 유무와 무관하게 항상 저장 가능하고, 세션이 끝나면 그냥 방치되는
+// (필요시 정리되는) 순수 휘발성 상태다. filename으로 게이트용/persona용을 구분한다
+// (예: `${sessionId}.gate-turn-state.json`, `${sessionId}.persona-turn-state.json`).
+export function sessionStatePath(homeDir: string, sessionId: string, filename: string) {
+  const safeId = String(sessionId || "no-session").replace(/[^a-zA-Z0-9_-]/g, "_");
+  return makePath(homeDir, DEUK_ROOT_DIR, "sessions", `${safeId}.${filename}`);
 }
 
 export const TICKET_INDEX_FILENAME = "INDEX.json";
@@ -424,29 +506,22 @@ export function normalizeWorkflowMode(value) {
   return normalized === WORKFLOW_MODE_EXECUTE ? WORKFLOW_MODE_EXECUTE : WORKFLOW_MODE_PLAN;
 }
 
-export function isWorkflowExecute(opts: CliOpts = {}, savedConfig = null) {
-  return normalizeWorkflowMode(
-    opts.workflowMode ??
-    opts.workflow ??
-    opts.approval ??
-    opts.approvalState ??
-    savedConfig?.workflowMode ??
-    savedConfig?.approvalState
-  ) === WORKFLOW_MODE_EXECUTE;
+// DR-03 SSOT: 워크플로 모드/승인의 입력 소스는 여기 한 곳에서만 정의한다. CLI 실입력은
+// 두 개뿐이다 — opts.workflowMode(←--workflow)와 opts.approval(←--approval). 과거 체인에
+// 섞여 있던 opts.workflow·opts.approvalState는 어떤 CLI 경로도 채우지 않는 죽은 별칭이라
+// 제거했다(cli-args.ts에 해당 플래그 없음). savedConfig는 저장된 설정 소스로 별개다.
+// 이 배열이 정본 우선순위이며, 모든 소비처(isWorkflowExecute/resolveWorkflowMode/
+// evidence-validators/cli-prompts)가 이 함수를 거친다 — 폴백 체인을 곳곳에 복제하지 않는다.
+function workflowModeInput(opts: CliOpts = {}, savedConfig = null) {
+  return opts.workflowMode ?? opts.approval ?? savedConfig?.workflowMode;
 }
 
-/**
- * Resolves the final workflow mode by checking opts, then saved config, with fallback.
- */
 export function resolveWorkflowMode(opts: CliOpts = {}, savedConfig = null) {
-  return normalizeWorkflowMode(
-    opts.workflowMode ??
-    opts.workflow ??
-    opts.approval ??
-    opts.approvalState ??
-    savedConfig?.workflowMode ??
-    savedConfig?.approvalState
-  );
+  return normalizeWorkflowMode(workflowModeInput(opts, savedConfig));
+}
+
+export function isWorkflowExecute(opts: CliOpts = {}, savedConfig = null) {
+  return resolveWorkflowMode(opts, savedConfig) === WORKFLOW_MODE_EXECUTE;
 }
 
 /**
@@ -493,6 +568,14 @@ export function toRepoRelativePath(cwd, absPath) {
 // NOTE(후속): 같은 드라이브일 때 ../상대경로 최적화·linux 동작은 별도 티켓에서 고민.
 export function toWsRelativePath(_cwd, absPath) {
   return toPosixPath(makePath(resolve(absPath))).replace(/^[a-zA-Z]:/, "");
+}
+
+// #815: 채팅 패널 클릭용 ②형식(drive-stripped, toWsRelativePath)은 셸·에이전트가
+// cat/Read로 열 수 없다(drive 정보 손실). 사람이 읽는 Path:/Source: 라인에는 ②
+// 클릭 링크와 함께 ①형식(drive 포함 절대경로)을 병기해 양쪽 소비자를 모두 만족시킨다.
+// 이 함수는 그 ①형식(예: "C:/Users/..." )을 반환한다.
+export function toDriveAbsolutePath(absPath) {
+  return toPosixPath(makePath(resolve(absPath)));
 }
 
 // Hangul syllable \u2192 Latin transliteration (Revised Romanization, simplified).
@@ -631,15 +714,22 @@ export function buildPromptWorkspaceAliases(workspace) {
 }
 
 export function hasWorkspaceMarker(candidatePath) {
-  return existsSync(makePath(candidatePath, WORKSPACE_MARKER_FILE)) ||
-    existsSync(makePath(candidatePath, DEUK_ROOT_DIR));
+  // #827: 워크스페이스 마커는 .deuk-workspace-id 파일 하나뿐이다. .deuk 폴더는 글로벌
+  // 스토어(~/.deuk) 이름이라 이걸 마커로 인정하면 home 디렉토리가 스토어를 소유한다는
+  // 이유만으로 워크스페이스로 오인·ghost 등록된다(joy 오인등록). .deuk 폴더 존재는
+  // 마커가 아니므로 판정에서 제외 — home과 워크스페이스가 파일 마커로 자연히 구분된다.
+  return existsSync(makePath(candidatePath, WORKSPACE_MARKER_FILE));
 }
 
+// #950: package.json 단독 판정을 제거했다. 모노레포 워크스페이스(DeukWriter 등)는
+// 서브패키지마다 package.json을 갖는데, 이걸 경계로 인정하면 서브디렉토리에서 init을
+// 실행했을 때 그 서브디렉토리가 독립 워크스페이스로 자체 등록되며 PROJECT_RULE.md
+// 사본을 또 만들어냈다(#824 이후 실증: DeukWriter 10개소, DeukPack 14개소, DeukHwp 8개소).
+// .git/AGENTS.md/docs/PROJECT_RULE.md만 실제 프로젝트 경계로 인정한다.
 function hasLocalProjectBoundary(candidatePath) {
   return existsSync(makePath(candidatePath, ".git")) ||
     existsSync(makePath(candidatePath, "AGENTS.md")) ||
-    existsSync(makePath(candidatePath, "PROJECT_RULE.md")) ||
-    existsSync(makePath(candidatePath, "package.json"));
+    existsSync(makePath(candidatePath, "docs", "PROJECT_RULE.md"));
 }
 
 function directProjectRoot(startDir) {
@@ -866,139 +956,17 @@ export function findPromptWorkspaceMatches(prompt, candidates) {
 }
 
 
-// Resolves a stable session identifier from agent-injected environment variables.
-// Priority: explicit arg → Claude Code → Codex → Antigravity → VSCODE_PID → "default".
-// Each supported agent injects a per-session UUID so concurrent agents on the same
-// machine get independent flow-cookies and claim files without manual --session-id.
-export function resolveSessionId(explicitId) {
-  if (explicitId) return String(explicitId).trim().slice(0, 36);
-  const raw =
-    process.env.CLAUDE_CODE_SESSION_ID    ||
-    process.env.CODEX_THREAD_ID           ||
-    process.env.ANTIGRAVITY_TRAJECTORY_ID ||
-    process.env.VSCODE_PID               ||
-    "";
-  return raw.trim().slice(0, 36) || "default";
-}
-
-// #675: touch-file cookie — cookie-{workspaceId}-{ticketId}-{sessionId}
-// Lives in ~/.deuk-agent/ (home root). File existence = session owns workspace+ticket.
-// No JSON content; all info is in the filename. TTL via statSync().mtimeMs.
-// Replaces both flow-cookie-*.json AND claim-*.json.
-
-const COOKIE_PREFIX = "cookie-";
-const COOKIE_TTL_MS = 30 * 60 * 1000;
-
-function sanitizeCookieSegment(s) {
-  return String(s || "").toLowerCase().replace(/[^a-z0-9\-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "x";
-}
-
-function cookieHomeDir(opts: CliOpts = {}) {
-  return makePath([resolveUserHome(opts), DEUK_ROOT_DIR], opts);
-}
-
-export function writeCookieFile(workspaceId, ticketId, sessionId, opts: CliOpts = {}) {
-  const dir = cookieHomeDir(opts);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const wp = sanitizeCookieSegment(workspaceId);
-  const tid = sanitizeCookieSegment(ticketId || "none");
-  const sid = sanitizeCookieSegment(sessionId);
-  const p = makePath([dir, `${COOKIE_PREFIX}${wp}-${tid}-${sid}`], opts);
-  writeFileSync(p, "", "utf8");
-}
-
-export function readCookieFile(sessionId, opts: CliOpts = {}) {
-  const dir = cookieHomeDir(opts);
-  if (!existsSync(dir)) return null;
-  const sid = sanitizeCookieSegment(sessionId);
-  const files = readdirSync(dir).filter(f => f.startsWith(COOKIE_PREFIX) && f.endsWith(`-${sid}`));
-  for (const f of files) {
-    const parts = f.slice(COOKIE_PREFIX.length).split("-");
-    // format: {wp}-{tid}-{sid} where sid can contain dashes — find by suffix match
-    const suffix = `-${sid}`;
-    const body = f.slice(COOKIE_PREFIX.length, f.length - suffix.length);
-    const dashIdx = body.indexOf("-");
-    if (dashIdx < 0) continue;
-    const wp = body.slice(0, dashIdx);
-    const tid = body.slice(dashIdx + 1);
-    const p = makePath([dir, f], opts);
-    try {
-      const mtime = statSync(p).mtimeMs;
-      if (Date.now() - mtime > COOKIE_TTL_MS) { try { unlinkSync(p); } catch { } continue; }
-    } catch { continue; }
-    return { workspaceId: wp, ticketId: tid === "none" ? null : tid, sessionId: sid, path: p };
-  }
-  return null;
-}
-
-export function releaseCookieFile(sessionId, opts: CliOpts = {}) {
-  const dir = cookieHomeDir(opts);
-  if (!existsSync(dir)) return;
-  const sid = sanitizeCookieSegment(sessionId);
-  const files = readdirSync(dir).filter(f => f.startsWith(COOKIE_PREFIX) && f.endsWith(`-${sid}`));
-  for (const f of files) { try { unlinkSync(makePath([dir, f], opts)); } catch { } }
-}
-
-export function listCookiesByTicket(workspaceId, ticketId, opts: CliOpts = {}) {
-  const dir = cookieHomeDir(opts);
-  if (!existsSync(dir)) return [];
-  const wp = sanitizeCookieSegment(workspaceId);
-  const tid = sanitizeCookieSegment(ticketId || "none");
-  const prefix = `${COOKIE_PREFIX}${wp}-${tid}-`;
-  return readdirSync(dir)
-    .filter(f => f.startsWith(prefix))
-    .map(f => {
-      const sid = f.slice(prefix.length);
-      const p = makePath([dir, f], opts);
-      try { const mtime = statSync(p).mtimeMs; if (Date.now() - mtime > COOKIE_TTL_MS) { try { unlinkSync(p); } catch { } return null; } return { sessionId: sid, path: p, mtime }; } catch { return null; }
-    })
-    .filter(Boolean);
-}
-
-// Legacy compat shims — used by resolveWorkspaceTarget call sites
-export function getWorkspaceCookiePath(_cwd, sessionId, opts: CliOpts = {}) {
-  const sid = sanitizeCookieSegment(resolveSessionId(sessionId));
-  const dir = cookieHomeDir(opts);
-  // Return a glob-friendly sentinel; actual file is found via readCookieFile
-  return makePath([dir, `${COOKIE_PREFIX}*-*-${sid}`], opts);
-}
-
-export function readWorkspaceCookie(_cwd, sessionId, opts: CliOpts = {}) {
-  const sid = resolveSessionId(sessionId);
-  const cookie = readCookieFile(sid, opts);
-  if (!cookie) return null;
-  // Find the registry workspace by id to get the path
-  const candidates = opts.candidates || loadAllRegistryWorkspaceCandidates(opts);
-  const matched = candidates?.workspaces?.find(w =>
-    sanitizeCookieSegment(w.id) === cookie.workspaceId || sanitizeCookieSegment(w.path) === cookie.workspaceId
-  );
-  return matched ? { workspacePath: matched.path, workspaceId: matched.id } : null;
-}
-
-export function writeWorkspaceCookie(_cwd, sessionId, targetPath, opts: CliOpts = {}) {
-  const sid = resolveSessionId(sessionId);
-  // Derive workspaceId from registry match or basename
-  const candidates = opts.candidates || loadAllRegistryWorkspaceCandidates(opts);
-  const absPath = normalizeRegistryPath(targetPath);
-  const matched = candidates?.workspaces?.find(w => w.path === absPath);
-  const workspaceId = matched?.id || basename(absPath);
-  // Preserve existing ticketId if cookie already exists for this session
-  const existing = readCookieFile(sid, opts);
-  releaseCookieFile(sid, opts);
-  writeCookieFile(workspaceId, existing?.ticketId || null, sid, opts);
-}
-
-export function resolveWorkspaceTarget(startDir, query, opts: CliOpts = {}) {
+export function resolveWorkspaceTarget(query, opts: CliOpts = {}) {
   // #645: SSOT-only (workspace.json records). No cwd-based sibling fallback.
   // #685: LangGraph 진입 원칙 — workspace는 사람이 --workspace로 명시한다. sessionId
-  // 쿠키로 "지난번 워크스페이스"를 추측하는 폴백은 제거됨(env 미전파 환경에서 default로
-  // 무너지는 근원). query가 없으면 추측하지 않고 missing-query 노드로 떨어진다.
+  // 쿠키나 "지난번 워크스페이스" 앵커로 추측하는 폴백은 없다(env 미전파 환경에서 default로
+  // 무너지는 근원, §6.0.5/#871-followup이 재도입했다가 세션 간 워크스페이스 오염 사고로
+  // 재차 폐기됨). query가 없으면 추측하지 않고 missing-query 노드로 떨어진다.
   const candidates = opts.candidates || loadAllRegistryWorkspaceCandidates(opts);
 
   if (!candidates) return null;
   const rawQuery = String(query || "").trim();
   if (!rawQuery) {
-    // workspace is resolved ONLY from an explicit query. No cookie/cwd inference.
     return { candidates, target: null, reason: "missing-query" };
   }
 
@@ -1024,47 +992,6 @@ export function resolveWorkspaceTarget(startDir, query, opts: CliOpts = {}) {
   }
 
   return { candidates, target: matches[0], reason: "matched", score: 100 };
-}
-
-export function buildWorkspaceGuide(startDir, opts: CliOpts = {}) {
-  const hostContext = resolveWorkspaceContext(startDir);
-  // #645: SSOT-only (workspace.json records). No cwd-based sibling fallback.
-  const candidates = loadAllRegistryWorkspaceCandidates(opts);
-  const explicitQuery = opts.workspace || "";
-  const prompt = opts.prompt || "";
-  let resolution = explicitQuery ? resolveWorkspaceTarget(startDir, explicitQuery, { candidates }) : null;
-  let promptMatches = [];
-  let recommendedTarget = resolution?.target || null;
-  let reason = "";
-
-  if (recommendedTarget) {
-    reason = `explicit workspace matched: ${explicitQuery}`;
-  } else if (candidates?.workspaces?.length && prompt) {
-    promptMatches = findPromptWorkspaceMatches(prompt, candidates);
-    if (promptMatches.length === 1) {
-      recommendedTarget = promptMatches[0];
-      reason = `prompt matched workspace alias: ${recommendedTarget.id}`;
-    } else if (promptMatches.length > 1) {
-      reason = `prompt matched multiple workspaces: ${promptMatches.map(workspace => workspace.id).join(", ")}`;
-    }
-  }
-
-  if (!reason) {
-    if (!candidates?.workspaces?.length) reason = "no sibling workspace candidates found";
-    else reason = "no explicit workspace target detected";
-  }
-
-  return {
-    hostWorkspace: {
-      label: hostContext.breadcrumb,
-      path: hostContext.root
-    },
-    candidates: candidates?.workspaces || [],
-    recommendedTarget,
-    reason,
-    requiresConfirmation: !recommendedTarget && Boolean(candidates?.workspaces?.length > 1),
-    promptMatches
-  };
 }
 
 export function requireNonEmptySlug(input, fieldName = "value") {
@@ -1356,10 +1283,17 @@ export function detectConsumerTicketDir(startDir, opts: CliOpts = {}) {
     // entry (keyed by the existing marker id); fall back to basename when not yet
     // migrated. Crucially, this reads — it does not create a marker or move files.
     return home.resolveHomeTicketDirForWorkspace(root, opts);
-  } catch {
+  } catch (e) {
     // If home resolution fails for any reason, fall back to the in-workspace path
     // so the tool keeps working rather than losing the ticket system entirely.
-    return resolveTicketSystemPaths(root).primary;
+    // #829: this fallback used to be silent, which let tickets accumulate in a
+    // path the CLI's own discard/use/show lookups never scan (home is canonical).
+    // Surface it loudly so the mismatch is diagnosed immediately, not reverse-
+    // engineered from filesystem archaeology later.
+    const fallback = resolveTicketSystemPaths(root).primary;
+    console.warn(`\x1b[33m[deuk-agent-flow] warning: home ticket dir resolution failed (${e && e.message ? e.message : e}); falling back to in-workspace path: ${fallback}\x1b[0m`);
+    console.warn(`\x1b[33m[deuk-agent-flow] tickets written here will NOT be visible to home-store lookups (discard/use/show). Investigate the home resolution failure before continuing.\x1b[0m`);
+    return fallback;
   }
 }
 

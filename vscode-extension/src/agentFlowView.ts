@@ -933,9 +933,16 @@ export class AgentFlowCommandCenter {
             <div class="tickets-empty-title">${escapeHtml(t('ticketsEmptyTitle'))}</div>
             <div class="tickets-empty-hint">${escapeHtml(t('ticketsEmptyHint'))}</div>
             <button class="primary create-ticket-cta" data-action="create-ticket" title="${escapeHtml(t('createTicketTitle'))}">${escapeHtml(t('createTicketCta'))}</button>
-          </div>` : state.tickets.map((ticket) => renderTicketItem(ticket, state.activeTicket?.id, state.previewTicket?.id, state.selectedTicketIds)).join('')}
+          </div>` : state.tickets.map((ticket) => {
+            const item = renderTicketItem(ticket, state.activeTicket?.id, state.previewTicket?.id, state.selectedTicketIds);
+            // #930: 미리보기를 리스트 끝에 한 번만 붙이면 리스트가 길 때 클릭 위치에서
+            // 멀어진다 — 클릭된(previewTicket과 일치하는) 항목 바로 아래에 이어붙인다.
+            const previewHtml = state.previewTicket && ticket.id === state.previewTicket.id
+              ? renderPreviewPanel(state.previewTicket, state.activeTicket?.id)
+              : '';
+            return item + previewHtml;
+          }).join('')}
         </div>
-        ${state.previewTicket ? renderPreviewPanel(state.previewTicket, state.activeTicket?.id) : ''}
         `}
         </div>
         <div class="tab-panel" data-tab="skill">

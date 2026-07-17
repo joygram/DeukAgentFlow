@@ -1,48 +1,27 @@
----
-<%- frontmatter %>
----
-# <%= meta.title %>
+# {{Title: a short kebab-sluggable title. e.g. fix-create-title-parsing}}
 
-## Agent Permission Contract (APC)
+{{Summary: request + root cause in one line. This paragraph becomes the ticket summary.}}
 
-### [BOUNDARY]
-- Editable:
-- Protected:
-- Governing rules:
+## Scope
 
-### [CONTRACT]
-- Inputs/evidence:
-- Expected output:
-- Allowed side effects:
-- Excluded:
+{{Scope: which files/functions. Requirement: the result the user wants. Approach: the concrete method. Protected: what must not be touched.}}
 
-### [PATCH PLAN]
-- Implementation path:
+## Design
 
-## Compact Plan
+{{The design direction/structure this ticket implements (not code-state analysis). Read the relevant design canon (docs/public/architecture/ etc.) and describe that direction.}}
 
-- Problem:
-- Approach:
-- Verification:
+## Environment
 
-## Problem Analysis
+{{Dev environment: language/runtime version, package manager. Virtual env: how to activate (verification is valid only inside it). Test/run: verification commands.}}
 
-- 
+## Plan
 
-## Source Observations
+{{Reference at least one project rule id such as [DR-01] — the id pointer ONLY, never paste the rule's full text (the rule lives once in PROJECT_RULE.md, SSOT) — plus numbered execution steps.}}
 
-- 
+## Analysis
 
-## Cause Hypotheses
+{{Root cause. file:line observed evidence. Hypotheses.}}
 
-- 
+## Direction
 
-## Improvement Direction
-
-- 
-
-## Audit Evidence
-
-- Core rules:
-- Project rules:
-- Commands/evidence:
+{{Improvement direction.}}

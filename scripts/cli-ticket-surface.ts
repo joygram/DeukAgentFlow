@@ -1,3 +1,5 @@
+import { evidenceFlagsForEvidenceKey } from "./cli-ticket-evidence.js";
+
 export function renderTicketWorkflowGateFailure({ ticketId = "<ticket-id>", workspace = "", docmeta = {} as Record<string, any>, reasons = [] }: Record<string, any> = {}) {
   const missing = [...new Set([...(reasons || []), ...(docmeta.validation?.errors || [])])];
   const phase1Reasons = docmeta.slot_source_map?.phase1Plan?.errors || [];
@@ -20,7 +22,11 @@ export function renderTicketWorkflowGateFailure({ ticketId = "<ticket-id>", work
 
   for (const slot of Object.keys(docmeta.slots || {})) {
     if (docmeta.slots[slot]) continue;
-    lines.push(`- ${slot}: ${slotLabels[slot] || "required evidence is missing"}`);
+    // #831: surface the CLI flag(s) that fill this slot so the agent uses them instead
+    // of hand-editing the ticket .md.
+    const flags = evidenceFlagsForEvidenceKey(slot);
+    const flagHint = flags.length ? ` (fill via: ${flags.join(" ")})` : "";
+    lines.push(`- ${slot}: ${slotLabels[slot] || "required evidence is missing"}${flagHint}`);
   }
 
   if (phase1Reasons.length > 0) {

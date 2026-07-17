@@ -341,6 +341,10 @@ export function appendTelemetryRecord(cwd, entry: Record<string, any> = {}) {
     ts: Math.floor(new Date(occurredAt).getTime() / 1000) || Math.floor(Date.now() / 1000),
     occurredAt,
     source: entry.source || "manual",
+    // #837: source is overwritten to "internal" for workflow events, so it can't record
+    // who triggered a discard/rollback. originSource preserves the caller-declared origin
+    // (e.g. "human" | "agent" | "auto-clean") for actor auditing.
+    originSource: entry.originSource || "",
     kind: entry.kind || "work",
     event,
     tokens: Number(entry.tokens || 0),

@@ -1,8 +1,8 @@
 import { dirname, basename } from "path";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, unlinkSync, renameSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, unlinkSync, renameSync, readdirSync } from "fs";
 import { fileURLToPath } from "url";
-import { DEUK_ROOT_DIR, CliOpts, SPOKE_REGISTRY, makePath, resolvePackageRoot, resolveUserHome, toFileUri, toPosixPath, toRepoRelativePath } from "./cli-utils.js";
-import { CANONICAL_INIT_CLEANUP_PATHS, GLOBAL_POINTER_BEGIN_PREFIX, GLOBAL_POINTER_END, MANAGED_BLOCK_BEGIN, MANAGED_BLOCK_END, hashManagedContent, mergeManagedBlock, safeReadText, splitManagedBlock, wrapManagedBlock } from "./cli-init-core.js";
+import { DEFAULT_IGNORE_DIRS, DEUK_ROOT_DIR, CliOpts, SPOKE_REGISTRY, makePath, resolvePackageRoot, resolveUserHome, toFileUri, toPosixPath, toRepoRelativePath } from "./cli-utils.js";
+import { CANONICAL_INIT_CLEANUP_PATHS, GLOBAL_POINTER_BEGIN_PREFIX, GLOBAL_POINTER_END, MANAGED_BLOCK_BEGIN, MANAGED_BLOCK_END, hashManagedContent, mergeManagedBlock, readTextIfExists, splitManagedBlock, wrapManagedBlock } from "./cli-init-core.js";
 import { upsertClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
 import { ensureTicketDirAndGitignore } from "./cli-init-logic.js";
 import { resolveHomeTicketDirForWorkspace } from "./cli-ticket-home.js";
@@ -10,7 +10,7 @@ import { normalizeTicketPaths } from "./cli-ticket-migration.js";
 import { rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.js";
 import { syncActiveTicketId, writeTicketIndexJson } from "./cli-ticket-index.js";
 import { cleanupGeneratedAgentPointerSurface, cleanupNestedGeneratedAgentPointers, ensureWritableDirectory, migrateDeukRootDir, migrateHtmlMarkersToHeadings, migrateLegacyStructure, removeLegacyPaths, removeLocalAgentSurfaces, removeLocalSkillCopies, removeRuntimeTemplateCopies, sameFileContent } from "./cli-init-migrate.js";
-import { ensureSystemSkills } from "./cli-skill-commands.js";
+import { ensureSystemSkills, pruneOrphanedSystemSkills } from "./cli-skill-commands.js";
 
 function readWorkspaceDeukContextMcpUrl(cwd) {
   const mcpPath = makePath(cwd, ".mcp.json");
@@ -131,6 +131,7 @@ export function isGeneratedDeukPointer(content) {
 export function canonicalizeGeneratedCommandReferences(cwd, bundleRoot, dryRun) {
   const targets = [
     makePath(cwd, "AGENTS.md"),
+    makePath(cwd, "docs", "PROJECT_RULE.md"),
     makePath(cwd, "PROJECT_RULE.md"),
     makePath(cwd, DEUK_ROOT_DIR, "PROJECT_RULE.md"),
     makePath(cwd, "docs", "project", "AGENTS.md"),
@@ -268,6 +269,11 @@ function stripGlobalPointerBlocks(content) {
   text = text.replace(/^---\ndescription: "DeukAgentFlow global pointer"\nglobs: \["\*\*\/\*"\]\nalwaysApply: true\n---\n?/gm, "");
   // Strip plain (tag-free) pointer blocks left by previous init versions
   text = text.replace(/^# DeukAgentFlow Global Pointer\n[\s\S]*$/m, "");
+
+  // #777: 잘려있던 한국어 페르소나 지침 잔재(좀비 블록) 자동 클린업
+  text = text.replace(/요청하신 페르소나 지침을 더 자연스럽고 생동감 있게 다듬었습니다[\s\S]*?---/g, "");
+  text = text.replace(/요청하신 페르소나 지침을 더 자연스럽고 생동감 있게 다듬었습니다[\s\S]*$/g, "");
+
   return text.trim();
 }
 
@@ -317,7 +323,7 @@ function syncGlobalAgentInstructions(dryRun, bundleRoot = resolvePackageRoot({ f
   for (const entry of getGlobalAgentInstructionTargets(homeDir, bundleRoot)) {
     if (dryRun) continue;
     const nextContent = entry.content;
-    const existingContent = existsSync(entry.target) ? safeReadText(entry.target) : "";
+    const existingContent = existsSync(entry.target) ? readTextIfExists(entry.target) : "";
     const mergedContent = mergeGlobalAgentPointer(existingContent, nextContent);
     if (existingContent === mergedContent) continue;
 
@@ -374,7 +380,7 @@ function deploySpokePointers(cwd, bundleRoot, dryRun) {
     const targetPath = makePath(cwd, spoke.target);
     const targetDir = dirname(targetPath);
     const managedContent = generateSpokeContent(spoke, bundleRoot);
-    const existingContent = existsSync(targetPath) ? safeReadText(targetPath) : "";
+    const existingContent = existsSync(targetPath) ? readTextIfExists(targetPath) : "";
     const normalizedContent = normalizeExistingSpokeContent(existingContent, managedContent, bundleRoot);
     const nextContent = mergeManagedBlock(normalizedContent, managedContent);
     if (existingContent === nextContent) {
@@ -399,34 +405,73 @@ export function removeDuplicateRuleCopies(cwd, dryRun) {
 }
 
 function migrateProjectRuleToAgentRoot(cwd, dryRun, opts: CliOpts = {}) {
-  const sourcePath = makePath(cwd, "PROJECT_RULE.md");
-  if (!existsSync(sourcePath)) return false;
+  // #950: 정본은 워크스페이스의 docs/PROJECT_RULE.md다(과거 워크스페이스 루트 #824에서
+  // docs/ 하위로 재이동). 워크스페이스 루트에 남아있는 구 정본이 있으면 1회 이동하고,
+  // 없으면 티켓홈 레거시 사본에서 1회 복원한다. docs/PROJECT_RULE.md가 이미 있으면
+  // 손대지 않는다(파괴적 이동·삭제 금지).
+  const docsPath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  if (existsSync(docsPath)) return false; // 정본 존재 → 그대로 둠
 
-  // Workspace-level PROJECT_RULE.md is legacy — remove it (content lives in home ticket store).
-  const homeDir = resolveHomeTicketDirForWorkspace(cwd, opts);
-  const targetPath = makePath(homeDir, "PROJECT_RULE.md");
-
-  if (existsSync(targetPath)) {
-    if (sameFileContent(sourcePath, targetPath)) {
-      if (!dryRun) unlinkSync(sourcePath);
-      console.log(`[MIGRATE] removed duplicate root PROJECT_RULE.md: ${toRepoRelativePath(cwd, sourcePath)}`);
-      return true;
+  const legacyRootPath = makePath(cwd, "PROJECT_RULE.md");
+  if (existsSync(legacyRootPath)) {
+    if (!dryRun) {
+      mkdirSync(dirname(docsPath), { recursive: true });
+      copyFileSync(legacyRootPath, docsPath);
     }
-    console.warn(`[WARNING] PROJECT_RULE.md conflict: home store version exists with different content, kept ${toRepoRelativePath(cwd, sourcePath)}`);
-    return false;
+    console.log(`[MIGRATE] ${dryRun ? "Would move" : "Moved"} PROJECT_RULE.md from workspace root -> ${toRepoRelativePath(cwd, docsPath)}`);
+    return true;
   }
+
+  const homeDir = resolveHomeTicketDirForWorkspace(cwd, opts);
+  const legacyHomePath = makePath(homeDir, "PROJECT_RULE.md");
+  if (!existsSync(legacyHomePath)) return false; // 복원할 사본 없음
 
   if (!dryRun) {
-    mkdirSync(dirname(targetPath), { recursive: true });
-    renameSync(sourcePath, targetPath);
+    mkdirSync(dirname(docsPath), { recursive: true });
+    copyFileSync(legacyHomePath, docsPath);
   }
-  console.log(`[MIGRATE] ${dryRun ? "Would move" : "Moved"} project rules: ${toRepoRelativePath(cwd, sourcePath)} -> home ticket store`);
+  console.log(`[MIGRATE] ${dryRun ? "Would restore" : "Restored"} PROJECT_RULE.md from home store -> ${toRepoRelativePath(cwd, docsPath)}`);
   return true;
 }
 
+// #950: 과거 hasLocalProjectBoundary의 package.json 오판으로 모노레포 서브패키지마다
+// 찍혀나간 PROJECT_RULE.md 사본을 찾아 삭제한다. 워크스페이스 정본(docs/PROJECT_RULE.md)과
+// 신규 생성용 템플릿(templates/PROJECT_RULE.md — DeukAgentFlow 번들 자신의 소스)은 대상에서 제외한다.
+function removeStrayProjectRuleCopies(cwd, dryRun) {
+  const canonicalPath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  const removed = [];
+
+  function walk(dir) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      if (DEFAULT_IGNORE_DIRS.includes(ent.name) || ent.name.startsWith(".") || ent.name === "templates") continue;
+      const subDir = makePath(dir, ent.name);
+      const strayPath = makePath(subDir, "PROJECT_RULE.md");
+      if (existsSync(strayPath) && strayPath !== canonicalPath) {
+        if (!dryRun) unlinkSync(strayPath);
+        removed.push(toRepoRelativePath(cwd, strayPath));
+      }
+      walk(subDir);
+    }
+  }
+
+  walk(cwd);
+
+  if (removed.length > 0) {
+    console.log(`[CLEANUP] ${dryRun ? "Would remove" : "Removed"} stray PROJECT_RULE.md copies: ${removed.join(", ")}`);
+  }
+  return removed;
+}
+
 function ensureProjectRule(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
-  const homeDir = resolveHomeTicketDirForWorkspace(cwd, opts);
-  const projectRulePath = makePath(homeDir, "PROJECT_RULE.md");
+  // #950: 정본은 워크스페이스 docs/ 하위. 템플릿으로 초기 생성도 docs/에 한다.
+  const projectRulePath = makePath(cwd, "docs", "PROJECT_RULE.md");
   if (existsSync(projectRulePath)) return false;
 
   const templatePath = makePath(bundleRoot, "templates", "PROJECT_RULE.md");
@@ -436,25 +481,11 @@ function ensureProjectRule(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
     mkdirSync(dirname(projectRulePath), { recursive: true });
     copyFileSync(templatePath, projectRulePath);
   }
-  console.log(`PROJECT_RULE.md: created from template in home ticket store`);
+  console.log(`PROJECT_RULE.md: created from template in docs/`);
   return true;
 }
 
-function ensureProjectMemory(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
-  const homeDir = resolveHomeTicketDirForWorkspace(cwd, opts);
-  const memoryPath = makePath(homeDir, "project-memory.md");
-  if (existsSync(memoryPath)) return false;
-
-  const templatePath = makePath(bundleRoot, "templates", "project-memory.md");
-  if (!existsSync(templatePath)) return false;
-
-  if (!dryRun) {
-    mkdirSync(dirname(memoryPath), { recursive: true });
-    copyFileSync(templatePath, memoryPath);
-  }
-  console.log(`project-memory.md: created from template in home ticket store`);
-  return true;
-}
+// #804: ensureProjectMemory 죽은함수 제거 — 호출부는 #685서 제거됨(호출 0).
 
 export function runSingleWorkspaceMaintenance(cwd, dryRun, bundleRoot, opts: CliOpts = {}) {
   console.log(`\nInitializing ${basename(cwd)}...`);
@@ -476,12 +507,16 @@ export function runSingleWorkspaceMaintenance(cwd, dryRun, bundleRoot, opts: Cli
   cleanupGeneratedAgentPointerSurface(makePath(cwd, "AGENTS.md"), cwd, dryRun);
   migrateProjectRuleToAgentRoot(cwd, dryRun, opts);
   ensureProjectRule(cwd, bundleRoot, dryRun, opts);
+  removeStrayProjectRuleCopies(cwd, dryRun);
   // #685: project-memory.md 자동 생성 제거 — 무의미한 진행-상태 레이어(언니 지시).
 
   removeRuntimeTemplateCopies(cwd, dryRun);
   removeLocalSkillCopies(cwd, dryRun);
   // #697: 시스템 필수 스킬(ticket-status-surface 등 system:true)을 항상 보장.
   try { ensureSystemSkills(cwd, { dryRun }); } catch { /* best-effort */ }
+  // #949: id가 rename/제거된 옛 스킬(원본 소스 소멸분)을 자동 청소 — 재설치만으로
+  // id 변경이 마이그레이션되게 한다. ensure(새 id 설치) 뒤에 prune(옛 id 제거)이 온다.
+  try { pruneOrphanedSystemSkills(cwd, { dryRun }); } catch { /* best-effort */ }
   removeLocalAgentSurfaces(cwd, dryRun);
   canonicalizeGeneratedCommandReferences(cwd, bundleRoot, dryRun);
   cleanupNestedGeneratedAgentPointers(cwd, dryRun);

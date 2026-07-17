@@ -5,6 +5,9 @@ import { CliOpts, DEUK_ROOT_DIR, makePath, resolveConsumerTicketRoot, resolvePac
 // #691: 전이/guard 검증은 XState 머신(ticket-machine.mjs)이 담당. ESM 순환 import이지만
 // machineTransition은 호출 시점에만 TICKET_WORKFLOW를 읽으므로 안전하다.
 import { machineTransition } from "./ticket-machine.js";
+// #875: 전이 실패 메시지에 "이 증거를 채우는 플래그"를 붙여 에이전트가 무엇이 빠졌는지
+// 즉시 알게 한다(예: executionEvidence는 --reproduction … --docs-reflected 를 요구).
+import { evidenceFlagsForEvidenceKey } from "./cli-ticket-evidence.js";
 
 const PACKAGE_ROOT = resolvePackageRoot({ fromUrl: import.meta.url });
 
@@ -28,6 +31,24 @@ export const FLOW_SURFACE_STATUS = {
   progressComplete: "✅ 완료",
   end: "🎉 종료"
 };
+
+// #908: phase → 현재 롤 라벨(SSOT). role-layer.md §3 "phase↔롤 결속" 표를 코드로 옮긴
+// 단일 정본이다 — 한 줄 상태 카드가 "지금 무슨 모드로 일하는지"를 표면화할 때 이 맵을
+// 다시 읽어 쓴다(role-layer.md §3.0: 각자 다시 정의하지 않고 designer 산출을 재-참조; DR-03).
+// phase1은 planner→designer→ux-designer 롤이 (대상 성격에 따라) 서므로 카드엔 대표 라벨로 묶는다.
+// #914: phase2는 승인 후 "구현" 단일 state — 계획(설계 조정)과 구현이 같은 state 안에서
+// 왕복 없이 함께 이뤄지므로 라벨도 두 롤을 함께 밝힌다(설계자가 재승인 없이 구현자와
+// 같은 state에 머문다는 것을 카드에서부터 드러낸다).
+export const PHASE_ROLE_LABEL: Record<number, string> = {
+  1: "planner/designer/ux-designer",
+  2: "planner/designer+implementer",
+  3: "qa",
+  4: "closer"
+};
+
+export function roleLabelForPhase(phase): string {
+  return PHASE_ROLE_LABEL[normalizeTicketPhaseNumber(phase)] || "";
+}
 
 export const TICKET_WORKFLOW = {
   name: "ticket_workflow",
@@ -56,6 +77,14 @@ export const TICKET_WORKFLOW = {
         end: ["phase1Plan"]
       }
     },
+    // #914: phase1(기획/설계)과 구 phase2(구현)를 병합한 "구현" 단일 state. 승인(userApproval)
+    // 후 검증(phase3)까지 머무는 동안, 스펙 재확인/조정은 phase 전이가 아니라 `edit` 액션으로
+    // 본문(Scope/Plan/Analysis/Direction)을 그 자리에서 고쳐 쓰는 것으로 흡수한다 — 재승인
+    // ceremony도, reopenDecision 증거도 요구하지 않는다(design-driven-flow.md:331 "설계 개정
+    // 이력이 티켓 본문에 누적되어 수렴"을 FSM 구조로 반영). phase2→phase1 롤백 전이는
+    // 제거했다: 진짜 "스코프 자체가 틀렸다"(전제 자체가 잘못됨) 케이스는 여전히 discard가
+    // 담당하고, 되돌아가 재승인받는 왕복은 더 이상 없다. phase3→phase2 롤백(debuggingDecision)
+    // 은 그대로 유지 — 이번 스코프 밖.
     phase2: {
       prompt: "phase2",
       policyRole: "coding",
@@ -63,7 +92,7 @@ export const TICKET_WORKFLOW = {
       phase: 2,
       status: "open",
       transitions: ["phase3", "end"],
-      actions: ["status", "use", "move", "close", "reportAttach"],
+      actions: ["status", "use", "edit", "move", "discard", "close", "reportAttach"],
       requiredEvidence: {
         phase3: ["executionEvidence"],
         end: ["completionEvidence"]
@@ -255,8 +284,20 @@ export function assertTicketWorkflowTransition(meta: Record<string, any> = {}, o
   if (result.reasons.length > 0) {
     const fromState = TICKET_WORKFLOW.states[result.transition.from];
     const validTransitions = (fromState?.transitions || []).join(", ") || "none";
+    // #875: 요구 증거를 채우는 플래그를 명시한다 — executionEvidence는 실행 슬롯과 함께
+    // --docs-reflected 를 요구하므로, 이 힌트가 없으면 에이전트가 문서반영 플래그를 모른 채
+    // 실행 슬롯만 채우며 삽질한다.
+    const evidenceKeys = getTicketWorkflowTransitionEvidenceKeys(result.transition.from, result.transition.to);
+    const flagHint = evidenceKeys
+      .map(key => {
+        const flags = evidenceFlagsForEvidenceKey(key);
+        return flags.length ? `  ${key}: fill via ${flags.join(" ")}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
     throw new Error(
       `[TICKET WORKFLOW BLOCKED] ${result.transition.from} -> ${result.transition.to}: ${result.reasons.join(", ")}\n` +
+      (flagHint ? `Required evidence flags:\n${flagHint}\n` : "") +
       `Valid transitions from ${result.transition.from}: ${validTransitions}`
     );
   }
@@ -271,7 +312,8 @@ function readProjectPolicyText(cwd, policyRole, language, replacements: Record<s
     : makePath(cwd, DEUK_ROOT_DIR, "project-guardrails", `${policyRole}.md`);
   if (!existsSync(policyPath)) return "";
   let content = readFileSync(policyPath, "utf8");
-  const projectRulePath = makePath(cwd, DEUK_ROOT_DIR, "PROJECT_RULE.md");
+  // #824: 정본은 워크스페이스 루트 PROJECT_RULE.md (치환 토큰 표시용 경로도 루트로 통일).
+  const projectRulePath = makePath(cwd, "PROJECT_RULE.md");
   const allReplacements = {
     PROJECT_RULE_PATH: projectRulePath,
     PROJECT_GUARDRAIL: policyRole,
@@ -454,8 +496,11 @@ export function renderTicketDocMetaSurface(kind, opts: CliOpts = {}) {
 
 export function buildTicketFlowSurface(kind, opts: CliOpts = {}) {
   const docmeta = buildTicketDocMetaSurface(kind, opts);
+  // #908: pass the phase so the card can surface the phase + current role badge.
+  // Prefer the flow's explicit phase, else the runtime context, else the state's phase.
+  const cardPhase = opts.flow?.phase ?? opts.runtimeContext?.phase ?? docmeta.state.phase;
   const flowLine = opts.flow
-    ? formatTicketFlowLine(opts.flow.workspaceLabel, opts.flow.statusLabel, opts.flow.ticketId, opts.flow.absPath, opts.flow.invocationCwd || opts.cwd || "")
+    ? formatTicketFlowLine(opts.flow.workspaceLabel, opts.flow.statusLabel, opts.flow.ticketId, opts.flow.absPath, opts.flow.invocationCwd || opts.cwd || "", cardPhase)
     : "";
   const surfaceText = renderTicketDocMetaSurface(kind, opts);
   return {
@@ -481,7 +526,7 @@ export function sanitizeTicketWorkspaceLabel(workspaceLabel) {
   return normalized;
 }
 
-export function formatTicketFlowLine(workspaceLabel, statusLabel, ticketId, absPath, cwd = "") {
+export function formatTicketFlowLine(workspaceLabel, statusLabel, ticketId, absPath, cwd = "", phase = null) {
   const resolvedWorkspaceLabel = sanitizeTicketWorkspaceLabel(workspaceLabel);
   if (!resolvedWorkspaceLabel) {
     throw new Error("ticket flow surface requires a concrete workspace label");
@@ -507,7 +552,20 @@ export function formatTicketFlowLine(workspaceLabel, statusLabel, ticketId, absP
   const rawSlug = idMatch ? idMatch[2] : ticketId;
   const slug = rawSlug.length > 40 ? rawSlug.slice(0, 40) : rawSlug;
   const label = num ? `${num} ${slug}` : slug;
-  return `📦 ${resolvedWorkspaceLabel} · ${resolvedStatusLabel} · [${label}](${linkPath})`;
+  // #908: surface the current phase + role on the card so "무슨 단계·무슨 롤로 일하는지"가
+  // 항상 보인다(role-layer.md §3 phase↔롤 결속). phase가 없으면(생성/조정 등) 배지를 생략해
+  // 기존 3요소 카드로 남는다. 롤 라벨은 PHASE_ROLE_LABEL SSOT에서 파생한다.
+  const phaseBadge = buildPhaseRoleBadge(phase);
+  return `📦 ${resolvedWorkspaceLabel} · ${resolvedStatusLabel}${phaseBadge} · [${label}](${linkPath})`;
+}
+
+// #908: "· ⚙️ phase2 · implementer" 형태의 배지를 만든다. phase가 없거나 유효하지
+// 않으면 빈 문자열(배지 생략). 롤 라벨은 PHASE_ROLE_LABEL(role-layer.md §3 SSOT)에서 온다.
+function buildPhaseRoleBadge(phase): string {
+  if (phase === null || phase === undefined || phase === "") return "";
+  const phaseNum = normalizeTicketPhaseNumber(phase);
+  const role = roleLabelForPhase(phaseNum);
+  return role ? ` · phase${phaseNum} · ${role}` : ` · phase${phaseNum}`;
 }
 
 export function getTicketGuide(kind, docsLanguage = "ko", resolveLanguage = (value) => value, normalizeDocsLanguage = (value) => value, context: Record<string, any> = {}) {

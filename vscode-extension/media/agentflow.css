@@ -296,7 +296,8 @@ h1 {
   display: grid;
   gap: 4px;
   margin-top: 6px;
-  max-height: 380px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 2px 4px;
   box-sizing: border-box;
@@ -721,9 +722,6 @@ textarea {
   .ticket, .actions, .chat, .session {
     grid-column: span 12;
   }
-  .ticket-list {
-    max-height: 380px;
-  }
   .workspace-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -784,6 +782,38 @@ textarea {
 }
 body:not([data-tab="skill"]) .tab-panel[data-tab="skill"] { display: none; }
 body[data-tab="skill"] .tab-panel[data-tab="workspace"] { display: none; }
+
+/*
+ * 창을 채우는 세로 flex 체인 (#919): 고정 max-height 상자 대신 활성 탭이
+ * 뷰포트 높이까지 늘어나고, 목록 영역(.ticket-list / .skills-scroll)만
+ * flex:1 로 남은 높이를 흡수해 스크롤이 하나만 남는다.
+ * 활성 탭에만 걸어 다른 탭 레이아웃엔 회귀가 없다.
+ */
+body[data-tab] .grid {
+  align-items: stretch;
+  align-content: stretch;
+  grid-auto-rows: 1fr;
+}
+body[data-tab] .card.ticket {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* 활성 tab-panel 이 카드 안에서 남은 높이를 먹는다 */
+body[data-tab="skill"] .tab-panel[data-tab="skill"],
+body:not([data-tab="skill"]) .tab-panel[data-tab="workspace"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+/* 스킬 탭: card.skills 도 세로 flex 로 이어 skills-scroll 이 늘어나게 */
+body[data-tab="skill"] .card.skills {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
 .workspace-loading-bar {
   font-size: 11px;
   color: var(--muted);
@@ -843,7 +873,8 @@ body[data-tab="skill"] .tab-panel[data-tab="workspace"] { display: none; }
 .card.skills { margin-top: 8px; }
 .skills-hint { font-size: 10px; color: var(--muted); margin: 2px 0 6px; }
 .skills-scroll {
-  max-height: 380px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;

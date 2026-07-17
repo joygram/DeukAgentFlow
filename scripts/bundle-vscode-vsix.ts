@@ -20,6 +20,8 @@ const rootPkg = JSON.parse(fs.readFileSync(makePath(root, 'package.json'), 'utf8
 const extPkg = JSON.parse(fs.readFileSync(extPkgPath, 'utf8'));
 const savedPrepublish = extPkg.scripts?.['vscode:prepublish'];
 extPkg.version = rootPkg.version;
+// 루트 LICENSE를 정본으로 두고 확장 패키징에 동기화한다(vsce LICENSE-missing 경고 제거).
+extPkg.license = rootPkg.license || extPkg.license;
 extPkg.scripts = {
   ...extPkg.scripts,
   'vscode:prepublish': 'tsc -p ./',
@@ -31,6 +33,11 @@ try {
   execSync('npm install --no-audit --no-fund --loglevel=silent', { cwd: extDir, stdio: 'inherit', shell: true } as any);
   if (!skipCompile) {
     execSync('npm run compile', { cwd: extDir, stdio: 'inherit' } as any);
+  }
+  // 루트 LICENSE를 확장 디렉토리로 복사해 vsce의 LICENSE-missing 경고를 없앤다(정본은 루트).
+  const rootLicense = makePath(root, 'LICENSE');
+  if (fs.existsSync(rootLicense)) {
+    fs.copyFileSync(rootLicense, makePath(extDir, 'LICENSE'));
   }
   const vsceBin = makePath(extDir, 'node_modules', '.bin', process.platform === 'win32' ? 'vsce.cmd' : 'vsce');
   if (!fs.existsSync(vsceBin)) {

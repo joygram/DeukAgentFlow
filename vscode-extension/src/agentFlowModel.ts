@@ -15,6 +15,21 @@ function baseSeg(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? '';
 }
 
+// #930/#931: CLI는 드라이브 절대경로(C:\...)를 준다. 익스텐션 host가 linux에서 도는 경우
+// (WSL 리모트의 vscode-server는 os.platform()이 'linux') vscode.Uri.file()이 C:\ 경로를 못
+// 연다. 판별 기준은 익스텐션이 실제로 도는 os.platform() — UI는 자기 플랫폼을 확실히 안다
+// (감지·추측 불필요). linux면 드라이브레터를 슬래시-루트(/c/...)로 변환한다. 이 머신의 실제
+// 마운트가 /c 라서 /mnt/ 하드코딩(#930)은 틀렸다 — 드라이브레터를 /<drive>/ 로만 바꾼다.
+// win32면 C:\ 그대로.
+function normalizeTicketFilePathForHostPlatform(p: string): string {
+  if (os.platform() !== 'linux') return p;
+  const m = /^([A-Za-z]):[\\/](.*)$/.exec(p);
+  if (!m) return p;
+  const drive = m[1].toLowerCase();
+  const rest = m[2].replace(/\\/g, '/');
+  return `/${drive}/${rest}`;
+}
+
 async function loadWorkspaceRegistry(): Promise<Map<string, string>> {
   if (workspaceRegistryCache) return workspaceRegistryCache;
   const map = new Map<string, string>(); // basename → registry name
@@ -304,7 +319,12 @@ function summariesFromCliEntries(
       priority: cleanText(meta.priority, 'P2'),
       // 파일 mtime 대신 CLI 가 준 createdAt/updatedAt 을 쓴다(홈/파일 미접근).
       createdAt: cleanText(meta.createdAt, cleanText(entry.createdAt, cleanText(entry.updatedAt, ''))),
-      filePath: idPath,
+      // #818: 파일 열기엔 CLI 가 준 absPath(드라이브포함 절대경로)를 그대로 쓴다.
+      // 경로를 직접 조합하지 않는다(상대 path 는 표시용). absPath 부재 시(구 CLI)
+      // 최후로 id 파일명을 남겨 두되, 정상 경로는 항상 absPath 이다.
+      // #930: 익스텐션 host가 Linux(WSL 리모트 포함)에서 돌면 Windows 드라이브
+      // 경로를 POSIX로 정규화 — 파싱 시 한 번만 하고 view 레이어는 그대로 쓴다.
+      filePath: normalizeTicketFilePathForHostPlatform(cleanText(entry.absPath, idPath)),
       body,
       // telemetry 는 홈 디렉토리(telemetry.jsonl) 접근이 필요해 CLI 위임 범위 밖 →
       // 홈을 직접 만지지 않기 위해 제거. (#722)

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync, rmSyn
 import type { Dirent } from "fs";
 import { randomUUID } from "crypto";
 import { LEGACY_DEUK, DEUK_ROOT_DIR, CliOpts, WORKSPACE_MARKER_FILE, getWorkspaceInitConfigPath, makePath, resolveDocsLanguage, resolveUserHome, toRepoRelativePath } from "./cli-utils.js";
-import { CANONICAL_INIT_CLEANUP_PATHS, safeReadText, splitManagedBlock } from "./cli-init-core.js";
+import { CANONICAL_INIT_CLEANUP_PATHS, readTextIfExists, splitManagedBlock } from "./cli-init-core.js";
 import { isGeneratedDeukPointer, splitProjectDoc } from "./cli-init-instructions.js";
 import { cliText, resolveCliLocale } from "./cli-locales.js";
 
@@ -244,7 +244,7 @@ function sortedDirEntries(dir: string, options: Record<string, any> = {}): (stri
 }
 
 export function sameFileContent(leftPath, rightPath) {
-  return safeReadText(leftPath) === safeReadText(rightPath);
+  return readTextIfExists(leftPath) === readTextIfExists(rightPath);
 }
 
 export function walkMdFiles(dir, callback) {

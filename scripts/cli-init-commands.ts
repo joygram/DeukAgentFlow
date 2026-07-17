@@ -1,5 +1,5 @@
-import { removeClaudeUserPromptSubmitHook, upsertClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
-import { CANONICAL_INIT_CLEANUP_PATHS, CLAUDE_SETTINGS_PATH, CLAUDE_USERPROMPT_SUBMIT_COMMAND, CLAUDE_USERPROMPT_SUBMIT_MATCHER, GLOBAL_POINTER_BEGIN_PREFIX, GLOBAL_POINTER_END, MANAGED_BLOCK_BEGIN, MANAGED_BLOCK_END, hashManagedContent, mergeManagedBlock, safeReadText, splitManagedBlock, wrapManagedBlock } from "./cli-init-core.js";
+import { removeClaudePostToolUseHook, removeClaudePreToolUseHook, removeClaudeUserPromptSubmitHook, upsertClaudePostToolUseHook, upsertClaudePreToolUseHook, upsertClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
+import { CANONICAL_INIT_CLEANUP_PATHS, CLAUDE_SETTINGS_PATH, CLAUDE_USERPROMPT_SUBMIT_COMMAND, CLAUDE_USERPROMPT_SUBMIT_MATCHER, GLOBAL_POINTER_BEGIN_PREFIX, GLOBAL_POINTER_END, MANAGED_BLOCK_BEGIN, MANAGED_BLOCK_END, hashManagedContent, mergeManagedBlock, readTextIfExists, splitManagedBlock, wrapManagedBlock } from "./cli-init-core.js";
 // #638: updateSiblingWorkspaceRegistry (B / ~/.agent-flow) retired — no longer called.
 import { dirname, basename, relative, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -63,6 +63,14 @@ export function runWorkspaceMaintenance(cwd = process.cwd(), dryRun = false, bun
   runGlobalAgentInstructionSync(dryRun, bundleRoot, homeDir);
   const codexMcpResult = syncCodexMcpEndpointFromWorkspace(cwd, { dryRun, homeDir });
   const claudeSettingsResult = upsertClaudeUserPromptSubmitHook({ dryRun, homeDir });
+  // #883: also install the PreToolUse (Edit|Write) hook so the design-first / anti-drift
+  // rules are re-surfaced right before a file mutation — the moment drift happens.
+  upsertClaudePreToolUseHook({ dryRun, homeDir });
+  // #904: also install the PostToolUse (Bash) hook so the ticket status card survives
+  // into agent context after every ticket move/use/create/close, even when the agent's
+  // own response summary omits it — a code-level guarantee on top of the prompt-level
+  // ticket-status-surface skill (prompt compliance alone was proven insufficient).
+  upsertClaudePostToolUseHook({ dryRun, homeDir });
   // #638: the ~/.agent-flow sibling registry (B) is retired. Workspace candidates now
   // come solely from ~/.deuk-agent/tickets/{uuid}/workspace.json (written by reconcile),
   // so we no longer write B here — it only went stale and spawned ambiguous ghosts.

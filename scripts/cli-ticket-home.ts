@@ -13,7 +13,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, renameSync, rmSync, statSync, appendFileSync, copyFileSync } from "fs";
 import { randomUUID, createHash } from "crypto";
-import { LEGACY_DEUK, DEUK_ROOT_DIR, CliOpts, TICKET_SUBDIR, WORKSPACE_MARKER_FILE, basenameAnyOS, hasWorkspaceMarker, isHomeDirectChild, makePath, normalizeRegistryPath, registerTicketHomeModule, resolveUserHome } from "./cli-utils.js";
+import { LEGACY_DEUK, DEUK_ROOT_DIR, CliOpts, TICKET_SUBDIR, WORKSPACE_MARKER_FILE, basenameAnyOS, hasWorkspaceMarker, isHomeDirectChild, makePath, normalizeRegistryPath, readJsonFile, registerTicketHomeModule, resolveUserHome } from "./cli-utils.js";
 import { collectTicketMarkdownFiles } from "./cli-ticket-scan.js";
 
 const WORKSPACE_ID_FILE = "workspace-id";
@@ -216,9 +216,8 @@ export function isHomeStoreRoot(workspaceRoot, opts: CliOpts = {}) {
 const WORKSPACE_META_FILE = "workspace.json";
 
 function readWorkspaceMeta(homeDir) {
-  try {
-    return JSON.parse(readFileSync(makePath(homeDir, WORKSPACE_META_FILE), "utf8"));
-  } catch { return null; }
+  // #882: 공용 readJsonFile로 통합 — 없으면 null(명시 부재), 손상 JSON은 던짐(폴백 제거).
+  return readJsonFile(makePath(homeDir, WORKSPACE_META_FILE), null);
 }
 
 function writeWorkspaceStoreMarkers(homeDir, { uuid, path, name }, opts: CliOpts = {}) {

@@ -13,10 +13,25 @@
 // 전이를 거부하므로 증거 우회 구멍이 구조적으로 막힌다.
 
 import { createMachine, transition, initialTransition } from "xstate";
-import { TICKET_WORKFLOW, TICKET_WORKFLOW_EVIDENCE } from "./ticket-workflow.js";
+import { TICKET_WORKFLOW, TICKET_WORKFLOW_EVIDENCE, roleLabelForPhase } from "./ticket-workflow.js";
+// #691 follow-up (design-driven-flow.md §6.0): guard는 더 이상 evidence[key]의 존재("텍스트
+// 존재 검사")를 보지 않는다. 대신 evidence key별 콘텐츠 완주 검증기(raw 티켓 본문/cwd 대조,
+// code↔design 대조 포함)를 직접 호출해 "이 state의 서브 FSM이 완주했나"를 판정한다.
+// 판정 로직은 이 룩업 테이블 하나에 SSOT로 있고, 호출측(cli-ticket-commands.ts)은 raw
+// content/cwd만 모아 evidence 객체로 넘길 뿐 판정을 미리 하지 않는다.
+import { isTicketEvidenceKeySatisfied } from "./ticket-evidence-validators.js";
+import { diagnoseExecutionEvidence } from "./cli-ticket-evidence.js";
 
 export function eventForTarget(targetStateName) {
   return `GO_${targetStateName}`;
+}
+
+// design-driven-flow.md §6.0 "롤=서브FSM 등식"의 귀결(2): 전이는 다음 state와 함께
+// 다음 롤을 산출한다. state 이름(phase1~4/start/end 등)에서 그 노드의 phase를 얻어
+// PHASE_ROLE_LABEL(SSOT)로 롤 라벨을 유도한다. 노드에 phase가 없으면(entry 계열) 빈 문자열.
+export function roleForStateName(stateName): string {
+  const node = TICKET_WORKFLOW.states[stateName] as Record<string, any> | undefined;
+  return node?.phase ? roleLabelForPhase(node.phase) : "";
 }
 
 // TICKET_WORKFLOW.states → XState states 정의. 각 전이는 GO_<target> 이벤트 + guard.
@@ -29,10 +44,13 @@ function buildMachineStates() {
       const evidenceKeys = n.requiredEvidence?.[target] || [];
       on[eventForTarget(target)] = {
         target,
-        // guard: 이 전이가 요구하는 증거가 evidence 입력에 모두 있어야 통과.
+        // guard: 이 전이가 요구하는 각 evidence key의 서브 FSM이 실제로 완주했는지, raw
+        // evidence(본문 텍스트/cwd 등)를 콘텐츠 검증기에 직접 통과시켜 판정한다.
+        // targetState를 실어, 같은 evidence key라도 전이 방향에 따라 판정이 갈리는
+        // 검증기(예: executionEvidence의 phase2→3 vs phase3→end)가 방향을 알 수 있게 한다.
         guard: ({ event }) => {
-          const evidence = event?.evidence || {};
-          return evidenceKeys.every(key => Boolean(evidence[key]));
+          const evidence = { ...(event?.evidence || {}), targetState: target };
+          return evidenceKeys.every(key => isTicketEvidenceKeySatisfied(key, evidence));
         }
       };
     }
@@ -69,16 +87,16 @@ function snapshotForState(stateName) {
 // missingEvidence가 비어있지 않으면 guard 차단(증거 부족), to가 그대로면 미정의 전이.
 export function machineTransition(fromStateName, targetStateName, evidence = {}) {
   if (fromStateName === targetStateName) {
-    return { allowed: true, to: targetStateName, missingEvidence: [] };
+    return { allowed: true, to: targetStateName, role: roleForStateName(targetStateName), missingEvidence: [] };
   }
   const node = TICKET_WORKFLOW.states[fromStateName];
   if (!node) {
-    return { allowed: false, reason: "unknown_state", to: fromStateName, missingEvidence: [] };
+    return { allowed: false, reason: "unknown_state", to: fromStateName, role: roleForStateName(fromStateName), missingEvidence: [] };
   }
   const allowedTargets = node.transitions || [];
   if (!allowedTargets.includes(targetStateName)) {
     // 미정의 전이 — 구멍 차단.
-    return { allowed: false, reason: "transition_not_declared", to: fromStateName, missingEvidence: [] };
+    return { allowed: false, reason: "transition_not_declared", to: fromStateName, role: roleForStateName(fromStateName), missingEvidence: [] };
   }
   // 증거 guard 검증 (XState transition으로).
   const snapshot = snapshotForState(fromStateName);
@@ -88,12 +106,25 @@ export function machineTransition(fromStateName, targetStateName, evidence = {})
   } as any);
   const reached = String(next.value) === targetStateName;
   if (reached) {
-    return { allowed: true, to: targetStateName, missingEvidence: [] };
+    // §6.0 귀결(2): 전이 성공 시 다음 롤을 함께 산출한다.
+    return { allowed: true, to: targetStateName, role: roleForStateName(targetStateName), missingEvidence: [] };
   }
-  // guard가 막음 — 어떤 증거가 비었는지 산출.
+  // guard가 막음 — 어떤 증거가 미완주인지 콘텐츠 검증기로 다시 판정해 산출한다(guard와
+  // 동일한 판정 기준을 재사용 — 여기서 !evidence[key]로 되돌아가면 표면은 통과해도 내부는
+  // 위장 게이트로 회귀한다).
   const evidenceKeys = node.requiredEvidence?.[targetStateName] || [];
+  const evidenceForMissingCheck = { ...evidence, targetState: targetStateName };
   const missingEvidence = evidenceKeys
-    .filter(key => !evidence[key])
-    .map(key => TICKET_WORKFLOW_EVIDENCE[key]?.missingReason || `${key}_missing`);
-  return { allowed: false, reason: "guard_blocked", to: fromStateName, missingEvidence };
+    .filter(key => !isTicketEvidenceKeySatisfied(key, evidenceForMissingCheck))
+    .flatMap(key => {
+      // §6.0.4: executionEvidence(phase2→3)는 두 하위조건의 AND라 단일 사유로는 무엇이
+      // 막혔는지 알 수 없다 — 진단 함수로 어느 조건이 왜 막혔는지 구체 문장을 낸다.
+      if (key === "executionEvidence" && targetStateName === "phase3") {
+        const ev = evidence as Record<string, any>;
+        const detail = diagnoseExecutionEvidence(String(ev.content || ""), ev.cwd);
+        if (detail.length > 0) return detail;
+      }
+      return [TICKET_WORKFLOW_EVIDENCE[key]?.missingReason || `${key}_missing`];
+    });
+  return { allowed: false, reason: "guard_blocked", to: fromStateName, role: roleForStateName(fromStateName), missingEvidence };
 }

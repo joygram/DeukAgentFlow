@@ -2,7 +2,7 @@
   <br />
   <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
   <br />
-  <h1>Deuk Agent Flow v5.0.2</h1>
+  <h1>Deuk Agent Flow</h1>
   <p>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
     <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/dm/deuk-agent-flow.svg?label=downloads" alt="deuk-agent-flow npm downloads" /></a>
@@ -122,13 +122,13 @@ Used together, skills can improve the quality of the move, while Deuk Agent Flow
 ### 📚 Detailed Documentation
 | Doc | Purpose |
 |---|---|
-| [docs/usage-guide.ko.md](docs/usage-guide.ko.md) | **Recommended:** practical rollout and step-by-step usage guide |
-| [docs/skills-guide.md](docs/skills-guide.md) | **New in v5.0:** skill system, persona usage, and VS Code Flow UI |
-| [Flow UI Guide](docs/skills-guide.md#4-vs-code-flow-ui-agentflow-panel) | AgentFlow Panel — Workspace & Skill tabs, handoff, usage tips |
-| [docs/architecture.md](docs/architecture.md) | High-level system structure and visual infographics |
-| [docs/how-it-works.md](docs/how-it-works.md) | Detailed CLI mechanics, ticket workflow runtime, initialization lifecycle, and file roles |
-| [docs/principles.md](docs/principles.md) | Design philosophy: Hub-Spoke, Zero-Legacy, and Source Sovereignty |
-| **Korean Docs** | [README.ko.md](README.ko.md) · [docs/architecture.ko.md](docs/architecture.ko.md) · [docs/how-it-works.ko.md](docs/how-it-works.ko.md) |
+| [docs/public/guides/usage-guide.md](docs/public/guides/usage-guide.md) | **Recommended:** practical rollout and step-by-step usage guide |
+| [docs/public/guides/skills-guide.md](docs/public/guides/skills-guide.md) | **New in v5.0:** skill system, persona usage, and VS Code Flow UI |
+| [Flow UI Guide](docs/public/guides/skills-guide.md#4-vs-code-flow-ui-agentflow-panel) | AgentFlow Panel — Workspace & Skill tabs, handoff, usage tips |
+| [docs/public/architecture/architecture.md](docs/public/architecture/architecture.md) | High-level system structure and visual infographics |
+| [docs/public/guides/how-it-works.md](docs/public/guides/how-it-works.md) | Detailed CLI mechanics, ticket workflow runtime, initialization lifecycle, and file roles |
+| [docs/public/principles/principles.md](docs/public/principles/principles.md) | Design philosophy: Hub-Spoke, Zero-Legacy, and Source Sovereignty |
+| **Korean Docs** | [README.ko.md](README.ko.md) · [docs/public/architecture/architecture.ko.md](docs/public/architecture/architecture.ko.md) · [docs/public/guides/how-it-works.ko.md](docs/public/guides/how-it-works.ko.md) |
 
 ---
 
@@ -155,7 +155,7 @@ You can run the full workflow from the CLI alone, but the Flow UI cuts down **co
 
 > No need to leave the terminal open or memorize commands. Monitor the flow in the sidebar while the agent works, and step in only when you need to.
 >
-> → Details: [Flow UI Guide](docs/skills-guide.md#4-vs-code-flow-ui-agentflow-panel)
+> → Details: [Flow UI Guide](docs/public/guides/skills-guide.md#4-vs-code-flow-ui-agentflow-panel)
 
 ---
 
@@ -202,7 +202,7 @@ After that, day-to-day work starts through plain agent requests, not memorized c
 
 For a single repo, run `deuk-agent-flow init` from that repo root. For a root workspace that contains multiple DeukAgentFlow projects, run the same command from the workspace root; `init` refreshes the root pointer and discovered child workspaces that own their own `PROJECT_RULE.md` / `.deuk-workspace-id` marker.
 
-For practical rollout details, see [docs/usage-guide.ko.md](docs/usage-guide.ko.md).
+For practical rollout details, see [docs/public/guides/usage-guide.md](docs/public/guides/usage-guide.md).
 
 ## 🛠️ Installation & Setup
 
@@ -306,11 +306,12 @@ npm run smoke:npm:docker
 
 The workflow is governed by a **Ticket-Driven Execution Contract**.
 
-1. **Scaffolding**: `init` deploys `AGENTS.md` and local pointers like `PROJECT_RULE.md`; runtime templates come from the package `templates/` SSoT, not a per-workspace copy.
+1. **Scaffolding**: `init` installs a one-line **pointer** in the workspace (and, per detected tool, native rule spokes) — it does **not** copy `AGENTS.md` into the repo. The core rules live once in the agent-flow home as the single source of truth; runtime templates come from the package `templates/` SSoT. A stray `AGENTS.md` sitting in a workspace root is legacy residue from the pre-home layout, not a current artifact.
 2. **Ticketing (Plan Phase)**: The user describes the work in natural language, and the agent turns it into a bounded work order in `~/.deuk/tickets/`. During this phase, agents operate in **Plan Mode** and are restricted from mutating files.
-3. **Execution (Execute Phase)**: Once authorized, the AI agent reads the ticket, locks onto the **Target Submodule**, and executes code changes. MCP Soft Gates ensure that unauthorized modifications are blocked.
-4. **Verification**: The agent performs a side-effect audit and convention (e.g., DC-DUP) check before closure.
-5. **Archiving (Archive Phase)**: Completed tickets undergo Zero-Token Knowledge Distillation and move to `reports/` to build the **Engineering Memory Engine** via DeukAgentContext.
+3. **Review & Approval Gate (Plan → Execute)**: Before any code is touched, the phase 1 → 2 transition is **hard-gated in code**: `ticket move --phase 2` refuses to proceed without an explicit `--approval approved`, so an agent cannot self-advance a plan into execution. The gate checks that approval was *given*, not that the plan was *understood* — that part is the agent's duty: it must **present the plan to the user as a review** (what changes, the real judgment calls, why this direction) so the user approves something they have actually seen, not a wall of pasted text. The CLI is the agent's execution layer, so the user reviews and approves in chat; the agent runs the command.
+4. **Execution (Execute Phase)**: Once approved, the AI agent reads the ticket, locks onto the **Target Submodule**, and executes code changes. MCP Soft Gates ensure that unauthorized modifications are blocked.
+5. **Verification**: The agent performs a side-effect audit and convention (e.g., DC-DUP) check before closure.
+6. **Archiving (Archive Phase)**: Completed tickets undergo Zero-Token Knowledge Distillation and move to `reports/` to build the **Engineering Memory Engine** via DeukAgentContext. On close, the agent also canonicalizes any docs/rules that drifted from the code (the `role-closer` doc-sync duty).
 
 ---
 
@@ -337,7 +338,7 @@ Ask your AI agent in plain language. The CLI commands are the agent's execution 
 
 For maintainers and automation, the underlying CLI still exposes commands such as `deuk-agent-flow ticket create`, `ticket move`, and `ticket archive`.
 
-For more day-to-day examples, see [docs/how-it-works.md](docs/how-it-works.md).
+For more day-to-day examples, see [docs/public/guides/how-it-works.md](docs/public/guides/how-it-works.md).
 
 ---
 
@@ -381,6 +382,10 @@ npx deuk-agent-flow skill add --skill project-pilot
 npx deuk-agent-flow skill add --skill persona-maid
 npx deuk-agent-flow skill expose --platform claude
 ```
+
+---
+
+> This project was built by joygram with AI-assisted (agentic) coding.
 
 ---
 

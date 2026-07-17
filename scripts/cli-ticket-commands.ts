@@ -3,17 +3,18 @@ import { hostname } from "os";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { fileURLToPath } from "url";
 import {
-  toSlug, toSnakeCaseKey, requireNonEmptySlug, toRepoRelativePath, toWsRelativePath, toFileUri, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath, sanitizeFrontMatterMeta, stringifyFrontMatter, stripLeadingFrontMatter,
-  resolveDocsLanguage, inferDocsLanguageFromText, normalizeDocsLanguage, isMcpActive, withReadline, parseFrontMatter, collectMcpConfigStatuses,
-  DEUK_ROOT_DIR, TICKET_SUBDIR, TICKET_INDEX_FILENAME, WORKFLOW_MODE_EXECUTE, hasWorkspaceMarker,
-  detectConsumerTicketDir, resolveConsumerTicketRoot, resolveWorkspaceContext, loadInitConfig, computeTicketPath, normalizeTicketGroup, normalizeWorkflowMode,
+  toSlug, toSnakeCaseKey, requireNonEmptySlug, toRepoRelativePath, toWsRelativePath, toDriveAbsolutePath, toFileUri, inferRefTitleAndTopic, resolveReferencedTicketPath, toPosixPath, sanitizeFrontMatterMeta, stringifyFrontMatter, stripLeadingFrontMatter,
+  resolveDocsLanguage, inferDocsLanguageFromText, normalizeDocsLanguage, isMcpActive, parseFrontMatter, collectMcpConfigStatuses,
+  DEUK_ROOT_DIR, TICKET_SUBDIR, TICKET_INDEX_FILENAME, hasWorkspaceMarker,
+  detectConsumerTicketDir, resolveConsumerTicketRoot, resolveWorkspaceContext, loadInitConfig, computeTicketPath, normalizeTicketGroup, isWorkflowExecute,
+  resolveTicketSystemPaths, findWorkspaceRoot,
   loadWorkspaceCandidates, resolveWorkspaceTarget, findPromptWorkspaceMatches, selectLocalizedTemplatePath,
-  buildPromptWorkspaceAliases, writeFileLF, makePath, resolvePackageRoot, readWorkspaceCookie
+  buildPromptWorkspaceAliases, writeFileLF, makePath, resolvePackageRoot
  , CliOpts } from "./cli-utils.js";
 import {
-  buildDocMetaFrontmatterSummary,
   buildTransitionValidationDocMeta,
   clearDocMetaFrontmatterSummary,
+  mergeDocMetaUpdate,
   splitTicketDocMetaSection
 } from "./cli-ticket-docmeta.js";
 import {
@@ -36,22 +37,33 @@ import { auditRules } from "./lint-rules.js";
 import { getUsageReminderLine } from "./cli-usage-commands.js";
 import { cliText } from "./cli-locales.js";
 import {
+  buildEvidenceSectionsForTransition,
   buildSlotStatusSummary,
   extractMarkdownSection,
+  getEvidenceSlotFlagSpecs,
+  getEvidenceFlagSpecsForTargetState,
+  evidenceFlagForSlotHeading,
+  mergeH2SectionsIntoBody,
   followUpDecisionMeansNoFollowUp,
   getAnalysisDesignIncompleteReasons,
   getCloseWorkflowReasons,
+  resolveTicketType,
+  TICKET_TYPES,
+  buildRequiredFlagsGuideText,
   getPhase1PlanBodyReasons,
   hasPhase2ExecutionEvidence,
   hasPlaceholderTokens,
+  meetsDocsReflectedGate,
   hasTicketCompletionEvidence,
   normalizePhase1PlanBodyHeadings,
-  phase1SectionsForType,
-  resolveTicketType,
   REQUIRED_APC_MARKERS,
   REQUIRED_PHASE1_SECTIONS
 } from "./cli-ticket-evidence.js";
 import { renderTicketWorkflowGateFailure } from "./cli-ticket-surface.js";
+// #691 follow-up (design-driven-flow.md §6.0): 콘텐츠 완주 판정 SSOT는
+// ticket-evidence-validators.ts(ticket-machine.ts의 guard가 직접 쓰는 룩업 테이블)다.
+// 여기서는 동일 검증기를 재사용해 docmeta의 slotValues를 채울 뿐, 판정을 새로 만들지 않는다.
+import { TICKET_EVIDENCE_VALIDATORS, isTicketEvidenceKeySatisfied, type TicketEvidenceInput } from "./ticket-evidence-validators.js";
 import {
   AUTO_ARCHIVE_DONE_STATUSES,
   OPEN_TICKET_STATUSES,
@@ -72,12 +84,9 @@ import {
   isTerminalTicketStatus,
   isExecutionTicketStatus
 } from "./ticket-workflow.js";
-import { detectCurrentPlatform, getActiveSkillsSurface } from "./cli-skill-commands.js";
-import ejs from "ejs";
-import YAML from "yaml";
+import { roleForStateName } from "./ticket-machine.js";
+import { detectCurrentPlatform, getActiveSkillsSurface, getActiveRoleSkillIds } from "./cli-skill-commands.js";
 
-import { createInterface } from "readline";
-import { selectOne } from "./cli-prompts.js";
 
 const MAX_OPEN_TICKETS = 20;
 const PACKAGE_ROOT = resolvePackageRoot({ fromUrl: import.meta.url });
@@ -200,72 +209,36 @@ function tokenizeClaimText(text) {
   return [...new Set(filtered)];
 }
 
-function collectClaimTargetSections(content) {
-  const targetSections = ["Analysis", "Direction", "Problem Analysis", "Source Observations", "Cause Hypotheses", "Improvement Direction"];
-  return targetSections.map(name => extractMarkdownSection(content, name)).join(" ");
-}
-
-function buildClaimCoverageSummary(claimTerms, sectionText) {
-  const haystack = String(sectionText || "").toLowerCase();
-  const normalized = haystack.replace(/\s+/g, " ");
-  const matched = claimTerms.filter(term => normalized.includes(term));
-  const missRate = claimTerms.length === 0 ? 0 : 1 - matched.length / claimTerms.length;
-  return {
-    matched,
-    missRate,
-    total: claimTerms.length
-  };
-}
-
-// Single source of truth for the fillable Phase 1 plan-body scaffold. Both the
-// human-readable guard message and the --json repair payload surface this exact
-// skeleton so an agent can fill the sections and pass the guard instead of being
-// blocked with headings-only text (the scaffold was previously omitted from the
-// default text path and hand-maintained separately in the JSON path).
-// Per-section placeholder hints used when rendering the fillable scaffold. The set of
-// sections shown is derived from the validator (phase1SectionsForType) so guidance and
-// validation can never drift again (#627).
-const PHASE1_SECTION_HINTS = {
-  "Scope & Approval": [
-    "범위: <어떤 파일/함수까지>",
-    "요구사항: <사용자가 원하는 결과>",
-    "접근법: <구체적 방법>"
-  ],
-  "Plan": ["1. <실행 단계>"],
-  "Analysis": [
-    "원인: <근본 원인 분석>",
-    "- <file:line — 관찰 증거>",
-    "가설: 1. <가설>"
-  ],
-  "Direction": ["<개선 방향>"]
-};
-
-// Builds the fillable scaffold for a given ticket type, showing only the sections that
-// type actually requires (non-CLI types omit the two CLI sections).
-function buildPhase1PlanBodySkeleton() {
-  const lines = [];
-  for (const section of phase1SectionsForType()) {
-    lines.push(`## ${section}`);
-    lines.push(...(PHASE1_SECTION_HINTS[section] || ["<fill>"]));
-    lines.push("");
-  }
-  return lines.join("\n").trimEnd();
+// 입력 정본 = 템플릿을 복사해 {{ }}를 채우고 그 본문을 stdin으로 흘려보낸다
+// (phase1-design-env-sections.md §2.2). 파일로 저장해 경로를 넘기면 실행 환경 경계
+// (WSL↔Windows)를 못 넘어 wslpath·UNC·임시파일 우회가 터진다. stdin은 경로가 없어 경계도
+// 없다. 안내는 (1) 복사할 템플릿 경로, (2) {{ }}를 채워 stdin(--plan-body-file -)으로 파이프,
+// (3) 안 채워진 {{ }} 목록만 보여준다.
+function ticketTemplateRelPath(locale) {
+  return locale === "ko" ? "templates/TICKET_TEMPLATE.ko.md" : "templates/TICKET_TEMPLATE.md";
 }
 
 function buildPlanBodyRequiredMessage(reasons = []) {
   const uniqueReasons = [...new Set(reasons)];
   const locale = resolveDocsLanguage("auto");
-  const headings = phase1SectionsForType().map(s => `\`## ${s}\``).join(", ");
+  const templatePath = makePath(PACKAGE_ROOT, ...ticketTemplateRelPath(locale).split("/"));
+  const unfilled = uniqueReasons.filter(r => String(r).startsWith("unfilled_placeholder:"));
+  const unfilledList = unfilled.length
+    ? ["Unfilled placeholders (each {{ }} must be replaced with real content):",
+       ...unfilled.map(r => `  - ${String(r).replace(/^unfilled_placeholder:\s*/, "")}`)]
+    : [`Missing or incomplete: ${uniqueReasons.join(", ")}`];
   return [
-    "[VALIDATION FAILED] ticket create requires a filled Phase 1 plan body with actual data.",
-    `Missing or incomplete: ${uniqueReasons.join(", ")}`,
+    "[VALIDATION FAILED] the ticket body still has unfilled {{ }} placeholders.",
+    ...unfilledList,
     cliText("ticket.validation.selfServeRecipe", { locale }),
-    "Use: `deuk-agent-flow ticket create --title <title> --summary \"<summary>\" --plan-body \"<filled body>\" --non-interactive`.",
-    `Use these exact H2 headings: ${headings}. (Aliases accepted: "## APC", "## Agent Permission Contract", "## Scope & Approval", "## Compact Plan", "## Problem Analysis", "## Source Observations", "## Audit Evidence", "## Improvement Direction" — all normalized before validation.)`,
-    "Do not rely on template defaults or auto-generated filler text for Phase 1 ticket content.",
-    "",
-    "Fillable plan-body scaffold (fill every section with real evidence, then pass via --plan-body):",
-    buildPhase1PlanBodySkeleton()
+    "How to create a ticket:",
+    `  1. Copy the template: ${templatePath}`,
+    "  2. Replace every {{ ... }} block with real content.",
+    "  3. Stream the body via stdin (do NOT save a file — a temp/scratchpad path cannot be read by the CLI):",
+    "     deuk-agent-flow ticket create --workspace <ws> --group main --plan-body-file - --non-interactive <<'TICKET'",
+    "     # <title>",
+    "     ...filled body...",
+    "     TICKET"
   ].filter(Boolean).join("\n");
 }
 
@@ -302,25 +275,12 @@ function getCoreRulesSection(heading) {
 }
 
 function renderTicketCreateTemplateGuide(docsLanguage = "ko") {
+  // 템플릿은 에이전트가 복사해 {{ }}를 채우는 순수 마크다운 본문이다(# 제목 + 요약 + 6섹션).
+  // frontmatter(id/phase/summary 등 메타데이터)는 에이전트가 쓰지 않는다 — CLI가 채운 파일에서
+  // title·summary를 추출해 조립한다(template-file-input-gate: 템플릿↔메타데이터 경계).
   const templateDir = makePath(PACKAGE_ROOT, "templates");
   const templatePath = selectLocalizedTemplatePath(templateDir, "TICKET_TEMPLATE.md", docsLanguage);
-  const template = readFileSync(templatePath, "utf8");
-  const frontmatter = YAML.stringify(sanitizeFrontMatterMeta({
-    id: "generated-ticket-id",
-    title: "ticket-title",
-    breadcrumb: "workspace-name",
-    phase: 1,
-    status: "open",
-    workflowSource: "ticket-create",
-    docsLanguage,
-    summary: "concrete-summary",
-    priority: "P2",
-    tags: []
-  })).trim();
-  return ejs.render(template, {
-    frontmatter,
-    meta: { title: "ticket-title" }
-  }).trimEnd();
+  return readFileSync(templatePath, "utf8").trimEnd();
 }
 
 function readCliSurfaceDocument(name) {
@@ -352,14 +312,72 @@ function renderCliSurfaceDocument(name, replacements: Record<string, any> = {}) 
 // #694: renderTicketWorkflowSummary 제거 — 워크플로 노드/전이는 XState 머신(SSOT)이고
 // rules 출력에서 표 덤프를 뺐으므로 더 이상 쓰이지 않는다.
 
+// #950: PROJECT_RULE.md 정본은 워크스페이스의 docs/ 하위다(워크스페이스 루트도, 티켓홈
+// 사본도 아니다). 읽기/쓰기 모두 이 헬퍼를 거쳐 단일 정본 위치를 가리킨다. 과거엔
+// resolveHomeTicketDirForWorkspace(티켓홈)을 기준으로 삼아 init이 워크스페이스 정본을
+// 티켓홈으로 이동·삭제하면서 정본이 소실됐다(#824). 이후 워크스페이스 루트를 정본으로
+// 고정했으나(#824), package.json만으로 프로젝트 경계를 인정하는 판정(hasLocalProjectBoundary)과
+// 맞물려 모노레포 서브패키지마다 루트 템플릿 사본이 찍혀나갔다 — docs/ 하위 단일 경로로
+// 옮겨 기존 docs/README.md SSOT 구조에 편입한다(#950).
+function resolveProjectRulePath(cwd) {
+  return makePath(cwd, "docs", "PROJECT_RULE.md");
+}
+
 function readProjectRuleSurface(cwd, platform = null) {
   // native 플랫폼(claude)은 PROJECT_RULE.md가 CLAUDE.md 컨텍스트에 이미 로드됨 — 중복 embed 스킵.
   const detectedPlatform = platform || detectCurrentPlatform();
   if (detectedPlatform === "claude") return "";
   if (!cwd) return "";
-  const projectRulePath = makePath(resolveHomeTicketDirForWorkspace(cwd), "PROJECT_RULE.md");
+  const projectRulePath = resolveProjectRulePath(cwd);
   if (!existsSync(projectRulePath)) return "";
   return readFileSync(projectRulePath, "utf8").trimEnd();
+}
+
+// 게이트용 워크스페이스 룰 ID 추출. readProjectRuleSurface와 달리 platform을 무시하고
+// 항상 직접 읽는다(claude 플랫폼에서도 게이트는 동작해야 하므로). PROJECT_RULE.md 안의
+// `[DR-01]` 같은 한 줄 룰 표기에서 ID를 모은다.
+const RULE_ID_PATTERN = /\[([A-Z]{2,}-\d+)\]/g;
+function readWorkspaceRuleIds(cwd): string[] {
+  if (!cwd) return [];
+  const projectRulePath = resolveProjectRulePath(cwd);
+  if (!existsSync(projectRulePath)) return [];
+  const text = readFileSync(projectRulePath, "utf8");
+  const ids = new Set<string>();
+  let m;
+  RULE_ID_PATTERN.lastIndex = 0;
+  while ((m = RULE_ID_PATTERN.exec(text)) !== null) ids.add(m[1]);
+  return Array.from(ids);
+}
+
+// 기초 룰 블록은 코드에 하드코딩하지 않고 templates/PROJECT_RULE.md(정본 템플릿)에서 읽어온다.
+// 템플릿의 `## Rules (id-based)` 섹션을 룰 블록으로 사용한다.
+function readBaselineRuleBlock(): string {
+  const tplPath = makePath(PACKAGE_ROOT, "templates", "PROJECT_RULE.md");
+  if (!existsSync(tplPath)) return "## Rules (id-based)\n\n- [DR-01] 승인된 티켓 범위 안에서만 작업하고, 생성물은 소스에서 갱신한다.\n";
+  const tpl = readFileSync(tplPath, "utf8");
+  const section = extractMarkdownSection(tpl, "Rules (id-based)");
+  return section ? `## Rules (id-based)\n\n${section.trim()}\n` : tpl;
+}
+
+// 룰 ID가 0개인 워크스페이스에 템플릿의 기초 룰 블록을 강제 주입한다(레거시 산문 룰은 강제 리팩터).
+// PROJECT_RULE.md가 없으면 생성한다. 반환: 주입했으면 새 ruleIds, 이미 있었으면 null.
+function ensureBaselineWorkspaceRule(cwd): string[] | null {
+  if (!cwd) return null;
+  const projectRulePath = resolveProjectRulePath(cwd);
+  const existing = existsSync(projectRulePath) ? readFileSync(projectRulePath, "utf8") : "";
+  RULE_ID_PATTERN.lastIndex = 0;
+  if (RULE_ID_PATTERN.test(existing)) return null; // 이미 룰 ID 있음
+  const block = readBaselineRuleBlock();
+  // 프론트매터(--- ... ---)는 보존하고 그 뒤 산문 본문은 ID 룰 블록으로 교체한다.
+  const fmMatch = existing.match(/^---\n[\s\S]*?\n---\n/);
+  const frontmatter = fmMatch ? fmMatch[0] : "";
+  const next = `${frontmatter}# Project Rules\n\n${block}`;
+  writeFileSync(projectRulePath, next);
+  RULE_ID_PATTERN.lastIndex = 0;
+  const ids = new Set<string>();
+  let m;
+  while ((m = RULE_ID_PATTERN.exec(block)) !== null) ids.add(m[1]);
+  return Array.from(ids);
 }
 
 function readProjectPolicySurface(cwd, opts: CliOpts = {}) {
@@ -419,7 +437,8 @@ export function buildTicketCreateGuide(opts: CliOpts = {}) {
   const renderedTemplate = renderTicketCreateTemplateGuide(docsLanguage);
   const surfaceName = docsLanguage === "ko" ? "ticket-create.ko" : "ticket-create";
   return renderCliSurfaceDocument(surfaceName, {
-    TICKET_TEMPLATE: renderedTemplate
+    TICKET_TEMPLATE: renderedTemplate,
+    REQUIRED_FLAGS: buildRequiredFlagsGuideText()
   });
 }
 
@@ -456,7 +475,7 @@ function readWorkspaceProfile(cwd, workspace, platform = null): string {
   if (detectedPlatform !== "claude") return "";
   if (!cwd) return "";
   try {
-    const p = makePath(resolveHomeTicketDirForWorkspace(cwd), "PROJECT_RULE.md");
+    const p = resolveProjectRulePath(cwd);
     if (existsSync(p)) {
       const raw = stripLeadingFrontMatter(readFileSync(p, "utf8")).trim();
       if (raw) return `[WORKSPACE_PROFILE: ${workspace || "local"}]\n${raw}`;
@@ -467,10 +486,31 @@ function readWorkspaceProfile(cwd, workspace, platform = null): string {
 
 // 역할 동적 컨텍스트 블록. 도메인/프로필 중 있는 것만 모아 한 섹션으로 낸다.
 // 둘 다 없으면 빈 문자열(템플릿에서 빈 줄로 흡수).
-function buildRoleContextBlock(domainFocus, workspaceProfile): string {
+// design-driven-flow.md §6.0(롤=서브FSM 등식 귀결)·§6.0.5: 현재 노드를 노출하는 표면은
+// 그 노드의 롤을 함께 명시한다. activeRole은 현재 state(area)에서 유도한 롤 라벨(없으면 "").
+function buildRoleContextBlock(domainFocus, workspaceProfile, activeRole = "", activeWorkspace = "", roleSkillIds: string[] = []): string {
+  // 현재 롤 선언 — 활성 노드가 있으면 "지금 어느 롤로 서는가"를 단정한다. 활성 티켓이
+  // 없어 롤이 없으면(area=rules) 롤 미할당을 명시해 "티켓을 먼저 세우라"로 안내한다
+  // (자각에 맡기지 않고 표면이 현재 롤을 못박는다 — §6.0.1 "없는 엣지" 방지).
+  //
+  // #935: 선언(declaration)만으로는 롤이 강제되지 않는다 — 에이전트가 "그렇구나" 하고
+  // 읽고 지나칠 수 있는 수동 텍스트일 뿐이다(persona-maid가 'invoke via the Skill tool'
+  // 명시 강제로 실제 호출되는 것과 대조). §6.0의 롤=서브FSM 등식이 성립하려면 현재 state의
+  // 서브FSM(=role 스킬)이 실제로 서야 하므로, 이 표면은 그 role 스킬을 Skill 툴로 지금
+  // invoke하라는 능동 지시를 함께 낸다. skill id는 getActiveRoleSkillIds(bind/category SSOT)
+  // 가 준 것을 그대로 쓴다(DR-03 — 여기서 별도 매핑을 재정의하지 않는다).
+  const invokeDirective = roleSkillIds.length > 0
+    ? `\n\n**🔧 지금 이 롤로 서려면 Skill 툴을 실제로 호출하라 (선언이 아니라 호출):** ${roleSkillIds.map(id => `\`${id}\``).join(", ")} 스킬을 Skill 툴로 지금 invoke하라. 롤 스킬을 invoke하지 않은 채 "롤이라고 생각만" 하는 것은 §6.0의 서브FSM이 서지 않은 것 — 롤 전환이 강제될 수 없는 "없는 엣지"로 전락한다(§6.0.5).`
+    : "";
+  const roleHeader = activeRole
+    ? `## 🎭 현재 역할 (ACTIVE ROLE)\n\n너는 지금 **${activeRole}** 롤이다${activeWorkspace ? ` (워크스페이스: ${activeWorkspace})` : ""}. 이 phase의 서브 FSM으로서 그 롤의 규율대로 산출을 낸다. 롤이 바뀌면(전이) 이 선언이 바뀐다 — 매 턴 이 줄을 읽어 자신이 어느 모드인지 재확인한다.${invokeDirective}`
+    : `## 🎭 현재 역할 (ACTIVE ROLE)\n\n**롤 미할당** — 활성 티켓이 없어 어느 서브 FSM에도 서 있지 않다. 작업을 시작하려면 티켓을 먼저 세워라(planner/designer). 다른 워크스페이스의 phase가 현재 롤을 대신하지 않는다(§6.0.5).`;
+
   const parts = [domainFocus, workspaceProfile].map(s => String(s || "").trim()).filter(Boolean);
-  if (parts.length === 0) return "";
-  return `## Role Context (이번 작업 동적 컨텍스트)\n\n현재 페이즈 역할 레이어에 다음을 함께 적용한다:\n\n${parts.join("\n\n")}`;
+  const dynamic = parts.length === 0
+    ? ""
+    : `\n\n## Role Context (이번 작업 동적 컨텍스트)\n\n현재 페이즈 역할 레이어에 다음을 함께 적용한다:\n\n${parts.join("\n\n")}`;
+  return roleHeader + dynamic;
 }
 
 export function buildTicketRulesGuide(opts: CliOpts = {}) {
@@ -500,7 +540,13 @@ export function buildTicketRulesGuide(opts: CliOpts = {}) {
     // 역할 동적 컨텍스트: 티켓 APC/도메인 + 워크스페이스 프로필. 네이티브 플랫폼(claude)은
     // 스킬 본문을 정적 파일로 깔아 본문 치환이 안 통하므로, 동적 컨텍스트는 rules surface의
     // 별도 인라인 블록(ROLE_CONTEXT)으로 항상 출력한다(NEXT_ACTION과 동일 방식).
-    const roleContext = buildRoleContextBlock(deriveDomainFocus(activeEntry), readWorkspaceProfile(opts.cwd, opts.workspace, opts.platform));
+    // §6.0 롤=서브FSM 등식: 현재 노드(area)에서 현재 롤을 유도해 표면에 명시한다.
+    const activeRole = roleForStateName(area);
+    // #935: 현재 state에 bind된 role 스킬 id를 뽑아 invoke 강제 지시에 실어 넘긴다.
+    // getActiveSkillsSurface(:AGENT_SKILLS)와 같은 area 필터를 쓰므로 "노출되는 스킬"과
+    // "invoke하라고 지시하는 스킬"이 어긋나지 않는다.
+    const roleSkillIds = getActiveRoleSkillIds(opts.cwd, opts.platform, area);
+    const roleContext = buildRoleContextBlock(deriveDomainFocus(activeEntry), readWorkspaceProfile(opts.cwd, opts.workspace, opts.platform), activeRole, activeEntry ? (opts.workspace || "") : "", roleSkillIds);
 
     // #685: PROJECT_MEMORY 제거(.md가 state SSOT). PROJECT_RULES는 도메인 케이스만.
     // #694: TICKET_WORKFLOW 표 덤프 제거 — 워크플로 노드/전이는 XState 머신(SSOT)이고
@@ -561,11 +607,11 @@ function routeEntryNode(opts: CliOpts = {}) {
     return { node: "entry-free", ctx: {} };
   }
 
-  // #743: 세션 쿠키 없이 전체 workspace 순회로 active ticket을 잡는 폴백 제거.
-  // sessionId 쿠키가 있으면 해당 workspace만 조회. 쿠키 없으면 entry-no-workspace로 떨어짐.
+  // #685/#743: 전체 workspace 순회로 active ticket을 잡는 폴백 없음. opts.cwd는
+  // applyTicketWorkspaceDispatch가 --workspace 명시일 때만 채운다 — 미지정이면
+  // entry-no-workspace로 떨어진다(추측하지 않는다).
   let activeId = null, activePhase = null, activeStatus = null, activePath = null, activeWsCwd = null;
-  const sessionCookie = opts.sessionId ? readWorkspaceCookie("", opts.sessionId, { homeDir: opts.homeDir }) : null;
-  const sessionWorkspacePath = sessionCookie?.workspacePath || opts.cwd || null;
+  const sessionWorkspacePath = opts.cwd || null;
 
   if (sessionWorkspacePath) {
     try {
@@ -588,7 +634,7 @@ function routeEntryNode(opts: CliOpts = {}) {
   }
 
   if (activeId && activeWsCwd) {
-    const advance = buildPhaseAdvanceHint(activeId, activePhase, activeStatus, resolveDocsLanguage(opts.docsLanguage || "auto"));
+    const advance = buildPhaseAdvanceHint(activeId, activePhase, activeStatus, resolveDocsLanguage(opts.docsLanguage || "auto"), opts);
     let ticketDisplay = `**${activeId}** (phase ${activePhase}, ${activeStatus})`;
     if (activePath) {
       const keyDir = detectConsumerTicketDir(activeWsCwd) || activeWsCwd;
@@ -628,7 +674,7 @@ function loadStateTemplate(stateName, lang = "en") {
   try { return readFileSync(p, "utf8").trim(); } catch { return null; }
 }
 
-function buildPhaseAdvanceHint(activeId, phase, status, lang = "en") {
+function buildPhaseAdvanceHint(activeId, phase, status, lang = "en", opts: CliOpts = {}) {
   if (isTerminalTicketStatus(status)) return "";
   const phaseNum = normalizeTicketPhaseNumber(phase);
   const stateName = `phase${phaseNum >= 4 ? 4 : phaseNum}`;
@@ -637,24 +683,55 @@ function buildPhaseAdvanceHint(activeId, phase, status, lang = "en") {
   if (transitions.length === 0) return "";
 
   // Label each transition: first=forward, end=early-exit, lower phase=rollback, phase1=reopen
-  const routeLines = transitions.map((target, i) => {
+  // #836: rollback/reopen are LAST-RESORT paths, not peers of forward. They are collected
+  // separately and printed under a de-emphasized "last resort" block with a warning, so the
+  // agent does not treat "roll back when stuck" as a normal next step (drift/rollback abuse).
+  const forwardLines = [];
+  const lastResortLines = [];
+  transitions.forEach((target, i) => {
     let label;
+    let isRollback = false;
     if (target === "end") label = "early-exit";
     else if (i === 0) label = "forward";
     else {
       const targetPhase = TICKET_WORKFLOW.states?.[target]?.phase;
-      label = targetPhase < phaseNum ? (targetPhase <= 1 ? "reopen" : "rollback") : "forward";
+      isRollback = targetPhase < phaseNum;
+      label = isRollback ? (targetPhase <= 1 ? "reopen" : "rollback") : "forward";
     }
     const targetPhaseNum = TICKET_WORKFLOW.states?.[target]?.phase;
+    // #831: append the evidence flags this transition consumes so the printed command
+    // is copy-paste complete — the agent fills them instead of hand-editing the .md.
+    const targetStateName = target === "end" ? "end" : `phase${targetPhaseNum}`;
+    const flagHints = getEvidenceFlagSpecsForTargetState(targetStateName)
+      .map(spec => `${spec.flag} "..."`)
+      .join(" ");
+    const flagSuffix = flagHints ? ` ${flagHints}` : "";
+    // #839: rollback is gated by #837's actor check. The rendered example an agent copies
+    // must self-declare --source agent so the last-resort gate actually fires (without it,
+    // an unset source defaults to human and the gate is bypassed). Forward/early-exit
+    // transitions are NOT gated, so they carry no --source.
+    const sourceSuffix = isRollback ? " --source agent" : "";
     const cmd = target === "end"
-      ? `deuk-agent-flow ticket move --id ${activeId} --to end --non-interactive`
-      : `deuk-agent-flow ticket move --id ${activeId} --phase ${targetPhaseNum} --non-interactive`;
-    return `  → ${target.padEnd(6)} (${label}):  ${cmd}`;
+      ? `deuk-agent-flow ticket move --id ${activeId} --to end${flagSuffix} --non-interactive`
+      : `deuk-agent-flow ticket move --id ${activeId} --phase ${targetPhaseNum}${flagSuffix}${sourceSuffix} --non-interactive`;
+    const line = `  → ${target.padEnd(6)} (${label}):  ${cmd}`;
+    if (isRollback) lastResortLines.push(line);
+    else forwardLines.push(line);
   });
 
-  // Discard hint if allowed
+  // #836: discard is abandonment — never a peer of forward. Group it with rollback under
+  // the last-resort block so it is not an ever-present "give up" button in front of the agent.
   if ((state?.actions || []).includes("discard")) {
-    routeLines.push(`  → discard (abandon): deuk-agent-flow ticket discard --id ${activeId} --workspace <ws> --non-interactive`);
+    // #839: carry --source agent so #837's discard gate fires on the copied command.
+    lastResortLines.push(`  → discard (abandon): deuk-agent-flow ticket discard --id ${activeId} --workspace <ws> --source agent --non-interactive`);
+  }
+
+  const routeLines = [...forwardLines];
+  if (lastResortLines.length > 0) {
+    routeLines.push(
+      "  ─ last resort (only for a wrong premise; to grow scope use `ticket edit`, NOT rollback) ─"
+    );
+    routeLines.push(...lastResortLines);
   }
 
   // Slot hint from forward target template
@@ -662,22 +739,55 @@ function buildPhaseAdvanceHint(activeId, phase, status, lang = "en") {
   const nextStateName = forward !== "end" ? `phase${TICKET_WORKFLOW.states?.[forward]?.phase}` : "end";
   const statePrompt = loadStatePrompt(nextStateName, lang) || loadStatePrompt(stateName, lang) || "";
   const templateContent = loadStateTemplate(nextStateName, lang) || "";
+  // #831: annotate each state-template slot with the CLI flag that fills it, so the
+  // agent satisfies the gate via flags (which merge into the .md) instead of being told
+  // to "fill the ticket file" — the message that used to push hand-editing.
   const slotLines = templateContent
     .split("\n")
     .filter(l => /^- \w.*:/.test(l.trim()))
-    .map(l => l.trim());
+    .map(l => {
+      const trimmed = l.trim();
+      const heading = trimmed.replace(/^-\s*/, "").replace(/:.*$/, "").trim();
+      const flag = evidenceFlagForSlotHeading(nextStateName, heading);
+      return flag ? `${trimmed}  (→ ${flag})` : trimmed;
+    });
   const slotsSection = slotLines.length > 0
     ? `\n${cliText("ticket.phase.fillSlots", { locale: lang })}\n${slotLines.map(l => `  ${l}`).join("\n")}`
+    : "";
+
+  // #935: 전이는 곧 롤 전환이다(§6.0 롤=서브FSM, §6.0.5 "전이 결과는 다음 롤을 담는다").
+  // move 성공 표면이 다음 CLI 명령만 담고 "다음 롤로 서라"를 안 담으면, 상태전환은 숫자만
+  // 바뀌고 서브FSM은 교체되지 않아 롤 전환이 "없는 엣지"로 전락한다(사용자 관측: '상태전환·
+  // 롤 전혀 안 됨'의 뿌리). 그러므로 전이 직후 다음 state의 role 스킬을 Skill 툴로 invoke해
+  // 그 롤로 서고, 그 롤로 재판단하라는 지시를 함께 낸다. 특히 진행 중 "선택지"가 생기면
+  // 곧장 사용자에게 회피성 질문을 던지지 말고, 먼저 해당 롤(설계 판단이면 designer)로 서서
+  // 설계 정본과 대조해 재판단한다 — 원 요구·설계에서 답이 도출되면 자율 진행하고, 데드락
+  // (둘 이상의 유효·되돌리기 어려운 선택)일 때만 물어본다(Escalation Gate / DC Protocol).
+  const nextRoleSkillIds = getActiveRoleSkillIds(opts.cwd, opts.platform, nextStateName);
+  const roleSwitchSection = nextRoleSkillIds.length > 0
+    ? `\n\n🎭 전이 = 롤 전환: ${forward}로 넘어가면 즉시 ${nextRoleSkillIds.map(id => `\`${id}\``).join(", ")} 스킬을 Skill 툴로 invoke해 그 롤로 서라(§6.0.5). 진행 중 선택지가 생기면 사용자에게 회피성 질문을 먼저 던지지 말고, 그 롤(설계 판단이면 designer)로 서서 설계 정본과 대조해 재판단하라 — 원 요구·설계에서 답이 나오면 자율 진행, 데드락일 때만 질문(Escalation Gate).`
     : "";
 
   // #690: 셸은 항상 bash 고정(에이전트는 Bash tool 전용). 노드 전이 프롬프트 본문은
   // loadStatePrompt로 .md(SSOT)에서 가져온다.
   return `
 
-Next phase (${stateName} → ${forward}): ${statePrompt}${slotsSection}
+Next phase (${stateName} → ${forward}): ${statePrompt}${slotsSection}${roleSwitchSection}
 \`\`\`bash
 ${routeLines.join("\n")}
 \`\`\``;
+}
+
+// #908: 선제 템플릿 출력 SSOT. move 성공·status·use 등 "현재 phase를 표면화하는" 모든
+// 지점이 이 헬퍼로 다음 전환용 완성형 명령을 출력한다 — 에이전트가 플래그 이름을 추론하지
+// 않고 슬롯 값만 채우게 한다(design-driven-flow.md §6.0: 요구형식은 템플릿으로 제시).
+// terminal 상태면 buildPhaseAdvanceHint가 빈 문자열을 반환해 자연히 생략된다. 렌더 실패는
+// best-effort로 무시한다(가이드가 없다고 명령 자체가 실패하면 안 된다).
+function printPhaseAdvanceHint(ticketId, phase, status, opts: CliOpts = {}) {
+  try {
+    const hint = buildPhaseAdvanceHint(ticketId, phase, status, resolveDocsLanguage(opts.docsLanguage || "auto"), opts);
+    if (hint) console.log(hint);
+  } catch { /* guidance is best-effort */ }
 }
 
 export function runTicketRules(opts: CliOpts = {}) {
@@ -690,15 +800,18 @@ export function runTicketRules(opts: CliOpts = {}) {
 
 function buildPlanBodyRepairPayload(reasons = []) {
   const uniqueReasons = [...new Set(reasons)];
+  const locale = resolveDocsLanguage("auto");
+  const templatePath = ticketTemplateRelPath(locale);
   return {
     ok: false,
     error: "ticket_create_phase1_plan_invalid",
-    missingOrIncomplete: uniqueReasons,
-    headings: phase1SectionsForType().map(section => `## ${section}`),
+    unfilledPlaceholders: uniqueReasons
+      .filter(r => String(r).startsWith("unfilled_placeholder:"))
+      .map(r => String(r).replace(/^unfilled_placeholder:\s*/, "")),
     repair: {
-      command: 'deuk-agent-flow ticket create --title <title> --summary "<summary>" --plan-body "<filled body>" --non-interactive --require-filled --json',
-      instruction: "Fill only the missing/incomplete sections and rerun with the same body.",
-      skeleton: buildPhase1PlanBodySkeleton()
+      template: templatePath,
+      command: "deuk-agent-flow ticket create --workspace <ws> --group main --plan-body-file - --non-interactive --json <<'TICKET' … TICKET",
+      instruction: "Copy the template, replace every {{ ... }} block with real content, then pipe the body into --plan-body-file - via a heredoc (do NOT save a file — a temp/scratchpad path cannot be read by the CLI)."
     }
   };
 }
@@ -708,6 +821,48 @@ function buildPlanBodyRequiredError(reasons = [], opts: CliOpts = {}) {
     return JSON.stringify(buildPlanBodyRepairPayload(reasons), null, 2);
   }
   return buildPlanBodyRequiredMessage(reasons);
+}
+
+// 워크스페이스에 룰(PROJECT_RULE.md의 [DR-XX])이 존재하는데 plan-body가 어떤 룰 ID도
+// 참조하지 않을 때의 게이트 실패 메시지. 룰 0개면 호출되지 않는다.
+// #909: 룰참조 게이트 SSOT. create(:2515)·edit/move 재검증(:2932) 두 곳이 같은 로직을
+// 복붙하던 것을 한 헬퍼로 모은다(DR-03). §6.0(design-driven-flow.md:189-191)은 "에이전트
+// 출력을 되파싱해 품질을 심문하지 말고 최소 형식 확인에 그친다"를 규정한다 — 여기서 하는
+// 것은 "본문에 룰 id 문자열이 하나라도 존재하는가"라는 최소 형식 확인일 뿐, 인용의 실재나
+// 서식·품질을 심문하지 않는다(그 경계 안에서 게이트 목적 '티켓이 룰에 결속됨'을 지킨다).
+// 룰 id가 하나도 없으면 에러를 throw하고, 있으면 조용히 통과한다.
+function assertPlanReferencesRule(planBody: string, ruleIds: string[] = [], opts: CliOpts = {}) {
+  if (ruleIds.length === 0) return;
+  const referenced = ruleIds.filter(id => planBody.includes(id));
+  if (referenced.length === 0) {
+    throw new Error(buildRuleReferenceRequiredError(ruleIds, opts));
+  }
+}
+
+function buildRuleReferenceRequiredError(ruleIds: string[] = [], opts: CliOpts = {}) {
+  if (opts.json) {
+    return JSON.stringify({
+      error: "rule_reference_required",
+      message: "ticket create requires the plan body to reference at least one project rule id.",
+      availableRuleIds: ruleIds,
+    }, null, 2);
+  }
+  const list = ruleIds.map(id => `  - [${id}]`).join("\n");
+  return [
+    "[VALIDATION FAILED] ticket create requires the plan body to reference at least one project rule.",
+    "",
+    "This workspace defines project rules in PROJECT_RULE.md. Every ticket must declare which rule(s)",
+    "it works under by referencing the rule id (e.g. [DR-01]) somewhere in the plan body.",
+    "",
+    "Reference the rule ID ONLY — a short pointer like [DR-01]. Do NOT paste the rule's full text",
+    "into the ticket: the rule text lives once in PROJECT_RULE.md (SSOT, DR-03). Copying it into the",
+    "ticket duplicates it, so editing the rule later leaves the ticket stale.",
+    "",
+    "Available rule ids:",
+    list,
+    "",
+    "Fix: add the relevant rule id(s) — id pointer only, not the rule text — to the plan body, then re-run.",
+  ].join("\n");
 }
 
 export function getAutoCloseDecision(meta, content) {
@@ -734,18 +889,16 @@ export function getAutoCloseDecision(meta, content) {
 }
 
 function validateClaimAgainstTicketContent(meta, content, claim) {
+  // #918: 이전 판은 claim의 토큰이 Analysis/Direction 섹션에 substring으로 33% 이상
+  // 나타나는지로 "주장이 근거 있나"를 판정했다 — design-driven-flow.md §6.0.3이
+  // 공허한 통과(vacuous pass)로 지목한 전형(키워드 겹침을 실질 근거로 위장). 제거한다.
+  // 주장의 실질 근거는 git 변경파일과의 대조(getImplementationClaimGuardResult)가
+  // 담당하고(§6.0.3 양방향 추적성), 이 함수는 형식 사실(claim 유무·summary·기록 완비)만 본다.
   const reasons = [];
   const claimTerms = tokenizeClaimText(claim);
   if (claimTerms.length === 0) {
     reasons.push("claim_terms_missing");
     return reasons;
-  }
-
-  const coverageText = collectClaimTargetSections(content);
-  const coverage = buildClaimCoverageSummary(claimTerms, coverageText);
-  const matchingRate = coverage.matched.length / Math.max(coverage.total, 1);
-  if (matchingRate < 0.33) {
-    reasons.push(`claim_coverage_missing:${coverage.matched.length}/${coverage.total}`);
   }
 
   if (!meta.summary || hasPlaceholderTokens(meta.summary)) {
@@ -763,11 +916,11 @@ function validateClaimAgainstTicketContent(meta, content, claim) {
 function getClaimEvidenceResult(target, meta, content, claim) {
   const reasons = validateClaimAgainstTicketContent(meta, content, claim);
   const claimTerms = tokenizeClaimText(claim);
-  const coverage = buildClaimCoverageSummary(claimTerms, collectClaimTargetSections(content));
   const phase1Missing = getAnalysisDesignIncompleteReasons(meta, content);
+  // #918: claimCoverage(키워드 겹침) 슬롯 제거 — 주장의 실질 근거는 git 대조가 담당.
+  // 여기 슬롯은 형식 사실만: claim 유무·summary 존재·phase1 기록 완비.
   const slots = {
     claimTermsPresent: claimTerms.length > 0,
-    claimCoverage: reasons.every(reason => !String(reason).startsWith("claim_coverage_missing")),
     ticketSummaryPresent: Boolean(meta.summary) && !hasPlaceholderTokens(meta.summary),
     ticketRecordComplete: phase1Missing.length === 0
   };
@@ -777,10 +930,7 @@ function getClaimEvidenceResult(target, meta, content, claim) {
     ticket: target.id,
     path: target.path,
     claim,
-    claimTerms: coverage.total,
-    coveredTerms: coverage.matched.length,
-    matchedTerms: coverage.matched,
-    missRate: Number((coverage.missRate * 100).toFixed(1)),
+    claimTerms: claimTerms.length,
     sections: {
       analysis: extractMarkdownSection(content, "Analysis").trim(),
       direction: extractMarkdownSection(content, "Direction").trim()
@@ -791,12 +941,11 @@ function getClaimEvidenceResult(target, meta, content, claim) {
       ticket_id: target.id,
       source_contract: {
         required_slots: Object.keys(slots),
-        metadata_fields: ["ticket_id", "claim", "claim_terms", "covered_terms", "source_path"]
+        metadata_fields: ["ticket_id", "claim", "claim_terms", "source_path"]
       },
       slots,
       slot_source_map: {
         claimTermsPresent: { source: "--claim" },
-        claimCoverage: { source: "ticket analysis/design/verification sections", covered_terms: coverage.matched },
         ticketSummaryPresent: { source: "ticket frontmatter summary" },
         ticketRecordComplete: { source: "ticket workflow sections", missing: phase1Missing }
       },
@@ -938,8 +1087,13 @@ function formatTicketStartLine(ticketId, absPath, cwd = "", invocationCwd = "") 
   return formatTicketFlowLine(resolveTicketWorkspaceLabel(cwd, absPath), FLOW_SURFACE_STATUS.start, ticketId, absPath, invocationCwd || cwd);
 }
 
-function formatTicketUpdateLine(ticketId, absPath, cwd = "", invocationCwd = "") {
-  return formatTicketFlowLine(resolveTicketWorkspaceLabel(cwd, absPath), FLOW_SURFACE_STATUS.adjust, ticketId, absPath, invocationCwd || cwd);
+function formatTicketUpdateLine(ticketId, absPath, cwd = "", invocationCwd = "", phase = null) {
+  // #908: pass phase so the card surfaces the phase + role badge on the `use` path too
+  // (role-layer.md §3: 현재 롤을 항상 표면화). phase가 없으면 배지는 생략된다.
+  const statusLabel = phase != null && normalizeTicketPhaseNumber(phase) >= 2
+    ? FLOW_SURFACE_STATUS.progressActive
+    : FLOW_SURFACE_STATUS.adjust;
+  return formatTicketFlowLine(resolveTicketWorkspaceLabel(cwd, absPath), statusLabel, ticketId, absPath, invocationCwd || cwd, phase);
 }
 
 function formatTicketPhaseLine(ticketId, absPath, phase, cwd = "", invocationCwd = "") {
@@ -954,8 +1108,11 @@ function formatTicketEndLine(ticketId, absPath, cwd = "", invocationCwd = "") {
   return formatTicketFlowLine(resolveTicketWorkspaceLabel(cwd, absPath), FLOW_SURFACE_STATUS.end, ticketId, absPath, invocationCwd || cwd);
 }
 
-function formatTicketStatusLine(label, ticketId, absPath) {
-  return `Ticket ${label}: [${ticketId}](${absPath})`;
+function formatTicketStatusLine(label, ticketId, absPath, cwd = "") {
+  // #807: ticket lives under ~/.deuk (different drive from workspace D:) →
+  // drive-stripped absolute (/Users/...) is the only form that opens in chat.
+  const linkPath = cwd ? toWsRelativePath(cwd, absPath) : toPosixPath(absPath).replace(/^[a-zA-Z]:/, "");
+  return `Ticket ${label}: [${ticketId}](${linkPath})`;
 }
 
 function ticketWorkflowOptions(opts: CliOpts = {}, replacements: Record<string, any> = {}) {
@@ -1009,7 +1166,10 @@ function ticketFlowOptions(ticketId, absPath, statusLabel, opts: CliOpts = {}, r
       statusLabel,
       ticketId,
       absPath: normalizedAbsPath,
-      invocationCwd: opts.invocationCwd || opts.cwd || ""
+      invocationCwd: opts.invocationCwd || opts.cwd || "",
+      // #908: carry the phase (when a caller passed it via PHASE) so the card renders
+      // the phase + role badge. Callers without a phase (start/adjust) leave it undefined.
+      phase: replacements.PHASE
     }
   };
 }
@@ -1054,7 +1214,7 @@ function printTicketSelectionLine(ticketId, absPath, opts: CliOpts = {}) {
     console.log(absPath);
     return;
   }
-  console.log(formatTicketUpdateLine(ticketId, toPosixPath(absPath), opts.cwd, opts.invocationCwd));
+  console.log(formatTicketUpdateLine(ticketId, toPosixPath(absPath), opts.cwd, opts.invocationCwd, opts.phase));
 }
 
 // The approval surface tells the user to "review the plan", so the plan body
@@ -1072,6 +1232,11 @@ function readApprovalPlanBody(absPath) {
 
 function printPendingApprovalSurface(ticketId, absPath, opts: CliOpts = {}) {
   const normalizedAbsPath = toPosixPath(absPath);
+  // #807: the "Source:" line must use the same drive-stripped link form as the
+  // card link / formatTicketFlowLine (#746/#647). A raw "C:/Users/..." path never
+  // opens in the chat panel; toWsRelativePath yields the "/Users/..." form both
+  // surfaces open. Card link already strips inside formatTicketFlowLine.
+  const sourceLinkPath = toWsRelativePath(opts.cwd, absPath);
   const flowLine = formatTicketUpdateLine(ticketId, normalizedAbsPath, opts.cwd, opts.invocationCwd);
   const summary = String(opts.summary || opts.runtimeContext?.summary || "").trim();
   const planBody = readApprovalPlanBody(absPath);
@@ -1080,7 +1245,9 @@ function printPendingApprovalSurface(ticketId, absPath, opts: CliOpts = {}) {
     opts.includeFlowLine === false ? "" : flowLine,
     summary ? `Summary: ${summary}` : "",
     "DocMeta state: approval_required",
-    `Source: ${normalizedAbsPath}`,
+    // #815: 클릭 ②(Source) + 셸·에이전트 cat용 ①(Abspath) 짝 병기.
+    `Source: ${sourceLinkPath}`,
+    `Abspath: ${toDriveAbsolutePath(absPath)}`,
     "",
     ...(planBody ? ["--- Plan under review ---", planBody, "--- End of plan ---", ""] : []),
     "Required slots:",
@@ -1088,7 +1255,16 @@ function printPendingApprovalSurface(ticketId, absPath, opts: CliOpts = {}) {
     "- userApproval",
     "",
     "Output: transition_blocked_until_approval",
-    "Action: review the plan above, then type `승인`.",
+    // #851: this surface is what the AGENT sees every time approval is pending. The user
+    // reads only what the agent relays to chat — so telling the agent to "review the plan
+    // above" is not enough; the agent must first PRESENT a review to the user, or the user
+    // is approving something they never saw. State that requirement here, at the point of
+    // use, not only in the session-start rules (#847) which are read once and forgotten.
+    "Action (agent): BEFORE requesting 승인, present a review to the user in chat — in your",
+    "own words, not a paste of the block above: (a) what actually changes (1-2 sentences),",
+    "(b) the real judgment call(s) the user must weigh, (c) why this direction. Only after",
+    "the user has seen that review and typed `승인` may you run the adapter command below.",
+    "An approval obtained without presenting this review is not informed — do not proceed on it.",
     "",
     ...workspacePreflightLines(opts.cwd),
     "Adapter command after approval (run ONLY after the user approves in chat):",
@@ -1098,7 +1274,7 @@ function printPendingApprovalSurface(ticketId, absPath, opts: CliOpts = {}) {
     "",
     "Not proceeding? Do NOT self-approve or force a phase jump — discard it instead:",
     "```bash",
-    `deuk-agent-flow ticket discard --id ${ticketId} --workspace ${wsName} --non-interactive`,
+    `deuk-agent-flow ticket discard --id ${ticketId} --workspace ${wsName} --source agent --non-interactive`,
     "```"
   ];
   console.log(lines.filter(line => line !== "").join("\n"));
@@ -1163,10 +1339,23 @@ function readCliTextInput(cwd, inputPath, label) {
   return readFileSync(absPath, "utf8");
 }
 
+// 입력 정본은 "템플릿 파일을 채워 경로를 넘긴다"이다(template-file-input-gate 설계).
+// 에이전트는 templates/TICKET_TEMPLATE.*.md를 복사해 {{ }}를 채운 파일을 Write로 만들고,
+// 그 저장소 상대경로를 --plan-body-file로 넘긴다. 값을 셸 인자로 넘기지 않으므로 특수문자
+// 이스케이프가 원천 소멸한다(구 6개 섹션 플래그 --scope/--design/... 는 셸 이스케이프
+// 표면을 6배로 늘려 폐기했다). --plan-body(문자열 직접)도 하위호환으로 받되, 권장 경로는
+// --plan-body-file이다.
 function hydrateCreateTextInputs(opts) {
   const next = { ...opts };
   if (next.planBodyFile) {
     next.planBody = readCliTextInput(next.cwd, next.planBodyFile, "ticket create --plan-body-file");
+  } else if (next.planBody === "-") {
+    // --plan-body-file -와 동일한 stdin 규약을 --plan-body에도 적용한다. 이전에는
+    // --plan-body -가 stdin을 읽지 않고 리터럴 "-" 한 글자를 그대로 본문으로 써버려,
+    // 룰 참조 게이트가 "본문에 룰 id 없음"으로 실패했다 — 실제 원인(본문이 사실상
+    // 비어있었음)을 가리는 오탐이었다. 두 플래그가 이름은 다르지만 값 "-"의 의미는
+    // 같아야 사용자 혼동이 없다.
+    next.planBody = readCliTextInput(next.cwd, "-", "ticket create --plan-body");
   }
   if (next.contentFile) {
     next.content = readCliTextInput(next.cwd, next.contentFile, "ticket create --content-file");
@@ -1339,24 +1528,15 @@ function applyTicketWorkspacePromptDispatch(opts: CliOpts = {}, promptText = "")
 function applyTicketWorkspaceDispatch(opts: CliOpts = {}) {
   const explicitQuery = opts.workspace || "";
 
-  // #652: registry-only. The workspace is resolved from the home registry candidates
-  // (or the session cookie), NEVER from a cwd-basename match — that old fallback let
-  // any cwd whose folder name resembled the query masquerade as a registered
-  // workspace and was a ghost factory.
+  // #652/#685: registry-only, --workspace 명시로만 해소한다. NEVER a cwd-basename
+  // match — that old fallback let any cwd whose folder name resembled the query
+  // masquerade as a registered workspace and was a ghost factory.
   const candidates = loadWorkspaceCandidates("", { homeDir: opts.homeDir });
 
-  // No explicit --workspace: try the session cookie (registry-backed). If that also
-  // resolves nothing, leave opts.cwd as-is — callers that genuinely need a workspace
-  // will fail later with a clear "workspace not found", never silently inferring one
-  // from cwd.
+  // No explicit --workspace: leave opts.cwd as-is — callers that genuinely need a
+  // workspace will fail later with a clear "workspace not found", never silently
+  // inferring one from a session cookie or cwd.
   if (!explicitQuery) {
-    if (opts.sessionId && candidates && candidates.workspaces.length > 0) {
-      const cookieRes = resolveWorkspaceTarget("", "", { candidates, sessionId: opts.sessionId, homeDir: opts.homeDir });
-      if (cookieRes?.target) {
-        opts.cwd = cookieRes.target.path;
-        opts.workspace = cookieRes.target.id;
-      }
-    }
     return opts;
   }
 
@@ -1364,7 +1544,7 @@ function applyTicketWorkspaceDispatch(opts: CliOpts = {}) {
     throw new Error(`ticket workspace target not found: ${explicitQuery} (no workspaces registered — run \`deuk-agent-flow init\` in the workspace first)`);
   }
 
-  const resolution = resolveWorkspaceTarget("", explicitQuery, { candidates, sessionId: opts.sessionId, homeDir: opts.homeDir });
+  const resolution = resolveWorkspaceTarget(explicitQuery, { candidates, homeDir: opts.homeDir });
 
   if (resolution?.reason === "ambiguous") {
     throw new Error(`ticket workspace target is ambiguous: ${formatWorkspaceCandidates(resolution.matches)}`);
@@ -1420,7 +1600,7 @@ function shouldRunWorkflowRulesAudit(changedFiles = []) {
     const normalized = String(relPath || "").replace(/\\/g, "/");
     if (!normalized) return false;
     return normalized === "core-rules/AGENTS.md"
-      || normalized === "PROJECT_RULE.md"
+      || normalized === "docs/PROJECT_RULE.md"
       || normalized === "AGENTS.md"
       || normalized === ".codex/AGENTS.md"
       || normalized.startsWith(".claude/rules/")
@@ -1466,33 +1646,60 @@ function getPhase1IncompleteReasons(cwd, absPath) {
   return getPhase1IncompleteReasonsFromBody(readFileSync(absPath, "utf8"));
 }
 
+// #691 follow-up (design-driven-flow.md §6.0): this must hand machineTransition's guard
+// RAW evidence (ticket body content, cwd, meta, decision-text opts) — not pre-judged
+// booleans. The guard in ticket-machine.ts calls ticket-evidence-validators.ts directly
+// against this raw shape; judging pass/fail here would just reproduce the old
+// Boolean(evidence[key]) pass-through gate one layer up.
+function buildRawTicketEvidence(cwd, meta: Record<string, any> = {}, content = "", opts: CliOpts = {}, targetState = ""): TicketEvidenceInput {
+  // 정본 입력만 싣는다(No-Fallback). 완주 판정은 content(플래그가 병합된 본문)에서 하고,
+  // 결정 슬롯은 --reason(reason), 승인은 --workflow(workflowMode)/--approval(approval)에서
+  // 온다. 과거의 debuggingDecision/reopenDecision/verificationEvidence/completionEvidence·
+  // 죽은 별칭(workflow/approvalState)은 검증기가 더는 읽지 않으므로 제거했다.
+  return {
+    content,
+    cwd,
+    meta,
+    targetState,
+    reason: opts.reason,
+    workflowMode: opts.workflowMode,
+    approval: opts.approval
+  };
+}
+
 function collectTicketTransitionValidationDocMeta(cwd, absPath, meta: Record<string, any> = {}, content = "", opts: CliOpts = {}, targetState = "") {
   const phase1Reasons = content
     ? getPhase1PlanBodyReasons(normalizePhase1PlanBodyHeadings(content || ""))
     : getPhase1IncompleteReasons(cwd, absPath);
   const closeReasons = getCloseWorkflowReasons(meta, content);
-  // phase2→phase3: executionEvidence is satisfied by phase2 execution slots or plan content.
-  // Other transitions (phase3→end, phase4→end) still require close workflow sections.
-  const executionEvidenceOk = targetState === "phase3"
-    ? hasPhase2ExecutionEvidence(content)
-    : closeReasons.length === 0;
-  const slotValues = {
-    phase1Plan: phase1Reasons.length === 0,
-    userApproval: hasExplicitExecutionApproval(opts),
-    executionEvidence: executionEvidenceOk,
-    verificationEvidence: closeReasons.length === 0 || Boolean(opts.reason || opts.verificationEvidence),
-    debuggingDecision: Boolean(opts.debuggingDecision || opts.reason || targetState !== "phase2"),
-    completionEvidence: closeReasons.length === 0 || Boolean(opts.reason || opts.completionEvidence),
-    reopenDecision: Boolean(opts.reopenDecision || opts.reason || targetState !== "phase1")
-  };
-  const executionEvidenceErrors = targetState === "phase3" && !executionEvidenceOk
-    ? ["phase2_execution_slots_empty"]
+  // #691 follow-up (design-driven-flow.md §6.0): 이 함수는 더 이상 pass/fail을 스스로
+  // 판정하지 않는다. 판정(콘텐츠 완주 검증)은 ticket-machine.ts의 guard가
+  // ticket-evidence-validators.ts를 통해 직접 수행한다 — 여기서는 raw evidence(본문
+  // content/cwd/meta/opts)를 모아 evidence 객체로 실어 나르는 오케스트레이션만 한다.
+  // slotValues는 docmeta 표시/에러 상세용으로 동일한 검증기를 재사용해 얻는다(중복
+  // 판정이 아니라 단일 판정 결과의 재조회 — 판정 기준이 어긋날 수 없다).
+  const evidenceForValidation = buildRawTicketEvidence(cwd, meta, content, opts, targetState);
+  const slotValues = Object.fromEntries(
+    Object.keys(TICKET_EVIDENCE_VALIDATORS).map(key => [key, isTicketEvidenceKeySatisfied(key, evidenceForValidation)])
+  );
+  // #868/#874: phase2→3 게이트는 (실행증거 AND 문서반영)로 구성된다. 실패 시 어느 쪽이
+  // 비었는지 구분해 안내한다 — 뭉뚱그린 execution_slots_empty만 내면 에이전트가 실행
+  // 슬롯만 채우며 무한 삽질한다(Docs Reflected가 필요한 줄 모름). docsReflected_missing은
+  // "--docs-reflected를 채워라"로 렌더된다(evidenceFlagsForEvidenceKey/DocsReflected).
+  const executionEvidenceErrors = targetState === "phase3" && !slotValues.executionEvidence
+    ? [
+        ...(hasPhase2ExecutionEvidence(content) ? [] : ["phase2_execution_slots_empty"]),
+        ...(meetsDocsReflectedGate(content, cwd) ? [] : ["docs_reflected_missing"])
+      ]
     : closeReasons;
+  // phase4 완주 사유는 close 슬롯 충족(closeReasons)만 본다. code_design_mismatch 게이트는
+  // 제거했다(role-layer.md §3.1: 코드 현상을 설계 판정에 섞지 않는다).
+  const verificationEvidenceErrors = closeReasons;
   const slotSourceMap = {
     phase1Plan: { source: toRepoRelativePath(cwd, absPath), errors: phase1Reasons },
     userApproval: { source: "--approval approved | --workflow execute" },
     executionEvidence: { source: "ticket workflow sections (phase2 execution slots or Analysis)", errors: executionEvidenceErrors },
-    verificationEvidence: { source: "ticket workflow sections", errors: closeReasons },
+    verificationEvidence: { source: "ticket workflow sections + code↔design comparison", errors: verificationEvidenceErrors },
     debuggingDecision: { source: "--reason | debugging decision" },
     completionEvidence: { source: "ticket workflow sections", errors: closeReasons },
     reopenDecision: { source: "--reason | reopen decision" }
@@ -1519,8 +1726,8 @@ function formatTicketWorkflowGateFailure(cwd, absPath, entry, meta: Record<strin
   return renderTicketWorkflowGateFailure({ ticketId, workspace: basename(String(cwd || "")), docmeta, reasons });
 }
 
-function getTicketWorkflowTransitionEvidence(cwd, absPath, meta: Record<string, any> = {}, content = "", opts: CliOpts = {}, targetState = "") {
-  return collectTicketTransitionValidationDocMeta(cwd, absPath, meta, content, opts, targetState).slots;
+function getTicketWorkflowTransitionEvidence(cwd, absPath, meta: Record<string, any> = {}, content = "", opts: CliOpts = {}, targetState = ""): TicketEvidenceInput {
+  return buildRawTicketEvidence(cwd, meta, content, opts, targetState);
 }
 
 function resolveTicketWorkflowCommandTransition(cwd, entry, absPath, meta, content, opts: CliOpts = {}, transitionOpts: Record<string, any> = {}) {
@@ -1540,13 +1747,12 @@ function resolveTicketWorkflowCommandTransition(cwd, entry, absPath, meta, conte
 }
 
 function hasExplicitExecutionApproval(opts: CliOpts = {}) {
+  // 정본 입력은 workflowMode(←--workflow)·approval(←--approval) 둘뿐(cli-utils.ts SSOT).
   if (!Object.prototype.hasOwnProperty.call(opts, "workflowMode")
-    && !Object.prototype.hasOwnProperty.call(opts, "workflow")
-    && !Object.prototype.hasOwnProperty.call(opts, "approval")
-    && !Object.prototype.hasOwnProperty.call(opts, "approvalState")) {
+    && !Object.prototype.hasOwnProperty.call(opts, "approval")) {
     return false;
   }
-  return normalizeWorkflowMode(opts.workflowMode ?? opts.workflow ?? opts.approval ?? opts.approvalState) === WORKFLOW_MODE_EXECUTE;
+  return isWorkflowExecute(opts) === true;
 }
 
 function getTicketWorkflowProvenanceReasons(entry, meta: Record<string, any> = {}) {
@@ -1705,9 +1911,52 @@ function buildUseFallbackCandidates(indexJson, opts: CliOpts = {}) {
     });
 }
 
-function buildUseNoMatchError(ticketId, candidates) {
+// #829: when a ticket isn't found in the canonical home ticket dir, an agent's next
+// instinct is to reverse-engineer the filesystem. Surfacing the exact path searched,
+// plus a same-named file found elsewhere (e.g. a stale in-workspace copy), collapses
+// that whole detour into one error message.
+function findStrayTicketFile(cwd, ticketId, ticketsRoot) {
+  if (!ticketId) return null;
+  const candidateRoots = [];
+  try {
+    const wsRoot = findWorkspaceRoot(cwd) || cwd;
+    const legacy = resolveTicketSystemPaths(wsRoot).primary;
+    if (legacy && legacy !== ticketsRoot) candidateRoots.push(legacy);
+    // #829: a plain top-level `main`/`sub`/`scratch` dir directly under the workspace
+    // root (no `.deuk/tickets` prefix) has shown up as a stale orphan copy — the CLI
+    // never scans it, but an agent skimming the tree mistakes it for canonical storage.
+    if (wsRoot && wsRoot !== ticketsRoot) candidateRoots.push(wsRoot);
+  } catch { /* best-effort hint only */ }
+  for (const root of candidateRoots) {
+    if (!existsSync(root)) continue;
+    try {
+      const groups = readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name);
+      for (const group of groups) {
+        const groupDir = join(root, group);
+        if (!existsSync(groupDir)) continue;
+        const files = readdirSync(groupDir).filter(f => f.startsWith(String(ticketId)) && f.endsWith(".md"));
+        if (files.length) return join(groupDir, files[0]);
+      }
+    } catch { /* best-effort hint only */ }
+  }
+  return null;
+}
+
+function buildTicketNotFoundHint(cwd, ticketId, ticketsRoot) {
+  const lines = [];
+  if (ticketsRoot) lines.push(`Searched canonical ticket dir: ${ticketsRoot}`);
+  const stray = findStrayTicketFile(cwd, ticketId, ticketsRoot);
+  if (stray) {
+    lines.push(`Found a similarly-named file OUTSIDE the canonical dir (not visible to use/discard/show): ${stray}`);
+    lines.push("This is likely a stale local copy, not the canonical ticket. Re-create via 'ticket create' if the canonical entry is truly gone.");
+  }
+  return lines;
+}
+
+function buildUseNoMatchError(ticketId, candidates, cwd?, ticketsRoot?) {
   const lines = [
     `No matching ticket found for "${ticketId || ""}".`,
+    ...buildTicketNotFoundHint(cwd, ticketId, ticketsRoot),
     "Last closed ticket and open tickets:"
   ];
 
@@ -1917,16 +2166,7 @@ export function archiveTicketEntry({ cwd, ticketDir, indexJson, found, opts = {}
     throw err;
   }
 
-  if (!opts.skipProjectMemoryUpdate) {
-    try {
-      const body = originalBody !== null ? originalBody : readFileSync(absPath, "utf8");
-      const { meta, content: bodyContent } = parseFrontMatter(body);
-      const ticketSections = extractMarkdownSections(bodyContent, ["Direction", "Improvement Direction", "Design Decisions", "Completion Report"]);
-      updateProjectMemoryFromTicket(cwd, found.id, meta, ticketSections);
-    } catch (err) {
-      console.warn(`[WARNING] project-memory update failed for ${found.id}: ${err.message}`);
-    }
-  }
+  // #804: project-memory.md archive append 경로 완전 제거(언니 지시). 재오염 차단.
   if (!isCompactTicketOutput(opts) && !opts.quietAutoArchive) {
     console.log(`ticket archive: ${moveToArchiveStorage ? "moved ticket to" : "marked ticket archived in place"} ${toWsRelativePath(opts.cwd, targetAbsPath)}`);
   }
@@ -2117,13 +2357,52 @@ export async function runTicketCreate(opts) {
   opts = hydrateCreateTextInputs(opts);
   applyTicketWorkspacePromptDispatch(opts, [opts.summary, opts.content].filter(Boolean).join("\n"));
   applyTicketRootContext(opts, { createIfMissing: true });
-  if (!opts.title && !opts.summary && !opts.ref) {
+  // #825: create의 첫-시도-실패를 fail-fast로 잡는다.
+  // 흔한 오용 — 제목을 위치인자로 줌(`ticket create "제목"`) — 은 parseTicketArgs에서
+  // opts.ticketId로 조용히 흡수된다(공통 파서라 명령 종류를 모름). 그 결과 opts.title이
+  // undefined가 되어 아래 help가 출력되고 exit 0으로 끝나, 에이전트가 "help 텍스트=생성결과"로
+  // 착각하고 삽질을 반복했다. create 컨텍스트에서 떠도는 위치인자는 잘못 흡수된 제목이므로
+  // 도움말 대신 명시적 에러+비0 exit로 즉시 실패시킨다.
+  if (opts.ticketId !== undefined && !opts.title && !opts.summary && !opts.ref) {
+    throw new Error(
+      `unexpected positional argument: "${opts.ticketId}". ` +
+      `Pass the ticket title via --title (e.g. --title my-ticket-slug), not as a positional argument. ` +
+      `Run \`deuk-agent-flow ticket create --help\` for the canonical form.`
+    );
+  }
+  // 인자가 사실상 없을 때(순수 도움말 의도)에만 가이드를 출력한다. 이건 오용이 아니라
+  // discoverability이므로 stdout + exit 0 유지가 맞다. 입력 정본은 --plan-body-file(채운
+  // 템플릿 파일)이므로 그것/‑body가 있으면 가이드가 아니라 생성으로 진행한다.
+  if (!opts.title && !opts.summary && !opts.ref && !opts.planBody && !opts.planBodyFile) {
     console.log(buildTicketCreateGuide(opts));
     return;
   }
+  // #939: 폐기된 개별 섹션 플래그를 fail-loud로 막고 템플릿 경로로 유도한다.
+  // create 본문 섹션의 단일 정식 입력 경로는 채운 템플릿을 --plan-body-file - 로
+  // heredoc 파이프하는 것이다(:806, :1338; 개별 6섹션 플래그는 셸 이스케이프 표면
+  // 6배 문제로 의도적으로 폐기됨). 과거엔 이 플래그들을 조용히 삼켜 Scope/Analysis/
+  // Direction 섹션 없는 티켓이 만들어졌고, 그 티켓이 phase2→end에서 영구 차단됐다
+  // (936/938 실증 — 원인-증상 거리가 벌어짐). 발생 지점(create)에서 즉시 에러내면
+  // 원인-증상 거리가 0이 된다. edit 경로는 대칭적으로 이 플래그들을 정당하게 쓰므로
+  // (기존 본문에 섹션만 병합) 여기서만 막는다.
+  const deprecatedSectionFlags = [
+    ["--scope", opts.scope],
+    ["--design", opts.design],
+    ["--environment", opts.environment],
+    ["--plan", opts.planSection],
+    ["--analysis", opts.analysis],
+    ["--direction", opts.direction],
+  ].filter(([, v]) => String(v ?? "").trim());
+  if (deprecatedSectionFlags.length > 0) {
+    const used = deprecatedSectionFlags.map(([f]) => f).join(", ");
+    throw new Error(
+      `ticket create: 개별 섹션 플래그(${used})는 폐기되었습니다. ` +
+      `본문 섹션은 채운 템플릿을 --plan-body-file - 로 파이프하는 것이 유일한 정식 경로입니다.\n\n` +
+      buildTicketCreateGuide(opts)
+    );
+  }
+
   const inferred = opts.ref ? inferRefTitleAndTopic(opts) : null;
-  const title = opts.title || inferred?.title || opts.summary || "ticket";
-  const titleSlug = requireNonEmptySlug(opts.title || inferred?.slug || title, "ticket title");
   const group = toSlug(opts.group || "main");
 
   await ensurePhase0Validation(opts);
@@ -2139,16 +2418,17 @@ export async function runTicketCreate(opts) {
       throw new Error("ticket create requires an AgentFlow-managed directory with .deuk. Run init or choose a managed sibling workspace.");
     }
 
+    // 제목·요약 SSOT는 채운 파일 본문이다(phase1-design-env-sections.md §2.1). 본문의
+    // # H1 → title, 그 아래 문단 → summary를 CLI가 추출한다. --title은 명시됐을 때만
+    // 슬러그를 오버라이드하는 하위호환 입력이고, 없으면 본문 H1이 정본이다.
     let parsedPlan = null;
-    let finalTitle = title;
-    let finalTitleSlug = titleSlug;
-    
-    if (typeof opts.planBody === "string" && opts.planBody.trim()) {
-      parsedPlan = parsePlan("inline-plan-body.md", normalizePhase1PlanBodyHeadings(opts.planBody));
+    let finalTitle = opts.title || inferred?.title || "ticket";
 
-      finalTitle = opts.title || parsedPlan.title || title;
-      finalTitleSlug = requireNonEmptySlug(finalTitle, "ticket title");
+    if (typeof opts.planBody === "string" && opts.planBody.trim()) {
+      parsedPlan = parsePlan("inline-plan-body.md", opts.planBody);
+      finalTitle = opts.title || parsedPlan.title || inferred?.title || "ticket";
     }
+    let finalTitleSlug = requireNonEmptySlug(opts.title || inferred?.slug || finalTitle, "ticket title (body # H1 heading)");
 
     const indexJson = loadTicketIndex(opts);
     const reusableTicket = findReusableCompletedTicket(indexJson, finalTitleSlug, opts);
@@ -2248,6 +2528,15 @@ export async function runTicketCreate(opts) {
 
     const summary = (opts.summary || parsedPlan?.summary || finalTitle || "ticket").trim();
 
+    // #944/#951 (design-driven-flow.md §6.0.4.1): 성격 선언은 생성 시점에 강제한다 — 완주 증거
+    // 슬롯이 티켓 종류에서 도출되므로, 종류 없는 티켓은 어떤 슬롯을 완주로 요구할지 정할 수 없다.
+    // fail-first: 미선언/미인식이면 만들지 않고 유효 종류를 요구한다(No-Fallback Gate).
+    const ticketType = resolveTicketType({ type: opts.type });
+    if (ticketType === null) {
+      const valid = Object.keys(TICKET_TYPES).join(", ");
+      throw new Error(`ticket create: --type is required and must be one of: ${valid}. It selects which completion-evidence slots this ticket must fill (design-driven-flow.md §6.0.4.1).`);
+    }
+
     const promptText = [summary, finalTitle, parsedPlan?.body].filter(Boolean).join("\n");
     const docsLanguage = resolveTicketDocsLanguage(opts.cwd, opts.docsLanguage, promptText);
 
@@ -2264,6 +2553,7 @@ export async function runTicketCreate(opts) {
       evidence: opts.evidence,
       mainTicket,
       summary,
+      type: ticketType,
       priority: opts.priority || "P2",
       tags: opts.tags
         ? opts.tags.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean)
@@ -2278,23 +2568,40 @@ export async function runTicketCreate(opts) {
     }));
     let finalDocument = null;
     if (parsedPlan) {
-      const planReasons = getPhase1PlanBodyReasons(parsedPlan.body, { title: finalTitle });
+      // G1+G2: create 경로에서만 Design·Environment를 강제(신규 스키마). 재검증·edit은 관대.
+      const planReasons = getPhase1PlanBodyReasons(parsedPlan.body, { title: finalTitle, enforceDesignEnv: true, cwd: opts.cwd });
       if (planReasons.length > 0) {
-        throw new Error(buildPlanBodyRequiredError(planReasons, opts));
+        console.log(buildPlanBodyRequiredError(planReasons, opts));
+        return;
+      }
+      // 룰 참조 게이트:
+      //  - 룰 0개면 기초 룰([DR-01])을 자동 주입하고 이번 티켓은 경고만 남기고 통과(다음 티켓부터 강제).
+      //  - 룰이 1개라도 있으면 plan-body가 최소 1개 룰 ID를 참조해야 한다. 아니면 throw(우회 불가).
+      let ruleIds = readWorkspaceRuleIds(opts.cwd);
+      if (ruleIds.length === 0) {
+        const injected = ensureBaselineWorkspaceRule(opts.cwd);
+        if (injected) {
+          ruleIds = injected;
+          console.warn(
+            `[RULE BASELINE] No project rule id found — injected baseline [DR-01] into PROJECT_RULE.md. ` +
+            `This ticket proceeds; future tickets must cite a rule id in the plan body.`
+          );
+        }
+      } else {
+        assertPlanReferencesRule(parsedPlan.body, ruleIds, opts); // #909: SSOT 게이트
       }
       const ticketBody = injectTicketContent(parsedPlan.body, opts.content, docsLanguage);
       const docmeta = collectTicketTransitionValidationDocMeta(opts.cwd, abs, meta, ticketBody, {}, "phase2");
-      const frontmatterMeta = sanitizeFrontMatterMeta({
-        ...meta,
-        ...buildDocMetaFrontmatterSummary(docmeta)
-      });
+      // #811: front-matter docmeta* 미러 폐지 — 검증 상태는 본문 ## DocMeta 정본에만 둔다.
+      const frontmatterMeta = sanitizeFrontMatterMeta(clearDocMetaFrontmatterSummary(meta));
       finalDocument = {
         meta: frontmatterMeta,
         content: ticketBody,
         docmeta
       };
     } else {
-      throw new Error(buildPlanBodyRequiredError(["plan_body_file_required"], opts));
+      console.log(buildPlanBodyRequiredError(["plan_body_file_required"], opts));
+      return;
     }
 
     let rollbackIndexJson = indexJson;
@@ -2392,6 +2699,13 @@ export async function runTicketCreate(opts) {
       printCreateApprovalGate(ticketId, opts, summary);
     }
     printUsageReminder(opts.cwd, opts);
+    // #819: emit a machine-parseable success trailer as the LAST stdout line so
+    // `tail`/agents can confirm creation. Without it, the final lines are the
+    // approval/discard guidance and a successful create reads as a failure,
+    // driving an infinite re-create loop. Mirrors `ticket move`'s ticket-guard-ok.
+    console.log(
+      `${opts.dryRun ? "ticket-created-dryrun" : "ticket-created-ok"} ${ticketId} | phase=ph1 | status=open | ${toDriveAbsolutePath(abs)}`
+    );
     if (!opts.dryRun) {
       appendTelemetryEvent(opts.cwd, {
         event: "ticket_created",
@@ -2444,16 +2758,22 @@ export async function runTicketList(opts) {
     // VSCode extension) get the content straight from the CLI and never resolve
     // ticket-home / read files themselves. The CLI ran in its own environment
     // (Windows/Linux) so it reads from the correct home regardless of caller.
-    const payloadRows = opts.printContent
-      ? rows.map(e => {
-          let content = "";
-          try {
-            const doc = readTicketDocument(opts.cwd, e, { action: "ticket list", requireExists: false });
-            content = doc.exists ? doc.content : "";
-          } catch { /* missing/corrupt ticket → empty body */ }
-          return { ...e, content };
-        })
-      : rows;
+    // #818: every row carries `absPath` — the drive-prefixed, posix-normalized
+    // absolute file path. Consumers (VSCode extension) open this directly and never
+    // recombine `path` (which is index-relative "main/x.md", display-only). The
+    // human "Path:" click-link form (drive-stripped, #746) stays separate.
+    const payloadRows = rows.map(e => {
+      let content = "";
+      let absPath = "";
+      try {
+        const doc = readTicketDocument(opts.cwd, e, { action: "ticket list", requireExists: false });
+        absPath = toDriveAbsolutePath(doc.absPath);
+        if (opts.printContent) content = doc.exists ? doc.content : "";
+      } catch { /* missing/corrupt ticket → empty body, best-effort absPath */
+        try { absPath = toDriveAbsolutePath(resolveTicketEntryOrComputedPath(opts.cwd, e)); } catch { /* give up */ }
+      }
+      return opts.printContent ? { ...e, absPath, content } : { ...e, absPath };
+    });
     // #756: --with-total wraps the (filtered) rows with the workspace-wide total
     // ticket count (all statuses incl. archived) so the VS Code panel can show
     // "open / total" without a second, heavy archive-loading call. INDEX.json
@@ -2479,6 +2799,14 @@ export async function runTicketList(opts) {
 export async function runTicketStatus(opts) {
   applyTicketRootContext(opts);
   const index = loadTicketIndex(opts);
+  const ambiguousCandidates = findLiveTicketCandidates(opts, index);
+  if (ambiguousCandidates) {
+    console.log(`${ambiguousCandidates.length} tickets are live in this workspace — pass --id to pick one instead of guessing:`);
+    for (const e of ambiguousCandidates) {
+      console.log(formatTicketChoice(e, index.activeTicketId));
+    }
+    return;
+  }
   const found = pickTicketEntry(opts, index);
   if (!found) {
     // No live (open, phase < 4) ticket is in focus. Do NOT surface an archived or
@@ -2531,6 +2859,7 @@ export async function runTicketStatus(opts) {
     const reasonText = out.reasons.length === 0 ? "ok" : out.reasons.join(", ");
     printTicketStatusFlowLine(out.id, absPath, out.phase, { ...opts, docsLanguage: parsed.meta.docsLanguage });
     console.log(`${out.id} | phase=${out.phase} | status=${out.status} | ${reasonText}`);
+    printPhaseAdvanceHint(out.id, out.phase, out.status, opts);
     printUsageReminder(opts.cwd, opts);
     return;
   }
@@ -2538,7 +2867,12 @@ export async function runTicketStatus(opts) {
   console.log(`Ticket: ${out.id}`);
   console.log(`Status: ${out.status}`);
   console.log(`Phase: ${out.phase}`);
-  console.log(`Path: ${out.path}`);
+  // #807: out.path stays raw for JSON consumers, but the human "Path:" line must
+  // use the drive-stripped ticket-link form (#746) — only that form clicks open in
+  // the chat panel (user click-test: drive-prefixed/relative/file-uri all fail).
+  // #815: 외부 표현(클릭 ②)과 내부 처리(셸·에이전트 cat ①)는 별개다 — 둘을 짝으로 병기.
+  console.log(`Path: ${toWsRelativePath(opts.cwd, ticketDoc.absPath)}`);
+  console.log(`Abspath: ${toDriveAbsolutePath(ticketDoc.absPath)}`);
   const runtimeContext = buildTicketRuntimeContext(out.id, absPath, parsed.meta, {
     cwd: opts.cwd,
     hostWorkspaceLabel: opts.hostWorkspaceContext?.breadcrumb,
@@ -2553,6 +2887,174 @@ export async function runTicketStatus(opts) {
     if (out.reasons.length === 0) console.log("Reasons: none");
     else console.log(`Reasons: ${out.reasons.join(", ")}`);
   }
+  printPhaseAdvanceHint(out.id, out.phase, out.status, opts);
+  printUsageReminder(opts.cwd, opts);
+}
+
+// #811: 티켓 본문 조회 전용 CLI. 에이전트가 find/grep/Read로 .md를 직접 뒤지지 않고
+// CLI 단일 명령으로 본문(4섹션)·DocMeta 정본·경로를 얻게 한다. 읽기 전용이라
+// 워크플로 상태를 바꾸지 않으며 모든 phase/상태에서 호출 가능하다.
+export async function runTicketShow(opts) {
+  applyTicketRootContext(opts);
+  const index = loadTicketIndex(opts);
+  const found = pickTicketEntry(opts, index);
+  if (!found) {
+    const selector = opts.ticketId || opts.title || "";
+    if (selector) {
+      const ticketsRoot = detectConsumerTicketDir(opts.cwd);
+      const hint = buildTicketNotFoundHint(opts.cwd, selector, ticketsRoot);
+      throw new Error([`ticket show: no matching ticket found for '${selector}'`, ...hint].join("\n"));
+    }
+    throw new Error("ticket show: --id <ticket-id> is required.");
+  }
+
+  const ticketDoc = readTicketDocument(opts.cwd, found, { action: "ticket show", requireExists: true });
+  const absPath = ticketDoc.absPath;
+  const phase = Number(ticketDoc.meta.phase || 1);
+  const status = deriveTicketWorkflowStatus(ticketDoc.meta, found.status || "open");
+
+  if (opts.json) {
+    console.log(JSON.stringify({
+      id: found.id,
+      title: found.title || ticketDoc.meta.title || null,
+      path: toPosixPath(resolve(absPath)),
+      phase,
+      status,
+      summary: ticketDoc.meta.summary || null,
+      content: ticketDoc.content,
+      docmeta: ticketDoc.docmeta
+    }, null, 2));
+    return;
+  }
+
+  // 카드 한 줄(워크스페이스·상태·티켓 링크) — 항상 먼저.
+  printTicketStatusFlowLine(found.id, absPath, phase, { ...opts, docsLanguage: ticketDoc.meta.docsLanguage });
+  console.log(`${found.id} | phase=${phase} | status=${status}`);
+  if (ticketDoc.meta.summary) console.log(`Summary: ${ticketDoc.meta.summary}`);
+  // #815: 클릭 ②(Path) + 셸·에이전트 cat용 ①(Abspath) 짝 병기.
+  console.log(`Path: ${toWsRelativePath(opts.cwd, absPath)}`);
+  console.log(`Abspath: ${toDriveAbsolutePath(absPath)}`);
+  console.log("");
+  // 본문(4섹션) 그대로 — 에이전트 검수용.
+  console.log(ticketDoc.content.trim());
+  if (ticketDoc.docmetaRaw) {
+    console.log("");
+    console.log("## DocMeta");
+    console.log("");
+    console.log("```yaml");
+    console.log(ticketDoc.docmetaRaw);
+    console.log("```");
+  }
+  printUsageReminder(opts.cwd, opts);
+}
+
+// #918: 이전 판(#912)은 Scope 섹션의 백틱 토큰을 정규식으로 긁어 "경로처럼 보이는 것"의
+// 집합 차이로 스코프 확장을 추론했다. 이는 design-driven-flow.md §6.0이 스스로 금지한
+// "에이전트 출력을 정규식으로 되파싱해 실질을 판정" 패턴이며, 티켓 본문에 경로를 백틱
+// 인용만 해도 오탐 거부가 났다. §6.0.4 판정 계약으로 치환한다: 스코프가 넓어졌는가라는
+// 실질은 게이트가 판정하지 않는다 — 편집 주체(ticket edit 실행 순간의 role-architect
+// 모드, role-layer.md §3.0.1)가 확장임을 --expand-scope로 명시 선언하고, 게이트는 그
+// 선언이 수행되었음만 요구한다. 선언 없는 phase2+ 편집은 비확장(오타·명료화·축소)으로
+// 간주해 통과시키고, 확장 선언은 승인된 스코프를 넘으므로 거부한다.
+
+// #829: phase1 tickets had no in-place amendment path, so widening a ticket's scope
+// mid-review (a common, legitimate need) pushed agents toward a "rollback to phase1
+// -> discard -> recreate" workaround. discard on an ID the registry never indexed
+// then fails, and the agent thrashes trying to route around it. `ticket edit`
+// rewrites the 4 canonical sections of an OPEN phase1 ticket in place, going through
+// the same plan-body / rule-reference gates as `ticket create` — no discard needed.
+export async function runTicketEdit(opts) {
+  applyTicketRootContext(opts);
+  applyTicketContext(opts);
+  if (!opts.ticketId && !opts.latest) {
+    throw new Error("ticket edit: --id or --latest is required.");
+  }
+
+  const index = loadTicketIndex(opts);
+  const found = pickTicketEntry(opts, index);
+  if (!found) {
+    const selector = opts.ticketId || "";
+    const ticketsRoot = detectConsumerTicketDir(opts.cwd);
+    const hint = buildTicketNotFoundHint(opts.cwd, selector, ticketsRoot);
+    throw new Error([`ticket edit: no matching ticket found for '${selector}'`, ...hint].join("\n"));
+  }
+
+  const ticketDoc = readTicketDocument(opts.cwd, found, { action: "ticket edit", requireExists: true });
+  const absPath = ticketDoc.absPath;
+  const phase = Number(ticketDoc.meta.phase || 1);
+  const status = String(found.status || ticketDoc.meta.status || "open");
+
+  if (status !== "open") {
+    throw new Error(`ticket edit: '${found.id}' has status '${status}', not 'open'. Only an open ticket can be edited.`);
+  }
+
+  const opts2 = hydrateCreateTextInputs(opts);
+  let planBody = String(opts2.planBody || "");
+  // #edit-section-flags: create와 대칭 — edit도 섹션 플래그를 받는다. 준 섹션만 기존
+  // 본문에 병합(교체)해 전체 재작성을 강요하지 않는다. 이전엔 planBody(전체 본문)만
+  // 받아, 한 섹션만 고쳐도 전체를 복붙 재작성해야 했고(원본 알맹이 유실 위험·heredoc
+  // 지옥), rules 안내와 코드가 불일치했다(설계↔구현 불일치). 이제 안내대로 섹션
+  // 플래그가 동작한다.
+  // #740/#324 버그 수정: TICKET_TEMPLATE.md는 6개 H2 섹션(Scope/Design/Environment/
+  // Plan/Analysis/Direction)을 갖지만, 이 배열은 create 시절 4섹션 스키마(design·
+  // environment는 create 전용으로 오인)만 남아 있었다. Design/Environment를 채우려는
+  // edit이 전부 "지원 안 함" 에러로 막혀, 구현자가 --direction에 설계 내용을 욱여넣는
+  // 편법으로 흘렀다. create와 동일한 6섹션을 대칭으로 지원한다.
+  const editSections = [
+    { flag: opts.scope, heading: "Scope" },
+    { flag: opts.design, heading: "Design" },
+    { flag: opts.environment, heading: "Environment" },
+    { flag: opts.planSection, heading: "Plan" },
+    { flag: opts.analysis, heading: "Analysis" },
+    { flag: opts.direction, heading: "Direction" },
+  ].filter(s => String(s.flag || "").trim());
+  if (!planBody.trim() && editSections.length > 0) {
+    // 전체 본문 미제공 + 섹션 플래그 있음 → 기존 .md 본문에 준 섹션만 병합해 planBody 합성.
+    const baseBody = stripLeadingFrontMatter(readFileSync(absPath, "utf8"));
+    planBody = mergeH2SectionsIntoBody(baseBody, editSections.map(s => ({ heading: s.heading, body: String(s.flag).trim() })));
+  }
+  if (!planBody.trim()) {
+    throw new Error(
+      "ticket edit: 수정할 섹션을 --scope/--design/--environment/--plan/--analysis/--direction 로 주거나(준 섹션만 병합), " +
+      "전체 본문을 --plan-body-file - (heredoc)로 파이프하세요."
+    );
+  }
+  const parsedPlan = parsePlan("inline-edit-body.md", planBody);
+
+  if (phase !== 1 && opts.expandScope) {
+    // 게이트는 확장 여부를 텍스트로 추론하지 않는다 — 편집 주체가 --expand-scope로
+    // "이건 확장이다"를 선언했을 때만 거부한다(§6.0.4: 게이트는 판정이 수행됨을 요구).
+    throw new Error(
+      `ticket edit: '${found.id}' is at phase ${phase}, not phase 1, and --expand-scope ` +
+      `declares this edit widens the approved Scope. A non-expanding edit (typo fixes, ` +
+      `narrowing, clarifying within the approved Scope) needs no flag and is allowed at phase2+. ` +
+      `If the scope genuinely must widen beyond what was approved, that is a wrong-premise case — ` +
+      `discard this ticket and create a new one with the wider scope.`
+    );
+  }
+
+  const planReasons = getPhase1PlanBodyReasons(parsedPlan.body, { title: found.title || ticketDoc.meta.title });
+  if (planReasons.length > 0) {
+    throw new Error(buildPlanBodyRequiredError(planReasons, opts));
+  }
+  assertPlanReferencesRule(parsedPlan.body, readWorkspaceRuleIds(opts.cwd), opts); // #909: SSOT 게이트
+
+  if (opts.summary) ticketDoc.meta.summary = String(opts.summary).trim();
+  ticketDoc.meta.updatedAt = new Date().toISOString().replace('T', ' ').split('.')[0];
+
+  if (opts.dryRun) {
+    console.log(`[DRY-RUN] Would rewrite ${found.id}'s Scope/Design/Environment/Plan/Analysis/Direction sections.`);
+    return;
+  }
+
+  writeTicketDocument(absPath, {
+    meta: sanitizeFrontMatterMeta(ticketDoc.meta),
+    content: parsedPlan.body,
+    docmeta: ticketDoc.docmeta
+  });
+
+  console.log(`ticket edit: updated -> ${found.id} (phase=${phase}, status=${status})`);
+  console.log(`Path: ${toWsRelativePath(opts.cwd, absPath)}`);
   printUsageReminder(opts.cwd, opts);
 }
 
@@ -2750,7 +3252,7 @@ export async function runTicketEvidenceCheck(opts) {
   if (opts.json) {
     console.log(JSON.stringify(result.docmeta, null, 2));
   } else {
-    console.log(`[evidence-ok] ${target.id} ${result.docmeta.validation.status} claim coverage ${result.coveredTerms}/${result.claimTerms}`);
+    console.log(`[evidence-ok] ${target.id} ${result.docmeta.validation.status} (claim terms: ${result.claimTerms})`);
   }
 }
 
@@ -2785,7 +3287,7 @@ export async function runTicketEvidenceReport(opts) {
 
   console.log(`Claim-bound ticket report: ${target.id}`);
   console.log(`Claim: ${opts.claim}`);
-  console.log(`Coverage: ${result.coveredTerms}/${result.claimTerms}`);
+  console.log(`Claim terms: ${result.claimTerms}`);
   for (const [label, value] of Object.entries(result.sections)) {
     if (!value) continue;
     console.log(`\n## ${label}`);
@@ -2797,22 +3299,11 @@ export async function runTicketEvidenceReport(opts) {
 export async function runTicketClose(opts) {
   applyTicketRootContext(opts);
   applyTicketContext(opts);
+  // No interactive ticket picker: default to the latest ticket when no
+  // --id/--latest is given. Approval/scope gating is enforced by the ticket
+  // workflow itself, not by a terminal prompt.
   if (!opts.ticketId && !opts.latest) {
-    if (opts.nonInteractive || !process.stdout.isTTY) {
-      opts.latest = true;
-    } else {
-      await withReadline(async (rl) => {
-        const index = loadTicketIndex(opts);
-        const choices = index.entries
-          .filter(e => e.status !== "closed" && e.status !== "cancelled")
-          .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.id }));
-        if (choices.length > 0) {
-          opts.ticketId = await selectOne(rl, "Choose a ticket to close:", choices);
-        } else {
-          throw new Error("No open tickets found to close.");
-        }
-      });
-    }
+    opts.latest = true;
   }
   // Respect --status flag (e.g. 'cancelled', 'wontfix'); default to 'closed'
   if (!opts.status) opts.status = "closed";
@@ -2834,7 +3325,7 @@ export async function runTicketClose(opts) {
       throw new Error(
         `${err.message}\n` +
         `Hint: "close" is not allowed in the current state. ` +
-        `Use "ticket move --to end" to transition, or "ticket discard --id ${targetEntry.id} --workspace ${opts.workspace || ""} --non-interactive" to abandon.`
+        `Use "ticket move --to end" to transition, or "ticket discard --id ${targetEntry.id} --workspace ${opts.workspace || ""} --source agent --non-interactive" to abandon.`
       );
     }
     throw err;
@@ -2878,7 +3369,7 @@ export async function runTicketClose(opts) {
         })
       });
     } else {
-      console.log(formatTicketStatusLine(normalizedStatus, entry.id, finalAbsPath));
+      console.log(formatTicketStatusLine(normalizedStatus, entry.id, finalAbsPath, opts.cwd));
     }
     return { status: opts.status, ticket: entry.id, path: finalPath };
   } catch (err) {
@@ -2895,16 +3386,8 @@ export async function runTicketUse(opts) {
   
   let targetTicketId = opts.ticketId;
   if (!targetTicketId && !opts.latest) {
-    if (opts.nonInteractive) {
-      throw new Error("ticket use: --id or --latest is required in non-interactive mode.");
-    }
-    await withReadline(async (rl) => {
-      const choices = scopedEntries
-        .map(e => ({ label: `${e.status === 'closed' ? '✓ ' : ''}[${e.group}] ${e.title}`, value: e.id }));
-      if (choices.length > 0) {
-        targetTicketId = await selectOne(rl, "Choose a ticket to use:", choices);
-      }
-    });
+    await runTicketList({ ...opts, active: false, archived: false, all: false });
+    return;
   }
 
   const found = opts.latest ? scopedEntries[0] : scopedEntries.find(e =>
@@ -2912,21 +3395,8 @@ export async function runTicketUse(opts) {
   );
   if (!found) {
     const candidates = buildUseFallbackCandidates(index, opts);
-    if (!opts.nonInteractive && candidates.length > 0) {
-      await withReadline(async (rl) => {
-        targetTicketId = await selectOne(
-          rl,
-          `No matching ticket found for "${targetTicketId}". Choose a ticket to use:`,
-          candidates.map(e => ({ label: formatTicketChoice(e), value: e.id }))
-        );
-      });
-      const selected = index.entries.find(e => e.id === targetTicketId);
-      if (selected) {
-        opts.ticketId = targetTicketId;
-        return runTicketUse({ ...opts, latest: false });
-      }
-    }
-    throw new Error(buildUseNoMatchError(targetTicketId, candidates));
+    const ticketsRoot = detectConsumerTicketDir(opts.cwd);
+    throw new Error(buildUseNoMatchError(targetTicketId, candidates, opts.cwd, ticketsRoot));
   }
 
   const foundDoc = readTicketDocument(opts.cwd, found, { action: "ticket use", requireExists: true });
@@ -2945,9 +3415,28 @@ export async function runTicketUse(opts) {
     printTicketSelectionLine(found.id, absPath, { ...opts, docsLanguage: foundDoc.meta.docsLanguage });
     return;
   }
-  printTicketSelectionLine(found.id, absPath, { ...opts, docsLanguage: foundDoc.meta.docsLanguage });
+  // #908: carry the ticket's phase so the selection card shows the phase + role badge.
+  printTicketSelectionLine(found.id, absPath, { ...opts, docsLanguage: foundDoc.meta.docsLanguage, phase: foundDoc.meta.phase });
   printTicketUseNextSteps(found, foundDoc, opts);
-  if (opts.printContent && !isCompactTicketOutput(opts)) console.log("\n" + readFileSync(foundDoc.absPath, "utf8"));
+  // #908: 작업 재개 시(use) 다음 전환용 완성형 명령을 선제 제시해, 에이전트가
+  // 플래그 이름을 추론하지 않고 슬롯 값만 채우게 한다(design-driven-flow.md §6.0 템플릿 원칙).
+  printPhaseAdvanceHint(found.id, foundDoc.meta.phase, foundDoc.meta.status, opts);
+  // #844: ticket use is the canonical session-start load step (Session Start Routine),
+  // but it used to print only the Summary line — so an agent that needed the actual APC
+  // (Scope/Plan/Analysis/Direction) reached for the .md file directly. Print the APC body
+  // by DEFAULT so one `ticket use` fully loads context.
+  // NOTE: agents always pass --non-interactive, and isCompactTicketOutput() treats that as
+  // compact — which would suppress the body on exactly the call path we need to fix. So the
+  // body gate here keys on --compact ONLY (not non-interactive). --path-only already
+  // returned above; --print-content forces the raw file (incl. DocMeta) for verbatim callers.
+  if (!opts.compact) {
+    if (opts.printContent) {
+      console.log("\n" + readFileSync(foundDoc.absPath, "utf8"));
+    } else {
+      const body = (foundDoc.content || "").trim();
+      if (body) console.log("\n" + body);
+    }
+  }
 }
 
 
@@ -2969,10 +3458,41 @@ function extractMarkdownSections(content, sectionNames) {
 // #727: knowledge distill 제거 — knowledge는 cwd(.deuk/knowledge)에 쓰던 의미없는 레거시
 // 기록이다(언니 지시). 티켓 archive 시 cwd write가 발생하지 않도록 기능을 통째로 제거. no-op.
 
-// #685: project-memory.md 자동 갱신 제거 — project-memory는 진행 상태를 담던 무의미한
-// 레이어다(언니 지시). 티켓 close 시 결정/마일스톤을 자동으로 박지 않는다. no-op.
-function updateProjectMemoryFromTicket(cwd, ticketId, meta, ticketSections) {
-  return;
+// #804: updateProjectMemoryFromTicket 제거 — #685서 no-op였고 호출부(archive)도 #804서 제거.
+
+// #837/#841: actor attribution for telemetry only. Extracts who ran the command so the
+// telemetry record can attribute discard/rollback events. (#841 removed the human/agent
+// judgement that used to live here — the user never runs discard/rollback directly via
+// CLI, so a "declaredHuman → pass" branch was dead code that let an agent bypass the gate
+// simply by omitting --source.)
+function resolveActorOrigin(opts) {
+  const source = String(opts.source || "").trim().toLowerCase();
+  const sessionMode = String(opts.sessionMode || "").trim().toLowerCase();
+  return { source, sessionMode };
+}
+
+// #841: last-resort confirm gate. discard/rollback are ALWAYS gated — there is no
+// "trusted actor" that skips it, because the human directs via chat and the agent always
+// runs the actual command. Default is REFUSE; the only way through is an explicit
+// --confirm-* flag. The refusal actively steers toward `ticket edit`, since the #1 cause
+// of discard abuse is treating a goal-change / scope-widening as a reason to discard→recreate
+// (rules: "Scope-widening is NOT a deadlock ... use `ticket edit`").
+function assertLastResortConfirmed(opts, action /* "discard" | "rollback" */) {
+  const confirmed = action === "discard" ? opts.confirmDiscard : opts.confirmRollback;
+  if (confirmed) return; // 명시 confirm만 통과 — 그 외 전부 거부
+  const flag = action === "discard" ? "--confirm-discard" : "--confirm-rollback";
+  const what = action === "discard" ? "Discard abandons a ticket" : "Rollback reverses phase";
+  throw new Error(
+    `[LAST-RESORT GATE] ${action} refused: no ${flag}. ` +
+    `${what} and is a last-resort action (#836/#837/#841) — it is refused BY DEFAULT and must ` +
+    `never be run automatically or in reaction to a single piece of feedback.\n` +
+    `Before you even consider ${flag}, ask: is the ticket's PREMISE actually wrong ` +
+    `(a false assumption / stale reference / a concept that no longer maps to the code)?\n` +
+    `  • Goal changed, scope grew, plan needs another step, or the user said "that's not it" ` +
+    `→ this is NOT a discard reason. Use \`ticket edit --scope/--plan/--analysis/--direction\` ` +
+    `to amend the SAME ticket in place. Do not discard→recreate.\n` +
+    `  • The premise is genuinely wrong → re-run with ${flag} to proceed.`
+  );
 }
 
 function appendTelemetryEvent(cwd, entry) {
@@ -2984,6 +3504,13 @@ function appendTelemetryEvent(cwd, entry) {
       file: entry.file || "",
       phase: entry.phase,
       status: entry.status || "",
+      // #837: carry actor attribution through to the telemetry record so discard/
+      // rollback events record WHO ran them (agent id + session mode + origin), instead
+      // of landing as empty fields. appendInternalWorkflowEvent forces source="internal";
+      // originSource preserves the caller-declared origin (agent/auto/human) for auditing.
+      agentId: entry.agentId || "",
+      sessionMode: entry.sessionMode || "",
+      originSource: entry.originSource || "",
       ragResult: entry.ragResult || "",
       localFallback: Boolean(entry.localFallback),
       knowledgeAction: entry.knowledgeAction || "",
@@ -3033,6 +3560,21 @@ export function pickTicketEntry(opts, indexJson) {
   // of silently surfacing an archived/completed ticket as if it were active.
   const live = rows.filter(e => isLiveTicketEntry(e));
   return live[0] || null;
+}
+
+// #906: pickTicketEntry always resolves a single winner (or null) even when
+// multiple tickets are live, so closing the ticket a session was just on can
+// silently surface a totally unrelated one with zero warning. This helper lets
+// selector-less call sites (currently: `ticket status`) detect that ambiguity
+// and ask the caller to disambiguate with --id instead of guessing. It does not
+// change pickTicketEntry's contract, so the other 14+ call sites keep their
+// existing (silent-newest-wins) behavior unless/until they opt in to this check.
+export function findLiveTicketCandidates(opts, indexJson) {
+  const ticketSelector = opts.ticketId || (!opts.summary && !opts.planBody && !opts.planBodyFile ? opts.title : "");
+  if (ticketSelector) return null; // explicit selector: no ambiguity to report
+  const rows = filterTicketEntries(indexJson.entries, opts);
+  const live = rows.filter(e => isLiveTicketEntry(e));
+  return live.length >= 2 ? live : null;
 }
 
 // A live ticket is open (not archived/closed) and has not reached the completion
@@ -3163,21 +3705,9 @@ export async function runTicketArchive(opts) {
   const ticketDir = detectConsumerTicketDir(opts.cwd);
 
   if (!opts.latest && !opts.ticketId) {
-    if (opts.nonInteractive) {
-      throw new Error("ticket archive: --id or --latest is required in non-interactive mode.");
-    }
-    await withReadline(async (rl) => {
-      const choices = indexJson.entries
-        .filter(e => e.status !== "archived")
-        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.id }));
-      if (choices.length > 0) {
-        opts.ticketId = await selectOne(rl, "Choose a ticket to archive:", choices);
-      } else {
-        throw new Error("No active tickets found to archive.");
-      }
-    });
+    throw new Error("ticket archive: --id or --latest is required.");
   }
-  
+
   const found = pickTicketEntry(opts, indexJson);
   if (!found) throw new Error("ticket archive: no matching entry");
   const archiveDoc = readTicketDocument(opts.cwd, found, { action: "ticket archive", requireExists: true });
@@ -3210,19 +3740,7 @@ export async function runTicketDiscard(opts) {
   const indexJson = loadTicketIndex(opts);
 
   if (!opts.latest && !opts.ticketId) {
-    if (opts.nonInteractive) {
-      throw new Error("ticket discard: --id or --latest is required in non-interactive mode.");
-    }
-    await withReadline(async (rl) => {
-      const choices = indexJson.entries
-        .filter(e => e.status === "open")
-        .map(e => ({ label: `[${e.group}] ${e.title}`, value: e.id }));
-      if (choices.length > 0) {
-        opts.ticketId = await selectOne(rl, "Choose an unapproved ticket to discard:", choices);
-      } else {
-        throw new Error("No open tickets found to discard.");
-      }
-    });
+    throw new Error("ticket discard: --id or --latest is required.");
   }
 
   let found = pickTicketEntry(opts, indexJson);
@@ -3241,7 +3759,10 @@ export async function runTicketDiscard(opts) {
         if (files.length === 1) { absPath = join(ticketsRoot, group, files[0]); break; }
       }
     }
-    if (!absPath) throw new Error(`ticket discard: no matching entry for '${ticketId}'`);
+    if (!absPath) {
+      const hint = buildTicketNotFoundHint(opts.cwd, ticketId, ticketsRoot);
+      throw new Error([`ticket discard: no matching entry for '${ticketId}'`, ...hint].join("\n"));
+    }
     found = { id: ticketId, status: "open" };
   } else if (!found) {
     throw new Error("ticket discard: no matching entry");
@@ -3260,9 +3781,16 @@ export async function runTicketDiscard(opts) {
   });
   const phase = Number(meta.phase || 1);
   const status = String(meta.status || found.status || "open").toLowerCase();
-  if (phase >= 2 || (status !== "open" && status !== "approval_required")) {
-    throw new Error(`ticket discard: ${found.id} is not an unapproved Phase 1 ticket. Use ticket close/archive for approved or executed work.`);
+  // #811: phase1(미승인)과 phase2(구현 중, plan 정정 대상)는 discard 허용.
+  // phase3+ 또는 종료/아카이브 상태는 close/archive를 쓰도록 막는다(실행 산출물 보호).
+  const isDiscardablePhase = phase <= 2;
+  const isDiscardableStatus = status === "open" || status === "approval_required";
+  if (!isDiscardablePhase || !isDiscardableStatus) {
+    throw new Error(`ticket discard: ${found.id} is not a discardable open ticket (phase<=2). Use ticket close/archive for verified or executed work.`);
   }
+
+  // #837: non-human actors must confirm discard explicitly (last-resort gate).
+  assertLastResortConfirmed(opts, "discard");
 
   if (opts.dryRun) {
     console.log(`ticket discard: would delete ${found.id} (${relativePath})`);
@@ -3282,7 +3810,11 @@ export async function runTicketDiscard(opts) {
     ticket: found.id,
     file: relativePath,
     phase,
-    status: "discarded"
+    status: "discarded",
+    // #837: record who discarded (actor attribution).
+    agentId: opts.agentId || "",
+    sessionMode: opts.sessionMode || "",
+    originSource: opts.source || ""
   });
   console.log(`ticket: discarded -> ${found.id}`);
   return { id: found.id, path: relativePath, discarded: true };
@@ -3404,6 +3936,33 @@ export async function runTicketRebuild(opts) {
   loadTicketIndex(opts, { force: true, rebuild: true });
 }
 
+// #834: strip a known trailing relative path off an absolute path to recover the root it
+// was joined against. Tolerant of / vs \ so it works cross-platform (win32 abs paths hold
+// backslashes; computeTicketPath emits forward slashes). Falls back to dirname(abs) if the
+// suffix doesn't line up, which is still inside the same store for a group-rooted ticket.
+function stripRelPathSuffix(absPath, relPath) {
+  const absNorm = String(absPath || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  const relNorm = String(relPath || "").replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (relNorm && absNorm.toLowerCase().endsWith("/" + relNorm.toLowerCase())) {
+    const root = absNorm.slice(0, absNorm.length - relNorm.length - 1);
+    // Re-normalize to the host separator via makePath so downstream joins stay consistent.
+    return makePath(root);
+  }
+  return dirname(absPath);
+}
+
+// #834: true iff `target` resolves to `dir` or a descendant of it. Uses path.relative so
+// a ".." prefix (escape) or absolute result (different drive/root) both read as "outside".
+function isPathInsideDir(target, dir) {
+  const rel = relative(makePath(dir), makePath(target));
+  return rel === "" || (!rel.startsWith("..") && !isAbsolutePathLike(rel));
+}
+
+function isAbsolutePathLike(p) {
+  const s = String(p || "");
+  return s.startsWith("/") || s.startsWith("\\") || /^[a-zA-Z]:[\\/]/.test(s);
+}
+
 export async function runTicketMove(opts) {
   // #635/#633: --workspace alone no longer means "move to another workspace" — since
   // #633 every ticket command is expected to carry --workspace to SELECT the target
@@ -3467,9 +4026,6 @@ export async function runTicketMove(opts) {
   applyTicketRootContext(opts);
   applyTicketContext(opts);
   if (!opts.ticketId && !opts.latest) {
-    if (opts.nonInteractive) {
-      throw new Error("ticket move: --id or --latest is required in non-interactive mode.");
-    }
     opts.latest = true; // Default to latest
   }
 
@@ -3478,7 +4034,22 @@ export async function runTicketMove(opts) {
 
   if (!entry) throw new Error("No matching ticket found to move.");
 
-  const { absPath: abs, meta: parsedMeta, content, docmeta: existingDocMeta } = readTicketDocument(opts.cwd, entry, { action: "ticket move", requireExists: true });
+  const { absPath: abs, meta: parsedMeta, content: rawContent, docmeta: existingDocMeta } = readTicketDocument(opts.cwd, entry, { action: "ticket move", requireExists: true });
+
+  // #808: inject evidence sections provided via move flags (--execution-result,
+  // --verification, --reproduction, ...) into the ticket body BEFORE the transition
+  // gate reads `content`, so the agent satisfies phase3→4 / phase2→3 from the CLI
+  // instead of hand-editing the .md. The substantive-content gate then validates the
+  // freshly merged sections — empty flags merge nothing and the gate still fails.
+  const targetStateForEvidence = Number.isFinite(Number(opts.phase))
+    ? `phase${normalizeTicketPhaseNumber(opts.phase)}`
+    : opts.next
+      ? `phase${Math.min(normalizeTicketPhaseNumber(Number(parsedMeta.phase || 1)) + 1, 4)}`
+      : "";
+  const evidenceSections = buildEvidenceSectionsForTransition(opts, targetStateForEvidence);
+  const content = evidenceSections.length
+    ? mergeH2SectionsIntoBody(rawContent, evidenceSections)
+    : rawContent;
 
   const previousIndex = readTicketIndexJson(opts.cwd);
   const body = readFileSync(abs, "utf8");
@@ -3510,6 +4081,13 @@ export async function runTicketMove(opts) {
     throw err;
   }
   const nextPhase = transition.phase;
+  // #837: rollback (moving to a LOWER phase, incl. reopen to phase1) is a last-resort
+  // action — gate it for non-human actors just like discard. Forward moves are never
+  // affected. Uses the resolved nextPhase so it also catches --to 1 reopen and any
+  // multi-step downshift.
+  if (Number.isFinite(nextPhase) && nextPhase < currentPhase) {
+    assertLastResortConfirmed(opts, "rollback");
+  }
   const ticketFileName = (entry.path || computeTicketPath(entry)).split(/[/\\]/).pop();
   const reopenTargetRelPath = nextPhase <= 1
     ? computeTicketPath({
@@ -3519,7 +4097,27 @@ export async function runTicketMove(opts) {
         archiveYearMonth: undefined
       })
     : null;
-  const reopenTargetAbsPath = reopenTargetRelPath ? makePath(opts.cwd, reopenTargetRelPath) : abs;
+  // #834: anchor the reopen target to the CANONICAL ticket root — the root that the
+  // resolved source file `abs` actually lives under — NOT to opts.cwd. On a rollback
+  // (phase→1) opts.cwd can be the workspace root rather than the ticket-home store dir;
+  // re-joining a relative path (computeTicketPath → "main/<id>.md") against it wrote the
+  // file to D:/workspace/<ws>/main/ and then rmSync'd the canonical original, making the
+  // ticket vanish from the registry. Derive the root by stripping the entry's own current
+  // relative path off `abs`, then re-join the reopen rel path so the file stays canonical.
+  const canonicalTicketRoot = stripRelPathSuffix(abs, computeTicketPath(entry));
+  const reopenTargetAbsPath = reopenTargetRelPath
+    ? makePath(canonicalTicketRoot, reopenTargetRelPath)
+    : abs;
+  // [DC-HALT] Guard: never let a reopen escape the canonical ticket root into a workspace
+  // path. If the computed target would land outside the store the source file lives in,
+  // halt loudly instead of silently relocating (and deleting) the canonical ticket.
+  if (reopenTargetRelPath && !isPathInsideDir(reopenTargetAbsPath, canonicalTicketRoot)) {
+    throw new Error(
+      `ticket move: refusing to reopen ticket ${entry.id} outside its canonical store — ` +
+      `target ${reopenTargetAbsPath} is not under ${canonicalTicketRoot}. This is the #834 ` +
+      `path-drift guard; fix the ticket root resolution rather than relocating the file.`
+    );
+  }
 
   if (currentPhase === 1 && nextPhase >= 2) {
     const reasons = getPhase1IncompleteReasons(opts.cwd, abs);
@@ -3531,15 +4129,18 @@ export async function runTicketMove(opts) {
     }
   }
 
-  const transitionDocMeta = transition.from === transition.to
-    ? existingDocMeta
-    : collectTicketTransitionValidationDocMeta(opts.cwd, abs, parsedMeta, content, opts, transition.to);
+  // #811: phase 갱신을 DocMeta 산출 "전에" 반영해, 본문 DocMeta의 state.phase가
+  // 목적지 phase를 정확히 가리키게 한다(과거: transition.to 기준이라 출발 phase로 남아
+  // front-matter와 어긋나는 드리프트 발생). 그리고 DocMeta 불변부는 보존하고
+  // 업데이트부만 교체한다(mergeDocMetaUpdate) — 매번 전체 재생성하지 않는다.
   parsedMeta.phase = nextPhase;
   parsedMeta.status = transition.status;
-  const nextMeta = {
-    ...clearDocMetaFrontmatterSummary(parsedMeta),
-    ...buildDocMetaFrontmatterSummary(transitionDocMeta)
-  };
+  const freshDocMeta = transition.from === transition.to
+    ? existingDocMeta
+    : collectTicketTransitionValidationDocMeta(opts.cwd, abs, parsedMeta, content, opts, transition.to);
+  const transitionDocMeta = mergeDocMetaUpdate(existingDocMeta, freshDocMeta);
+  // front-matter의 docmeta* 미러는 폐지(#811). 과거 잔재만 청소한다.
+  const nextMeta = clearDocMetaFrontmatterSummary(parsedMeta);
   for (const key of Object.keys(parsedMeta)) delete parsedMeta[key];
   Object.assign(parsedMeta, nextMeta);
 
@@ -3585,7 +4186,11 @@ export async function runTicketMove(opts) {
       phase: nextPhase,
       status: parsedMeta.status,
       from: transition.from,
-      to: transition.to
+      to: transition.to,
+      // #837: record who moved the ticket (actor attribution) — matters most for rollbacks.
+      agentId: opts.agentId || "",
+      sessionMode: opts.sessionMode || "",
+      originSource: opts.source || ""
     });
     console.log(`ticket: moved -> ${entry.id} is now in Phase ${nextPhase} (${parsedMeta.status})`);
     // Represent the resulting state (DocMeta state / required slots / next action),
@@ -3599,11 +4204,9 @@ export async function runTicketMove(opts) {
     }
     // 이동 후 다음 페이즈로 진행하는 가이드를 함께 출력한다. runTicketStatus 경로는
     // DocMeta 상태/슬롯만 렌더하고 buildPhaseAdvanceHint를 거치지 않아, 이게 없으면
-    // "페이즈 이동 시 다음 단계 가이드"가 표시되지 않는다. 렌더 실패는 무시한다.
-    try {
-      const hint = buildPhaseAdvanceHint(entry.id, nextPhase, parsedMeta.status, resolveDocsLanguage(opts.docsLanguage || "auto"));
-      if (hint) console.log(hint);
-    } catch { /* guidance is best-effort */ }
+    // "페이즈 이동 시 다음 단계 가이드"가 표시되지 않는다. #908: status/use와 동일한
+    // printPhaseAdvanceHint SSOT로 통일(DR-03).
+    printPhaseAdvanceHint(entry.id, nextPhase, parsedMeta.status, opts);
   } catch (err) {
     if (reopenedFromArchive) {
       rmSync(finalAbsPath, { force: true });
@@ -3681,30 +4284,14 @@ function isTicketNextRunnableCandidate(cwd, entry) {
 export async function runTicketHotfix(opts) {
   applyTicketRootContext(opts);
   if (!opts.ticketId && !opts.latest) {
-    if (opts.nonInteractive) {
-      throw new Error("ticket hotfix: --id or --latest is required in non-interactive mode.");
-    }
-    opts.latest = true;
-  }
-  
-  if (!opts.reason) {
-    throw new Error("[HOTFIX DENIED] A mandatory --reason must be provided to justify bypassing standard rules (e.g., 'codegen is broken').");
+    opts.latest = true; // Default to latest
   }
 
-  // User explicit approval
-  if (!opts.nonInteractive) {
-    let proceed = false;
-    await withReadline(async (rl) => {
-      proceed = await new Promise(resolve => {
-        rl.question(`\n⚠️  [EMERGENCY HOTFIX] This will bypass standard APC rules.\nReason: ${opts.reason}\nProceed? (y/N): `, a => {
-          resolve(a.trim().toLowerCase() === 'y');
-        });
-      });
-    });
-    if (!proceed) {
-      console.log('Hotfix cancelled by user.');
-      return;
-    }
+  // --reason is the gate for hotfix: bypassing standard APC rules requires an
+  // explicit, recorded justification. A terminal y/N prompt added no real
+  // protection (it was auto-skipped under --non-interactive) so it is gone.
+  if (!opts.reason) {
+    throw new Error("[HOTFIX DENIED] A mandatory --reason must be provided to justify bypassing standard rules (e.g., 'codegen is broken').");
   }
 
   const index = loadTicketIndex(opts);

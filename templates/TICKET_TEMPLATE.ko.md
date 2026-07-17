@@ -1,48 +1,27 @@
----
-<%- frontmatter %>
----
-# <%= meta.title %>
+# {{제목: 케밥-슬러그로 쓸 짧은 제목. 예: fix-create-title-parsing}}
 
-## Agent Permission Contract (APC)
+{{요약: 요청 + 근본원인을 한 줄로. 이 문단이 티켓 summary가 된다.}}
 
-### [BOUNDARY]
-- 수정 가능:
-- 보호 범위:
-- 적용 규칙:
+## Scope
 
-### [CONTRACT]
-- 입력/근거:
-- 기대 결과:
-- 허용 부작용:
-- 제외:
+{{범위: 어떤 파일/함수까지. 요구사항: 사용자가 원하는 결과. 접근법: 구체적 방법. 보호 대상: 건드리면 안 되는 것.}}
 
-### [PATCH PLAN]
-- 구현 경로:
+## Design
 
-## Compact Plan
+{{이 티켓이 구현할 설계 방향·구조(코드 현상 분석 아님). 관련 설계 정본(docs/public/architecture/ 등)을 실제로 읽고 그 방향을 서술.}}
 
-- Problem:
-- Approach:
-- Verification:
+## Environment
 
-## Problem Analysis
+{{개발환경: 언어·런타임 버전·패키지매니저. 가상환경: 활성화법(검증은 이 환경 안에서만 유효). 테스트·실행: 검증 명령.}}
 
-- 
+## Plan
 
-## Source Observations
+{{[DR-01] 같은 프로젝트 룰 id를 최소 하나 참조(id 포인터만 — 룰 전문 복붙 금지, 룰 정본은 PROJECT_RULE.md 한 곳) + 번호 매긴 실행 단계.}}
 
-- 
+## Analysis
 
-## Cause Hypotheses
+{{원인: 근본 원인 분석. file:line 관찰 증거. 가설.}}
 
-- 
+## Direction
 
-## Improvement Direction
-
-- 
-
-## Audit Evidence
-
-- Core rules:
-- Project rules:
-- Commands/evidence:
+{{개선 방향.}}
