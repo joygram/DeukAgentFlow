@@ -2,7 +2,7 @@
 
 DeukAgentFlow operates as an **AI Engineering Orchestration Protocol**. It coordinates how agents perceive, analyze, and modify your codebase using a centralized rule hub and a high-performance CLI.
 
-## 1. Hub-Spoke Execution Model
+## Hub-Spoke Execution Model
 
 In v3.0, rule files are no longer monolithic. We use a **Hub-Spoke** model to minimize context bloat.
 
@@ -11,7 +11,7 @@ In v3.0, rule files are no longer monolithic. We use a **Hub-Spoke** model to mi
 - **Spokes (`.cursor/rules/*.mdc`, etc.)**: Minimal entry points that tell the agent to read the Hubs.
 - **Why**: This ensures the agent always sees the latest rules without duplication errors across different IDEs.
 
-## 2. Global CLI Proxy
+## Global CLI Proxy
 
 The CLI (`deuk-agent-flow`, with `deuk-agent-rule` kept for compatibility) uses a **Source Sovereignty** mechanism.
 
@@ -19,7 +19,7 @@ The CLI (`deuk-agent-flow`, with `deuk-agent-rule` kept for compatibility) uses 
 - If a local source is detected, it **routes execution** to the local script.
 - This ensures that your agents are always using the latest uncommitted rules during development.
 
-## 3. Initialization Lifecycle
+## Initialization Lifecycle
 
 Running `deuk-agent-flow init` triggers the following lifecycle:
 
@@ -31,7 +31,7 @@ Running `deuk-agent-flow init` triggers the following lifecycle:
    - If only system-generated content is found, it deletes the file.
 4. **Hub Sync**: Deploys the latest `AGENTS.md` and generates thin Spokes for all supported agents.
 
-## 4. Repository Roles & Files
+## Repository Roles and Files
 
 | Path | Role |
 |---|---|
@@ -42,7 +42,7 @@ Running `deuk-agent-flow init` triggers the following lifecycle:
 | `templates/` | Package-owned SSoT for ticket, rule, and skill templates |
 | `bin/deuk-agent-flow.js` | The Global Execution Proxy |
 
-## 5. Ticket Workflow: CLI-Owned State Table
+## Ticket Workflow — CLI-Owned State Table
 
 DeukAgentFlow treats the ticket workflow as a local state table rather than a set of loose help text and phase flags. It is not a general workflow runtime. The CLI owns state, transitions, recipe assembly, and DocMeta validation.
 
@@ -99,7 +99,7 @@ Default command output should render the compact projection only. Full DocMeta i
 
 The same boundary applies to debugging and refactoring. If this workflow breaks, the fix is not a narrow parser or file-layout tweak by default; it is an end-to-end CLI contract repair spanning visible command behavior, state transition wiring, context attachment, approval gates, and regression coverage.
 
-## 6. Strict Phase-Driven Workflow (TDW)
+## Strict Phase-Driven Workflow
 
 1. **Issue Ticket (Phase 1)**: The user describes the work in natural language, and the agent creates or selects a ticket to define the target scope. Maintainers and automation can use `ticket create` directly, but day-to-day collaboration starts from a request, not a command.
 2. **APC and Main Ticket Record**: Before modifying code, the agent fills the APC (Agent Permission Contract) blocks `[BOUNDARY]`, `[CONTRACT]`, and `[PATCH PLAN]` inside the main ticket. The main ticket owns scope, contract, workflow checks, execution planning, and verification outcomes. Never move execution logs, command transcripts, completion summaries, or verification results into planning prose.
@@ -108,7 +108,7 @@ The same boundary applies to debugging and refactoring. If this workflow breaks,
 5. **Execute & Verify (Phase 2)**: Changes are made and verified within the isolated boundary.
 6. **Knowledge Distillation Archive**: When archiving, core information is extracted (Zero-Token Distillation) to save context tokens for long-term memory.
 
-## 7. Ticket Files in Git
+## Ticket Files in Git
 
 Ticket files are part of the repository workflow, but they should not be handled like ordinary handwritten notes.
 

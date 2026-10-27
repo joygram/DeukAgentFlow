@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { DEUK_ROOT_DIR, CliOpts, makePath } from "./cli-utils.js";
+import { existsSync,mkdirSync,readFileSync,writeFileSync } from "fs";
+import { CliOpts,DEUK_ROOT_DIR,makePath } from "./cli-utils.js";
 
 const USAGE_FILENAME = `${DEUK_ROOT_DIR}/usage.json`;
 const USAGE_VERSION = 1;
@@ -55,7 +55,6 @@ function writeUsageState(cwd, state) {
     version: USAGE_VERSION,
     platform: state.platform,
     client: state.client,
-    agentId: state.agentId,
     weeklyRemainingPct: state.weeklyRemainingPct,
     fiveHourRemainingPct: state.fiveHourRemainingPct,
     weeklyResetAt: state.weeklyResetAt,
@@ -70,7 +69,6 @@ function normalizeUsageState(raw: Record<string, any> = {}) {
   return {
     platform,
     client: normalizedClient || resolveClientForPlatform(platform),
-    agentId: String(raw.agentId || ""),
     weeklyRemainingPct: clampPercent(raw.weeklyRemainingPct),
     fiveHourRemainingPct: clampPercent(raw.fiveHourRemainingPct),
     weeklyResetAt: String(raw.weeklyResetAt || ""),
@@ -210,7 +208,7 @@ function buildConversationAdvice(state, opts: CliOpts = {}, budgetAdvice: Record
 }
 
 async function runUsageSet(opts) {
-  const current = loadUsageState(opts.cwd) || normalizeUsageState();
+  const current = loadUsageState(opts.workspaceRoot) || normalizeUsageState();
   const hasPlatformOverride = Boolean(String(opts.platform || "").trim());
   const nextPlatform = normalizePlatform(opts.platform || current.platform || DEFAULT_PLATFORM);
   const incomingClient = String(opts.client || "").trim();
@@ -222,7 +220,6 @@ async function runUsageSet(opts) {
     ...current,
     platform: nextPlatform,
     client: resolvedClient,
-    agentId: opts.agentId || current.agentId,
     weeklyRemainingPct: opts.weeklyRemaining !== null ? opts.weeklyRemaining : current.weeklyRemainingPct,
     fiveHourRemainingPct: opts.fiveHourRemaining !== null ? opts.fiveHourRemaining : current.fiveHourRemainingPct,
     weeklyResetAt: opts.weeklyReset || current.weeklyResetAt,
@@ -230,7 +227,7 @@ async function runUsageSet(opts) {
     updatedAt: new Date().toISOString()
   });
 
-  writeUsageState(opts.cwd, next);
+  writeUsageState(opts.workspaceRoot, next);
 
   if (opts.json) {
     console.log(JSON.stringify(next, null, 2));
@@ -238,13 +235,12 @@ async function runUsageSet(opts) {
   }
 
   console.log(`usage: ${next.client} weekly ${formatPct(next.weeklyRemainingPct)}, 5h ${formatPct(next.fiveHourRemainingPct)}`);
-  if (next.agentId) console.log(`agent: ${next.agentId}`);
   if (next.weeklyResetAt) console.log(`reset: weekly ${next.weeklyResetAt}`);
   if (next.fiveHourResetAt) console.log(`reset: 5h ${next.fiveHourResetAt}`);
 }
 
 async function runUsageStatus(opts) {
-  const state = loadUsageState(opts.cwd);
+  const state = loadUsageState(opts.workspaceRoot);
   if (!state) {
     const message = "usage not set";
     if (opts.json) {
@@ -261,13 +257,12 @@ async function runUsageStatus(opts) {
   }
 
   console.log(`usage: ${state.client} weekly ${formatPct(state.weeklyRemainingPct)}, 5h ${formatPct(state.fiveHourRemainingPct)}`);
-  if (state.agentId) console.log(`agent: ${state.agentId}`);
   if (state.weeklyResetAt) console.log(`reset: weekly ${state.weeklyResetAt}`);
   if (state.fiveHourResetAt) console.log(`reset: 5h ${state.fiveHourResetAt}`);
 }
 
 async function runUsageAdvise(opts) {
-  const state = loadUsageState(opts.cwd);
+  const state = loadUsageState(opts.workspaceRoot);
   if (!state) {
     const message = "usage not set";
     if (opts.json) {
@@ -298,7 +293,6 @@ async function runUsageAdvise(opts) {
   }
 
   console.log(`usage: ${state.client} weekly ${formatPct(state.weeklyRemainingPct)}, 5h ${formatPct(state.fiveHourRemainingPct)}`);
-  if (state.agentId) console.log(`agent: ${state.agentId}`);
   console.log(`budget: ${advice.budget}`);
   console.log(`${advice.gate === "ok" ? "next" : "gate"}: ${advice.gate === "ok" ? advice.next : advice.gate}`);
   if (advice.gate !== "ok") console.log(`next: ${advice.next}`);

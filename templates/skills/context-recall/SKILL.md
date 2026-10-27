@@ -7,6 +7,8 @@ bind: phase1
 
 # Context Recall
 
+이 스킬은 조건 없이 이행한다. 여기 적힌 조항을 상황·효율·다른 규칙을 이유로 유예·축약·생략하지 않는다 — 유예할 근거가 떠오르면 그것이 곧 이행하지 않고 있다는 신호다.
+
 Authority: follow `core-rules/AGENTS.md`, the active ticket APC, Phase Gate, and `PROJECT_RULE.md`.
 
 Use this skill when a task repeats a failure family, references prior decisions, asks why something happened, or crosses old tickets/rules.

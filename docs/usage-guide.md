@@ -4,7 +4,7 @@ This guide walks through deploying DeukAgentFlow on a real project and using it 
 
 ---
 
-## 1. Workspace Deployment Model
+## Workspace Deployment Model
 
 The unit of initialization for DeukAgentFlow is not simply "the current folder." Real-world usage is typically structured as **a workspace root + multiple project roots + nested projects where needed**.
 
@@ -90,13 +90,13 @@ npx deuk-agent-flow context setup-ide
 | Nested project | Subproject with an independent lifecycle (standalone deploy/server/app) | As needed |
 | generated/output folder | Build artifacts | Forbidden |
 
-### Step 1: Global Install
+### Global Install
 A global install is recommended to avoid `npx` cache issues and to use the command from anywhere.
 ```bash
 npm install -g deuk-agent-flow
 ```
 
-### Step 2: Initialize the Project Root
+### Initialize the Project Root
 Run the init command in each project root you want to manage.
 
 ```bash
@@ -121,11 +121,11 @@ After initialization, fill in each project's `PROJECT_RULE.md`. If it's still in
 
 ---
 
-## 2. Working with the Agent (Daily Workflow)
+## Working with the Agent
 
 When directing the agent, **keep it short**. Ticket creation and phase transitions are handled internally by the agent — the user focuses on direction and approval.
 
-### Step 1: Create a Ticket (Phase 1: Ticket + Plan)
+### Create a Ticket
 Start the work with a short instruction to the agent.
 > "Open a ticket and proceed"
 
@@ -133,7 +133,7 @@ The agent infers the topic from context and internally fills the ticket/APC/comp
 
 If you're trying to resume prior work and `ticket next` can't find a ticket to advance, the agent does not immediately create a new ticket — it first analyzes recent git history to recover actual follow-up work candidates. Only after recording that analysis basis in the main ticket's compact plan does it create the new ticket.
 
-### Step 2: Record the APC (Agent Permission Contract)
+### Record the APC
 A newly created ticket defaults to **Phase 1 (Ticket + Plan)**. Before modifying code, the agent must fill in the ticket's APC block (`[BOUNDARY]`, `[CONTRACT]`, `[PATCH PLAN]`).
 
 The ticket owns scope, constraints, the APC contract, lifecycle checks, and verification results. Execution logs, command transcripts, completion summaries, and verification results are never mixed into the plan text.
@@ -143,16 +143,16 @@ If the APC or compact plan is empty or incomplete, the agent fills it in first, 
 
 When the user raises an issue, regression, or policy violation, the agent does not execute immediately after ticket creation. The agent fills in the root-cause hypothesis, scope, APC, and patch plan in Phase 1, then stops and waits for the user's review approval. Even if the original request contained words like "fix" or "resolve," that is not treated as approval until the user has reviewed the ticket plan.
 
-### Step 3: Execute the Work (Phase 2: Execute)
+### Execute the Work
 Once the ticket is promoted to **Phase 2 (Execute)**, the agent modifies code within the bounded scope and performs verification work such as unit tests.
 
-### Step 4: Complete and Archive
+### Complete and Archive
 When the work is done, just ask for wrap-up.
 > "Record verification and wrap up"
 
 During archiving, **Zero-Token Knowledge Distillation** kicks in, compressing and storing only the essential information to reduce unnecessary context token usage.
 
-### Step 5: Managing Ticket Files in Git
+### Managing Ticket Files in Git
 Ticket files are part of the git history too, but treating them carelessly like source code easily tangles the active/archive state.
 
 - Commit the `.deuk-agent/tickets/INDEX*.json` changes produced by `ticket create`, `ticket move`, `ticket close`, and `ticket archive` together. Committing only the ticket body without the index can leave the state inconsistent for the next session.
@@ -174,7 +174,7 @@ When you see ticket-related changes, first ask "is this change a result of the C
 
 ---
 
-## 3. Agent Prompting Guide
+## Agent Prompting Guide
 
 To get an agent to strictly follow the DeukAgentFlow protocol, a short instruction at the start of a project is enough.
 
@@ -244,7 +244,7 @@ deuk-agent-flow skill expose --platform cursor
 
 ---
 
-## 4. Tips and Best Practices
+## Tips and Best Practices
 
 - **No Ticket, No Code**: modifying code without a ticket is forbidden. The user speaks briefly; the agent keeps the ticket record.
 - **Use RAG**: search past tickets and implementation examples with the `mcp_deukcontext_search_*` tools to reduce hallucination.

@@ -1,23 +1,26 @@
-// Read-only ticket scanning: derive ticket entries from the .md files that are
-// the single source of truth. This module performs NO writes and depends only on
-// cli-utils + ticket-workflow, so it can be imported by both cli-ticket-index.mjs
-// and cli-ticket-parser.mjs without creating an import cycle.
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { basename, dirname } from "path";
+import { existsSync,readdirSync,readFileSync,statSync } from "fs";
+import { basename,dirname } from "path";
 import {
-  DEUK_ROOT_DIR, TICKET_LIST_FILENAME,
-  toPosixPath, toRepoRelativePath, detectProjectFromBody, normalizeTicketGroup,
-  parseFrontMatter, detectConsumerTicketDir,
-  ARCHIVE_YEAR_MONTH_RE, ARCHIVE_DAY_RE, makePath
- , CliOpts } from "./cli-utils.js";
+ARCHIVE_DAY_RE,
+ARCHIVE_YEAR_MONTH_RE,
+detectConsumerTicketDir,
+detectProjectFromBody,
+DEUK_ROOT_DIR,
+makePath,
+normalizeTicketGroup,
+parseFrontMatter,
+TICKET_LIST_FILENAME,
+toPosixPath,toRepoRelativePath
+} from "./cli-utils.js";
 import { inferTicketWorkflowStatus } from "./ticket-workflow.js";
 
-export function collectTicketMarkdownFiles(dir, out = []) {
+export function collectTicketMarkdownFiles(dir, out = [], opts: { skipArchive?: boolean } = {}) {
   if (!existsSync(dir)) return out;
   for (const ent of readdirSync(dir, { withFileTypes: true })) {
-    const abs = makePath(dir, ent.name);
     if (ent.name === "node_modules" || ent.name === ".git") continue;
-    if (ent.isDirectory()) collectTicketMarkdownFiles(abs, out);
+    if (opts.skipArchive && ent.isDirectory() && ent.name === "archive") continue;
+    const abs = makePath(dir, ent.name);
+    if (ent.isDirectory()) collectTicketMarkdownFiles(abs, out, opts);
     else if (ent.isFile() && /\.md$/i.test(ent.name)) {
       const base = ent.name;
       if (base === "LATEST.md" || base === TICKET_LIST_FILENAME || base === "ACTIVE_TICKET.md" || base === "project-memory.md" || base === "PROJECT_RULE.md") continue;
@@ -49,10 +52,7 @@ function parseTicketStorage(rel, isArchived, abs) {
   return { group: normalizeTicketGroup(group) };
 }
 
-// Build a single ticket entry from its .md file. Read-only: always parses the
-// file (no mtime-cache reuse) — the active ticket count is bounded (MAX_OPEN_TICKETS),
-// so a full parse of the live set is negligible.
-export function buildTicketEntry(abs, cwd) {
+export function buildTicketEntry(abs, cwd, opts: { lite?: boolean } = {}) {
   const rel = toPosixPath(toRepoRelativePath(cwd, abs));
   const filename = basename(abs);
   const idFromFilename = filename.replace(/\.md$/i, "");
@@ -72,7 +72,7 @@ export function buildTicketEntry(abs, cwd) {
   }
 
   const title = meta.title || idFromFilename;
-  const project = meta.project || detectProjectFromBody(content);
+  const project = meta.project || (opts.lite ? "global" : detectProjectFromBody(content));
   const phase = Number(meta.phase || 1);
   const status = inferTicketWorkflowStatus(meta, isAlreadyInArchive);
 
@@ -93,10 +93,9 @@ export function buildTicketEntry(abs, cwd) {
   };
 }
 
-// Derive the full ticket entry list from .md files under the official ticket dir.
-export function collectTicketEntriesFromTopicFiles(cwd) {
+export function collectTicketEntriesFromTopicFiles(cwd, opts: { activeOnly?: boolean } = {}) {
   const ticketDir = detectConsumerTicketDir(cwd);
   if (!ticketDir) return [];
-  const files = collectTicketMarkdownFiles(ticketDir);
-  return files.map(abs => buildTicketEntry(abs, cwd));
+  const files = collectTicketMarkdownFiles(ticketDir, [], { skipArchive: Boolean(opts.activeOnly) });
+  return files.map(abs => buildTicketEntry(abs, cwd, { lite: Boolean(opts.activeOnly) }));
 }

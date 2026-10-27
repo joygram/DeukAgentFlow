@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.9] - 2026-07-18
+
+
+### Fixed
+
+- **init:** 루트 PROJECT_RULE.md를 무조건 docs로 덮어쓰기 이동 ([#971](https://github.com/joygram/DeukAgentFlow/issues/971))
+
+## [5.2.8] - 2026-07-17
+
+
+### Changed
+
+- **persona:** canonized persona work-utility and language/emotion mirroring in the design doc — persona is a work-experience layer (immersion, reduced fatigue, stress-moment rapport), on par with the role layer, not decoration ([#978](https://github.com/joygram/DeukAgentFlow/issues/978))
+
+## [5.2.7] - 2026-07-17
+
+
+### Changed
+
+- **rules:** removed three transcript-scanning self-surveillance functions so the rules hook no longer reads the conversation log, making it constant-time regardless of log size ([#975](https://github.com/joygram/DeukAgentFlow/issues/975))
+
+## [5.2.6] - 2026-07-17
+
+
+### Fixed
+
+- **locale:** fixed C/POSIX locale being misread as English; it is now treated as "locale unspecified" and falls through to the OS locale (Intl) ([#974](https://github.com/joygram/DeukAgentFlow/issues/974))
+
+## [5.2.5] - 2026-07-17
+
+
+### Fixed
+
+- **persona:** persona language is now determined by configuration (`docsLanguage`) instead of guessing per utterance, so an English command line no longer flips a Korean session to English ([#972](https://github.com/joygram/DeukAgentFlow/issues/972))
+
+## [5.2.4] - 2026-07-17
+
+
+### Fixed
+
+- **init:** automatically clean up the deprecated `architecture_docs` field and its prompting notice on init ([#970](https://github.com/joygram/DeukAgentFlow/issues/970))
+- **init:** when the canonical `docs/PROJECT_RULE.md` already exists, auto-remove a stale copy left at the workspace root (only when identical; warn on drift) ([#969](https://github.com/joygram/DeukAgentFlow/issues/969))
+
+
+### Changed
+
+- **ko:** correct 5.2.3 changelog to match what actually shipped
+
 ## [5.2.3] - 2026-07-17
 
 

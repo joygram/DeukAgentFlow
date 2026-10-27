@@ -1,27 +1,28 @@
-import { existsSync, readFileSync } from "fs";
-import {
-  parseFrontMatter, discoverAllWorkspaces, detectConsumerTicketDir, computeTicketPath, makePath
- , CliOpts } from "./cli-utils.js";
-import { readTicketIndexJson, writeTicketIndexJson } from "./cli-ticket-index.js";
+import { existsSync,readFileSync } from "fs";
 import { splitTicketDocMetaSection } from "./cli-ticket-docmeta.js";
 import { writeTicketDocument } from "./cli-ticket-document.js";
+import { readTicketIndexJson,writeTicketIndexJson } from "./cli-ticket-index.js";
+import {
+CliOpts,
+computeTicketPath,
+detectConsumerTicketDir,
+localized,
+makePath,
+parseFrontMatter
+} from "./cli-utils.js";
+
+const PARSER_TEXT = {
+  noMatchingTicket: { ko: "상태를 갱신할 티켓을 찾을 수 없다", en: "No matching ticket found to update status" },
+} as const;
 
 export { collectTicketMarkdownFiles } from "./cli-ticket-scan.js";
 
-export function discoverAllTicketDirs(baseCwd, out = []) {
-  return discoverAllWorkspaces(baseCwd, undefined, new Set(out));
-}
-
 export function rebuildTicketIndexFromTopicFilesIfNeeded(cwd, opts: CliOpts = {}) {
-  // readTicketIndexJson already derives entries from the .md files (single source
-  // of truth) and merges in the thin pointer state (activeTicketId/nextTicketSequence).
   const indexJson = readTicketIndexJson(cwd);
 
   const ticketDir = detectConsumerTicketDir(cwd);
   if (!ticketDir) return indexJson;
 
-  // Persist the thin pointer file so activeTicketId/nextTicketSequence are kept in
-  // sync on disk. writeTicketIndexJson stores ONLY the pointer state, never entries.
   writeTicketIndexJson(cwd, indexJson, indexJson._corrupt ? { ...opts, force: true } : opts);
   if (opts.rebuild) console.log(`[REBUILD] Ticket pointer synced; ${indexJson.entries.length} entries derived from .md.`);
   return indexJson;
@@ -30,7 +31,6 @@ export function rebuildTicketIndexFromTopicFilesIfNeeded(cwd, opts: CliOpts = {}
 export function appendTicketEntry(cwd, entry, opts: CliOpts = {}) {
   const indexJson = readTicketIndexJson(cwd);
   entry.status = entry.status || "open";
-  // We no longer store 'path' snapshots in INDEX.json
   const { path, ...cleanEntry } = entry;
   const next = { 
     version: indexJson.version || 1, 
@@ -55,7 +55,7 @@ export function updateTicketEntryStatus(cwd, opts: CliOpts = {}) {
   }
 
   if (foundIndex === -1) {
-    throw new Error("No matching ticket found to update status");
+    throw new Error(localized(PARSER_TEXT.noMatchingTicket));
   }
 
   const entry = indexJson.entries[foundIndex];
@@ -70,9 +70,6 @@ export function updateTicketEntryStatus(cwd, opts: CliOpts = {}) {
   }
   entry.updatedAt = new Date().toISOString();
   
-  // Sync status back to .md frontmatter to prevent rebuild reversion.
-  // #736: cwd is the WORKSPACE root; tickets live in the HOME store (detectConsumerTicketDir).
-  // makePath(workspaceRoot, relativePath) misses the file → use the ticket dir as base.
   const entryPath = entry.path || computeTicketPath(entry);
   const ticketDir = detectConsumerTicketDir(cwd) || cwd;
   const absPath = makePath(ticketDir, entryPath);

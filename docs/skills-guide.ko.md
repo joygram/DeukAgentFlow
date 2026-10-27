@@ -8,7 +8,7 @@
 
 ---
 
-## 1. 스킬이란
+## 스킬이란
 
 스킬은 `templates/skills/<id>/SKILL.md` 한 파일로 정의되는 행동 모듈입니다. frontmatter로 동작이 결정됩니다.
 
@@ -21,26 +21,45 @@
 
 **정본(SSOT)은 패키지 `templates/skills/`** 입니다. 사용자가 편집하려면 fork하며, 정본이 갱신되면 fork보다 우선해 전파됩니다.
 
-### 스킬 설치 vs 노출 — 두 단계 구조
+### 배포는 세 층이고 출처는 레지스트리다
 
-스킬은 **설치**와 **노출**이 분리되어 있습니다. 설치만 해도 동작하지 않으며, 플랫폼별로 따로 노출을 켜야 합니다.
+스킬은 세 층을 거쳐 에이전트에 닿습니다. 층마다 담는 것이 다르고, 그중 하나만이 출처입니다.
+
+| 층 | 자리 | 담는 것 |
+|---|---|---|
+| **원본** | `templates/skills/<id>/SKILL.md` | 배포의 재료가 되는 정본 |
+| **레지스트리** | `~/.deuk/skills.json` | 무엇을 설치·노출할지의 **출처** |
+| **플랫폼** | `~/.claude/skills/` 등 | 레지스트리가 만들어낸 파생물 |
 
 ```
-설치(install)  →  로컬에 스킬 파일 저장
-노출(expose)   →  특정 에이전트 플랫폼에 스킬을 장착
+원본        →  레지스트리      →  플랫폼 디렉터리
+(재료)         (출처: 등록)       (파생물: 배포된 사본)
 ```
 
 | 단계 | 의미 | Flow UI |
 |---|---|---|
-| **설치** | 스킬을 로컬에 내려받음 | `[✓]` 체크 표시 |
-| **노출 ON** | 해당 에이전트에 스킬 장착 | `[ON]` 토글 |
-| **노출 OFF** | 장착 해제 (삭제 아님) | `[OFF]` 토글 |
+| **설치** | 레지스트리에 설치로 등록 | `[✓]` 체크 표시 |
+| **노출 ON** | 레지스트리에 노출로 등록하고 플랫폼에 배포 | `[ON]` 토글 |
+| **노출 OFF** | 등록을 내리고 배포본을 회수 | `[OFF]` 토글 |
 
 플랫폼은 `claude / codex / copilot / antigravity` 중 **개별로** 노출을 등록할 수 있어, 특정 에이전트에만 스킬을 적용하는 세밀한 제어가 가능합니다.
 
+**플랫폼 디렉터리의 파일은 파생물입니다.** 등록이 레지스트리에 남아 있는 한, 그 파일을 지워도 다음 노출 시점에 원본으로부터 다시 배포됩니다. 스킬이 사라지지 않는다면 지운 것이 파생물이었기 때문입니다.
+
+**제거는 등록부터 내립니다.** 순서는 `skill unexpose`로 노출 등록을 내리고, `skill remove`로 설치 등록을 지우는 것입니다. 이 두 명령이 정본 경로이며, 파일을 직접 지우는 것은 파생물만 건드립니다.
+
 ---
 
-## 2. 스킬 사용 흐름 (CLI)
+### 룰 계열 디렉터리는 둘이고 쓰임이 다르다
+
+`templates/` 아래 룰 관련 자리가 둘이라 이름이 비슷합니다. 받는 쪽이 다릅니다.
+
+- `templates/rules.d/` — 룰 컴파일러가 읽어 워크스페이스 룰로 합치는 입력입니다.
+- `templates/rule-details.md` — `coding step`이 룰 제목 아래 얹는 세부 항목의 정본입니다. 룰 제목 자체는 `docs/PROJECT_RULE.md`가 정본입니다.
+
+---
+
+## 스킬 사용 흐름
 
 ```bash
 # 설치 가능한 스킬 목록
@@ -52,7 +71,7 @@ deuk-agent-flow skill add --skill <id>
 # 플랫폼에 노출 (Claude 등 native 플랫폼은 ~/.claude/skills 로 동기화)
 deuk-agent-flow skill expose --skill <id>
 
-# 노출 해제 / 제거
+# 노출 해제 / 제거 — 이 순서로 등록을 내린다
 deuk-agent-flow skill unexpose --skill <id>
 deuk-agent-flow skill remove --skill <id>
 
@@ -64,10 +83,11 @@ deuk-agent-flow skill edit --skill <id>   # fork 후 $EDITOR로 열기
 **핵심 동작:**
 - 스킬 정본을 고친 뒤 native(`~/.claude/skills`)로 반영하려면, `dev:install`만으로는 부족하고 **다음 티켓 명령 한 번**이면 자동 동기화됩니다(티켓 명령 진입점의 auto-sync). 해시 비교라 내용이 같으면 건너뜁니다.
 - `bind: rules` 스킬은 rules 노드 출력에 함께 노출됩니다.
+- 스킬을 없앨 때는 위 두 명령으로 등록을 내립니다. 플랫폼 디렉터리의 파일만 지우면 다음 노출에서 다시 배포됩니다.
 
 ---
 
-## 3. 페르소나 사용법 — `persona-maid`
+## 페르소나 사용법 — `persona-maid`
 
 `persona-maid`는 응대 톤을 "서브컬처 메이드"로 바꾸는 페르소나 스킬입니다. **공식 배포에서는 기본 비활성(opt-in)** 이라 직접 설치해야 합니다.
 
@@ -106,7 +126,7 @@ deuk-agent-flow skill remove --skill persona-maid     # 완전 제거
 
 ---
 
-## 4. VS Code Flow UI (AgentFlow Panel)
+## VS Code Flow UI
 
 > **v5.0 신규 (첫 배포)** — 사이드패널에서 티켓·스킬 워크플로를 제어합니다. 터미널 전환이 필요 없습니다.
 
@@ -185,6 +205,9 @@ npm run install:vscode
 │ ▼ documentation                             │
 │  doc-sync           [✓] [ON] [ON] [OFF][ON] │
 ├─────────────────────────────────────────────┤
+│ ▼ governance                                │
+│  rule-reload        [✓] [ON] [ON] [OFF][ON] │
+├─────────────────────────────────────────────┤
 │ ▼ guard                                     │
 │  ...                                        │
 └─────────────────────────────────────────────┘
@@ -211,7 +234,7 @@ npm run install:vscode
 
 ---
 
-## 5. 참고
+## 참고
 
 - 스킬 아키텍처·우선순위: [architecture.ko.md](architecture.ko.md)
 - 전체 사용 가이드: [usage-guide.ko.md](usage-guide.ko.md)

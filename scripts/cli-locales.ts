@@ -1,4 +1,4 @@
-import { CliOpts, resolveDocsLanguage } from "./cli-utils.js";
+import { resolveDocsLanguage } from "./cli-utils.js";
 
 const CLI_LOCALES = {
   en: {

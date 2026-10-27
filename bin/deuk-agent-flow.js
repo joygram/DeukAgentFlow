@@ -7,7 +7,7 @@
 import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,12 +41,14 @@ if (wsRoot) {
   }
 }
 
+// 기본 경로는 같은 프로세스에서 실행한다. 여기서 node를 한 번 더 띄우면 부팅 비용만
+// 순손실이며(1064 실측 60ms), 매 턴 나가는 표면이라 그 손실이 매 턴 과금됐다.
 const myCli = path.join(__dirname, "..", "scripts", "out", "scripts", "cli.js");
+// cli.js는 main()을 스스로 실행하고 끝나면 process.exit를 호출한다. 여기서 exit를
+// 겹쳐 부르면 그 비동기 본문이 끝나기 전에 잘려 출력이 통째로 사라진다.
 if (fs.existsSync(myCli)) {
-  const args = process.argv.slice(2);
-  const result = spawnSync("node", [myCli, ...args], { stdio: "inherit" });
-  process.exit(result.status !== null ? result.status : 1);
+  await import(pathToFileURL(myCli).href);
+} else {
+  console.error("Error: Could not find DeukAgentFlow CLI script at " + myCli);
+  process.exit(1);
 }
-
-console.error("Error: Could not find DeukAgentFlow CLI script at " + myCli);
-process.exit(1);

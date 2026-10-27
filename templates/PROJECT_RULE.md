@@ -1,13 +1,15 @@
 # Project Rules
 
 > Rule gate: every ticket's plan body MUST cite at least one rule id below (e.g. `[DR-01]`).
-> One rule per line: `- [ID] description`. Ids look like `[DR-01]`, `[SEC-12]`, `[DC-01]`.
+> One rule per line: `- [ID] @stage,stage 지시문`. Ids look like `[DR-01]`, `[SEC-12]`, `[DC-01]`.
+> Stages are `start`, `create`, `modify`. A rule with no stage is never surfaced by `coding step`.
+> Write rules with `deuk-agent-flow rule add` — this file is CLI output, not a hand-edited document.
 
 ## Rules (id-based)
 
-- [DR-01] 승인된 티켓 범위 안에서만 작업하고, 생성물은 소스에서 갱신한다.
-- [DR-02] 생성 파일(dist/, *.generated.*)은 직접 편집하지 않고 소스+빌드로 갱신한다.
-- [DR-03] 같은 개념·식별자·분기 기준은 한 곳에서만 정의한다(SSOT). 중복·내부 드리프트 금지.
-- [DR-04] 코드를 수정하기 전에 해당 동작을 규정하는 정본문서(SSOT)를 먼저 확인하고, 정본문서가 코드와 불일치하면 STOP·사용자 승인 후에만 정본문서를 최신화(정본화)한다.
-- [DC-HALT] 인프라 에러는 멈추고 우회 없이 사용자에게 보고한다.
-- [DC-INFRA] 부트스트랩/전송/DB/라우팅 코드는 별도 티켓+승인으로 다룬다.
+- [DR-01] @start 승인된 티켓 범위 안에서 작업한다.
+- [DR-02] @modify 생성 파일은 직접 고치지 말고 소스를 고쳐 빌드로 갱신한다.
+- [DR-03] @create,modify 같은 개념·식별자·분기 기준을 두 곳에 쓰지 마라. 이미 정의된 곳이 있으면 그것을 쓴다.
+- [DR-04] @start,create,modify 손대기 전에 이 작업의 설계 정본을 확인한다. 어긋나면 멈추고 승인받아 정본을 먼저 고친다.
+- [DC-HALT] @modify 인프라 에러는 멈추고 사용자에게 보고한다.
+- [DC-INFRA] @modify 인프라 코드는 티켓 스코프에 명시된 경우만 고친다.

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "fs";
-import { delimiter, resolve } from "path";
-import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
+import { existsSync,mkdtempSync,readFileSync,rmSync,statSync } from "fs";
 import { tmpdir } from "os";
-import { CliOpts, makePath } from "./cli-utils.js";
+import { delimiter } from "path";
+import { fileURLToPath } from "url";
+import { CliOpts,makePath } from "./cli-utils.js";
 
 const rootDir = fileURLToPath(new URL("../../..", import.meta.url));
 const aliasDir = makePath(rootDir, "packages", "deuk-agent-rule");

@@ -1,15 +1,19 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, copyFileSync, renameSync } from "fs";
-import { basename, dirname } from "path";
-import {
-  toRepoRelativePath, TICKET_SUBDIR, TICKET_LIST_FILENAME,
-  parseFrontMatter, findFileRecursively, detectConsumerTicketDir, makePath
- , CliOpts } from "./cli-utils.js";
-import { readTicketIndexJson, syncActiveTicketId, writeTicketIndexJson } from "./cli-ticket-index.js";
-import { collectTicketMarkdownFiles, rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.js";
+import { copyFileSync,existsSync,mkdirSync,readFileSync,renameSync,unlinkSync,writeFileSync } from "fs";
+import { basename,dirname } from "path";
 import { splitTicketDocMetaSection } from "./cli-ticket-docmeta.js";
 import { writeTicketDocument } from "./cli-ticket-document.js";
-
-// ─── Summary Extraction ─────────────────────────────────────────────────────
+import { readTicketIndexJson,syncActiveTicketId,writeTicketIndexJson } from "./cli-ticket-index.js";
+import { collectTicketMarkdownFiles,rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.js";
+import {
+CliOpts,
+TICKET_LIST_FILENAME,
+TICKET_SUBDIR,
+detectConsumerTicketDir,
+findFileRecursively,
+makePath,
+parseFrontMatter,
+toRepoRelativePath
+} from "./cli-utils.js";
 
 /**
  * Extracts a concise summary from ticket body content for legacy tickets.
@@ -23,19 +27,16 @@ export function extractSummary(meta, content) {
   const title = meta.title || "";
   const lines = content.split("\n");
 
-  // Collect section contents by known header patterns
   const sections: Record<string, any> = {};
   let currentSection = null;
   for (const line of lines) {
     const trimmed = line.trim();
-    // Match ## headers (with or without emoji prefix)
     const headerMatch = trimmed.match(/^##\s+(?:[\u{1F3AF}\u{1F4C1}\u{1F3D7}\u{1F6D1}\u{1F504}\u{2705}\s]*)?(.+)$/u);
     if (headerMatch) {
       currentSection = headerMatch[1].trim().toLowerCase();
       sections[currentSection] = [];
       continue;
     }
-    // Match # title
     if (trimmed.startsWith("# ") && !currentSection) {
       continue; // skip title line
     }
@@ -44,10 +45,8 @@ export function extractSummary(meta, content) {
     }
   }
 
-  // Priority: scope/background > analysis > tasks
   let contextLine = "";
 
-  // Try scope bounds (old format)
   const scopeKeys = Object.keys(sections).filter(k =>
     k.includes("scope") || k.includes("target") || k.includes("background")
   );
@@ -62,7 +61,6 @@ export function extractSummary(meta, content) {
     }
   }
 
-  // Try analysis section if no scope found
   if (!contextLine) {
     const analysisKeys = Object.keys(sections).filter(k =>
       k.includes("analysis") || k.includes("design") || k.includes("decisions")
@@ -78,7 +76,6 @@ export function extractSummary(meta, content) {
     }
   }
 
-  // Collect task summary (first 3 task items)
   const taskKeys = Object.keys(sections).filter(k =>
     k.includes("task") || k.includes("phased") || k.includes("execution steps")
   );
@@ -92,7 +89,6 @@ export function extractSummary(meta, content) {
     if (taskItems.length > 0) break;
   }
 
-  // Build summary
   const parts = [];
   if (contextLine) {
     parts.push(contextLine.length > 120 ? contextLine.substring(0, 117) + "..." : contextLine);
@@ -102,15 +98,12 @@ export function extractSummary(meta, content) {
   }
 
   if (parts.length === 0) {
-    // Fallback: use title itself as summary
     return title || null;
   }
 
   const summary = parts.join(". ").substring(0, 300);
   return summary || null;
 }
-
-// ─── CAUTION Block / Target Module Injection ─────────────────────────────────
 
 const CAUTION_BLOCK = `> **[CAUTION FOR AI AGENTS]**
 > 1. Restrict all analysis, file creation, and modifications to the declared **Target Module** below.
@@ -126,14 +119,11 @@ const CAUTION_BLOCK = `> **[CAUTION FOR AI AGENTS]**
  * Returns modified content or null if no change needed.
  */
 export function ensureCautionBlock(content) {
-  // Already has Target Module or the new-format CAUTION
   if (content.includes("## Target Module")) return null;
 
-  // Also skip if it already has the old-format scope bounds (don't duplicate)
   const hasOldScope = /## [\u{1F3AF}]?\s*Scope Bounds/u.test(content);
   if (hasOldScope) return null;
 
-  // Find the # title line and insert after it
   const titleMatch = content.match(/^(# .+)\n/m);
   if (!titleMatch) return null;
 
@@ -141,13 +131,10 @@ export function ensureCautionBlock(content) {
   const before = content.substring(0, titleEnd);
   let after = content.substring(titleEnd);
 
-  // Skip if CAUTION already exists (old variant)
   if (after.includes("[CAUTION FOR AI AGENTS]")) return null;
 
   return before + "\n" + CAUTION_BLOCK + "\n" + after;
 }
-
-// ─── Main Migration ─────────────────────────────────────────────────────────
 
 export function performUpgradeMigration(cwd, opts: CliOpts = {}) {
   const root = detectConsumerTicketDir(cwd, { createIfMissing: true });
@@ -172,7 +159,6 @@ export function performUpgradeMigration(cwd, opts: CliOpts = {}) {
 
     const isAlreadyInArchive = rel.includes("/archive/");
 
-    // 1. Summary enrichment for legacy tickets
     if (!meta.summary) {
       const generated = extractSummary(meta, content);
       if (generated) {
@@ -182,7 +168,6 @@ export function performUpgradeMigration(cwd, opts: CliOpts = {}) {
       }
     }
 
-    // 2. CAUTION / Target Module injection
     const cautionResult = ensureCautionBlock(modifiedContent);
     if (cautionResult !== null) {
       modifiedContent = cautionResult;
@@ -190,7 +175,6 @@ export function performUpgradeMigration(cwd, opts: CliOpts = {}) {
       cautionAdded++;
     }
 
-    // 3. Archive placement fix (existing logic)
     if (meta.status === "archived" && !isAlreadyInArchive && !opts.dryRun) {
       const finalAbs = moveFileToArchive(cwd, abs, meta.group || basename(dirname(abs)));
       const ticketDocMeta = splitTicketDocMetaSection(modifiedContent);
@@ -224,13 +208,6 @@ export function performUpgradeMigration(cwd, opts: CliOpts = {}) {
   return upgraded;
 }
 
-// #727: performDefragmentation 제거 — 홈 uuid 스토어의 티켓을 meta.submodule 기준으로
-// 서브모듈 .deuk/tickets 로 역이동(cwd write)시켜 홈 일원화(#622)를 되돌리던 코드였다.
-// normalizeTicketPaths 주석('티켓은 홈에 산다, cwd로 끌어내면 안 됨')과 정면 모순이라
-// 함수와 호출(upgrade 흐름)을 통째로 제거. 티켓은 홈에만 산다.
-
-// ─── Utilities ──────────────────────────────────────────────────────────────
-
 export function moveFileToArchive(cwd, abs, group) {
   const ticketDir = detectConsumerTicketDir(cwd);
   const archiveBase = makePath(ticketDir, "archive");
@@ -258,11 +235,6 @@ export function normalizeTicketPaths(cwd, opts: CliOpts = {}) {
   for (const entry of entries) {
     if (!entry.path) continue;
 
-    // #622/#623: 티켓 .md는 cwd(워크스페이스 git 트리)가 아니라 홈 ticketDir에 산다.
-    // 정상 위치는 makePath(ticketDir, entry.path)이다. entry.path를 cwd 기준으로 해석해
-    // 그쪽으로 옮기면, 홈에 멀쩡히 있던 .md를 워크스페이스로 끌어내 홈 디렉토리를 비우고
-    // (그 순간 rebuild 스캔이 entries=0을 보고 active claim을 고아로 오인해 삭제한다).
-    // 따라서 파일이 이미 ticketDir 하위에 있으면 그게 올바른 위치이므로 이동하지 않는다.
     const canonicalAbs = makePath(ticketDir, entry.path);
     if (existsSync(canonicalAbs)) continue;
 
@@ -271,7 +243,6 @@ export function normalizeTicketPaths(cwd, opts: CliOpts = {}) {
       const fileName = basename(entry.path);
       const found = findFileRecursively(ticketDir, fileName);
       if (found) {
-        // 발견된 파일이 이미 홈 ticketDir 하위면 정상 위치 — 워크스페이스로 옮기지 않는다.
         const destAbs = canonicalAbs;
         if (found !== destAbs) {
           mkdirSync(dirname(destAbs), { recursive: true });

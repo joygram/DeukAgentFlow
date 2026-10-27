@@ -4,24 +4,22 @@
  * Supports various AI Agent Plan formats (Antigravity, Copilot, etc.)
  * Extracts basic ticket fields (title, summary, tasks) and body.
  */
+import { parseHeadingAtDepth } from "./markdown-headings.js";
 
 export function parseGenericMarkdownPlan(content) {
   const lines = content.split('\n');
   
-  // 1. Title: First H1
-  const h1Line = lines.find(l => /^# /.test(l));
-  const title = h1Line ? h1Line.replace(/^# /, '').trim() : '';
+  const h1Line = lines.find(l => parseHeadingAtDepth(l, 1));
+  const title = h1Line ? parseHeadingAtDepth(h1Line, 1).text : '';
 
-  // 2. Summary: Text between H1 and the first --- or ##
   const h1Idx = h1Line ? lines.indexOf(h1Line) : -1;
   let summaryLines = [];
   for (let i = h1Idx + 1; i < lines.length; i++) {
-    if (/^---$/.test(lines[i].trim()) || /^## /.test(lines[i])) break;
+    if (/^---$/.test(lines[i].trim()) || parseHeadingAtDepth(lines[i], 2)) break;
     if (lines[i].trim()) summaryLines.push(lines[i].trim());
   }
   const summary = summaryLines.join(' ').slice(0, 200);
 
-  // 3. Tasks: Collect all checklist items
   const tasks = lines
     .filter(l => /^\s*- \[[ x/]\]/.test(l))
     .map(l => l.replace(/^\s*- \[[ x/]\]\s*/, '').trim());

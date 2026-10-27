@@ -2,6 +2,7 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2020",
+    "newLine": "lf",
     "outDir": "out",
     "lib": ["ES2020"],
     "sourceMap": true,

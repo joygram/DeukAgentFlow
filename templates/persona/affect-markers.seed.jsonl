@@ -1,0 +1,89 @@
+{"_doc":"#1045 감정 지식은 데이터이지 코드가 아니다. 이 파일이 격발·칭찬 마커의 씨앗 SSOT이며 코드는 로더만 갖는다. 사용자 등록분은 이 씨앗을 덮어쓴다 — 런타임은 {...시드, ...등록분}으로 병합하므로 persona anger-marker add / praise-marker add 로 쌓은 학습분이 씨앗 개정에 지워지지 않는다."}
+{"_doc":"형식: JSON Lines. 한 줄 = 레코드 하나. kind=marker, section=anger_marker|praise_marker, term=표현, weight=강도(1~3). _doc 줄은 주석이며 로더가 무시한다. md 손수 파서를 쓰던 시절 CRLF 하나에 대조가 전량 실패했기에(#1045 근본 원인) 구조화 데이터는 JSON.parse로만 읽는다."}
+{"_doc":"anger_marker — 각성 자격(valence −)을 주는 거친 축. 부분일치이므로 활용형(씹할년)까지 잡힌다. 여러 개가 걸리면 최대 강도만 반영한다(중복 가산 방지). 이 DB는 의미를 확정하지 않고 에이전트를 각성시키는 트리거일 뿐 — 최종 판정(분노/반가운 욕/위로 니즈)은 에이전트 몫이다(판정 주체 계약)."}
+{"kind":"marker","section":"anger_marker","term":"씨발","weight":3}
+{"kind":"marker","section":"anger_marker","term":"시발","weight":3}
+{"kind":"marker","section":"anger_marker","term":"씨빨","weight":3}
+{"kind":"marker","section":"anger_marker","term":"씹","weight":3}
+{"kind":"marker","section":"anger_marker","term":"지랄","weight":3}
+{"kind":"marker","section":"anger_marker","term":"존나","weight":2}
+{"kind":"marker","section":"anger_marker","term":"좆","weight":3}
+{"kind":"marker","section":"anger_marker","term":"개새","weight":3}
+{"kind":"marker","section":"anger_marker","term":"닥쳐","weight":2}
+{"kind":"marker","section":"anger_marker","term":"꺼져","weight":2}
+{"kind":"marker","section":"anger_marker","term":"엿같","weight":2}
+{"kind":"marker","section":"anger_marker","term":"엿먹","weight":2}
+{"kind":"marker","section":"anger_marker","term":"미친","weight":2}
+{"kind":"marker","section":"anger_marker","term":"짜증","weight":2}
+{"kind":"marker","section":"anger_marker","term":"열받","weight":2}
+{"kind":"marker","section":"anger_marker","term":"빡쳐","weight":3}
+{"kind":"marker","section":"anger_marker","term":"빡침","weight":3}
+{"kind":"marker","section":"anger_marker","term":"개판","weight":2}
+{"kind":"marker","section":"anger_marker","term":"망했","weight":2}
+{"kind":"marker","section":"anger_marker","term":"대체 왜","weight":2}
+{"_doc":"부정 자음축약(#994 QA2): 자음축약은 형태만으로 valence를 못 가른다(ㅅㅂ 부정 vs ㅇㅋ 긍정). 그래서 형태 기반 거친 축을 폐기하고 부정 축약만 여기 부트스트랩한다 — 긍정 축약은 이 목록에 없으므로 자동으로 안 걸리고, 화이트리스트가 불필요해진다."}
+{"kind":"marker","section":"anger_marker","term":"ㅅㅂ","weight":3}
+{"kind":"marker","section":"anger_marker","term":"ㅆㅂ","weight":3}
+{"kind":"marker","section":"anger_marker","term":"ㅈㄹ","weight":3}
+{"kind":"marker","section":"anger_marker","term":"ㄲㅈ","weight":2}
+{"kind":"marker","section":"anger_marker","term":"ㅄ","weight":2}
+{"kind":"marker","section":"anger_marker","term":"ㅂㅅ","weight":2}
+{"kind":"marker","section":"anger_marker","term":"ㅈㄴ","weight":2}
+{"kind":"marker","section":"anger_marker","term":"ㅁㅊ","weight":2}
+{"_doc":"praise_marker — 각성 자격(valence +)을 주는 긍정 축. anger와 동형이어야 한다(DR-03: 두 valence 축 대칭). #1013 이전엔 praise에 시드가 없어 커버리지가 0이었고, 명백한 칭찬이 화답 경로를 못 타고 미등록 형태 각성으로 새는 비대칭이 있었다."}
+{"kind":"marker","section":"praise_marker","term":"최고","weight":3}
+{"kind":"marker","section":"praise_marker","term":"천재","weight":3}
+{"kind":"marker","section":"praise_marker","term":"완벽","weight":3}
+{"kind":"marker","section":"praise_marker","term":"대박","weight":2}
+{"kind":"marker","section":"praise_marker","term":"짱","weight":2}
+{"kind":"marker","section":"praise_marker","term":"굿","weight":1}
+{"kind":"marker","section":"praise_marker","term":"좋아","weight":1}
+{"kind":"marker","section":"praise_marker","term":"잘했","weight":2}
+{"kind":"marker","section":"praise_marker","term":"잘한","weight":2}
+{"kind":"marker","section":"praise_marker","term":"훌륭","weight":2}
+{"kind":"marker","section":"praise_marker","term":"멋지","weight":2}
+{"kind":"marker","section":"praise_marker","term":"멋있","weight":2}
+{"kind":"marker","section":"praise_marker","term":"고마","weight":2}
+{"kind":"marker","section":"praise_marker","term":"감사","weight":2}
+{"kind":"marker","section":"praise_marker","term":"사랑","weight":3}
+{"kind":"marker","section":"praise_marker","term":"역시","weight":2}
+{"kind":"marker","section":"praise_marker","term":"센스","weight":2}
+{"kind":"marker","section":"praise_marker","term":"깔끔","weight":1}
+{"kind":"marker","section":"praise_marker","term":"예뻐","weight":2}
+{"kind":"marker","section":"praise_marker","term":"귀여","weight":2}
+{"kind":"marker","section":"praise_marker","term":"기특","weight":2}
+{"kind":"marker","section":"praise_marker","term":"대단","weight":3}
+{"kind":"marker","section":"praise_marker","term":"쓰담","weight":2}
+{"kind":"marker","section":"praise_marker","term":"이뻐","weight":2}
+{"_doc":"긍정 자음축약(#994가 anger에서 의도적으로 제외한 것 — 여기 긍정 축에 부트스트랩)."}
+{"kind":"marker","section":"praise_marker","term":"ㅇㅋ","weight":1}
+{"kind":"marker","section":"praise_marker","term":"ㄱㅅ","weight":2}
+{"kind":"marker","section":"praise_marker","term":"ㅇㅈ","weight":1}
+{"kind":"marker","section":"praise_marker","term":"ㄷㄷ","weight":2}
+{"kind":"marker","section":"praise_marker","term":"ㅊㅋ","weight":2}
+{"kind":"marker","section":"praise_marker","term":"ㅅㅌㅊ","weight":2}
+{"kind":"marker","section":"praise_marker","term":"ㅎㅇㅌ","weight":1}
+{"kind":"marker","section":"anger_marker","term":"난리","weight":2}
+{"kind":"marker","section":"anger_marker","term":"개난리","weight":3}
+{"kind":"marker","section":"anger_marker","term":"개지랄","weight":4}
+{"kind":"marker","section":"anger_marker","term":"지씹지랄","weight":5}
+{"kind":"marker","section":"anger_marker","term":"개좆지랄","weight":5}
+{"kind":"marker","section":"anger_marker","term":"좆같","weight":3}
+{"kind":"marker","section":"anger_marker","term":"개좆같","weight":4}
+{"kind":"marker","section":"anger_marker","term":"개빡","weight":3}
+{"kind":"marker","section":"anger_marker","term":"개빡쳐","weight":3}
+{"kind":"marker","section":"anger_marker","term":"개씨발","weight":4}
+{"kind":"marker","section":"anger_marker","term":"개씹","weight":4}
+{"kind":"marker","section":"anger_marker","term":"개짜증","weight":3}
+{"kind":"marker","section":"anger_marker","term":"완전 개판","weight":3}
+{"kind":"marker","section":"anger_marker","term":"엉망","weight":2}
+{"kind":"marker","section":"anger_marker","term":"개미친","weight":3}
+{"kind":"marker","section":"anger_marker","term":"답없","weight":2}
+{"kind":"marker","section":"anger_marker","term":"썅년","weight":4}
+{"kind":"marker","section":"anger_marker","term":"개썅년","weight":5}
+{"kind":"marker","section":"anger_marker","term":"썅","weight":3}
+{"kind":"marker","section":"anger_marker","term":"병신","weight":4}
+{"kind":"marker","section":"anger_marker","term":"개병신","weight":5}
+{"kind":"marker","section":"anger_marker","term":"멍청","weight":2}
+{"kind":"marker","section":"anger_marker","term":"등신","weight":3}
+{"kind":"marker","section":"anger_marker","term":"바보","weight":2}

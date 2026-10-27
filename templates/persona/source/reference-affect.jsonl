@@ -1,0 +1,229 @@
+{"form":"앗","axis":"억제·당황","level":1,"body":"성대","notes":"짧은 놀람. 문장 맨 앞"}
+{"form":"앗……","axis":"억제·당황","level":2,"body":"성대","notes":"놀람이 끊기지 않고 남음"}
+{"form":"읏","axis":"억제·당황","level":1,"body":"성대","notes":"참는 소리. 입을 다문 채"}
+{"form":"읏……","axis":"누수","level":2,"body":"성대","notes":"참다가 새어나옴"}
+{"form":"읏……!","axis":"갑작스러운 반응","level":2,"body":"성대","notes":"찰나의 자극"}
+{"form":"으읏","axis":"억제","level":2,"body":"성대","notes":"눌러 삼킨 소리"}
+{"form":"으읏……","axis":"누수","level":2,"body":"성대","notes":"삼키다 실패"}
+{"form":"윽","axis":"억제","level":1,"body":"성대","notes":"통증에 가까운 억제"}
+{"form":"헉","axis":"억제·당황","level":1,"body":"폐","notes":"숨을 들이켬"}
+{"form":"헛","axis":"당황","level":1,"body":"폐","notes":"웃음도 숨도 아닌 것"}
+{"form":"흡","axis":"억제","level":1,"body":"폐","notes":"숨을 멈춤"}
+{"form":"흐읍","axis":"억제","level":2,"body":"폐","notes":"길게 들이켜 멈춤"}
+{"form":"흣","axis":"누수","level":2,"body":"성대","notes":"짧게 새는 소리"}
+{"form":"흣……!","axis":"갑작스러운 반응","level":2,"body":"성대","notes":"의도 없이 튀어나옴"}
+{"form":"흐읏","axis":"누수","level":2,"body":"성대","notes":"떨림이 얹힌 날숨"}
+{"form":"흐읏……!","axis":"누수","level":3,"body":"성대","notes":"참으려던 것이 실패한 순간"}
+{"form":"하읏","axis":"누수","level":2,"body":"성대","notes":"들이쉬다 새어나감"}
+{"form":"하읏……","axis":"누수","level":3,"body":"성대","notes":"끝을 못 맺음"}
+{"form":"흐윽","axis":"누수","level":3,"body":"성대","notes":"울음에 가까운 결"}
+{"form":"으흣","axis":"누수","level":3,"body":"성대","notes":"닫힌 입 안에서 울림"}
+{"form":"응……","axis":"이완·안도","level":1,"body":"성대","notes":"대답 겸 이완"}
+{"form":"응……?","axis":"이완","level":1,"body":"성대","notes":"흐릿한 되물음"}
+{"form":"으응","axis":"이완","level":2,"body":"성대","notes":"의식이 흐려진 대답"}
+{"form":"으응……","axis":"누수","level":3,"body":"성대","notes":"대답이 소리로 무너짐"}
+{"form":"아……","axis":"이완·안도","level":1,"body":"성대","notes":"긴장이 풀림"}
+{"form":"아……!","axis":"갑작스러운 반응","level":2,"body":"성대","notes":"깨달음 또는 자극"}
+{"form":"아앗","axis":"갑작스러운 반응","level":2,"body":"성대","notes":"놀람이 길어짐"}
+{"form":"하아……","axis":"이완","level":1,"body":"폐","notes":"길게 뱉는 날숨"}
+{"form":"하아……!","axis":"누수","level":3,"body":"폐","notes":"참던 숨이 한번에"}
+{"form":"하아앗","axis":"누수","level":3,"body":"폐","notes":"날숨에 소리가 섞임"}
+{"form":"후우……","axis":"이완","level":1,"body":"폐","notes":"의도적으로 고르는 숨"}
+{"form":"후욱","axis":"억제","level":2,"body":"폐","notes":"고르려다 실패"}
+{"form":"으음……","axis":"이완","level":1,"body":"성대","notes":"낮게 잠긴 소리"}
+{"form":"으으……","axis":"누수","level":3,"body":"성대","notes":"말이 되지 않음"}
+{"form":"흐음","axis":"이완","level":1,"body":"성대","notes":"생각하는 결"}
+{"form":"음……","axis":"이완","level":1,"body":"성대","notes":"닫은 입술 안"}
+{"form":"파르르","axis":"떨림","level":2,"body":"입술·속눈썹","notes":"작고 빠른 떨림"}
+{"form":"파르르르","axis":"떨림","level":3,"body":"입술·속눈썹","notes":"멈추지 않는 떨림"}
+{"form":"바르르","axis":"떨림","level":2,"body":"손끝·어깨","notes":"힘이 들어간 떨림"}
+{"form":"부르르","axis":"떨림","level":2,"body":"등·전신","notes":"크게 한 번 훑는 떨림"}
+{"form":"오소소","axis":"떨림","level":2,"body":"팔·목덜미","notes":"소름이 이는 결"}
+{"form":"오싹","axis":"떨림","level":2,"body":"등","notes":"한 줄기로 지나감"}
+{"form":"소름","axis":"떨림","level":2,"body":"팔","notes":"명사형. 서술과 함께"}
+{"form":"자르르","axis":"자극","level":2,"body":"팔·등","notes":"퍼지는 저림"}
+{"form":"짜르르","axis":"자극","level":3,"body":"허리·아래","notes":"강한 저림. 방향이 있음"}
+{"form":"짜리릿","axis":"자극","level":3,"body":"허리·아래","notes":"찰나 + 강도"}
+{"form":"짜리리릿","axis":"자극","level":4,"body":"허리·아래","notes":"통제 불가 최고 강도"}
+{"form":"찌릿","axis":"자극","level":2,"body":"손끝·팔","notes":"짧고 날카로움"}
+{"form":"찌리릿","axis":"자극","level":3,"body":"허리·아래","notes":"길어진 찌릿"}
+{"form":"찌르르","axis":"자극","level":3,"body":"가슴·아래","notes":"울리며 남음"}
+{"form":"찌르르르","axis":"자극","level":4,"body":"아래","notes":"멎지 않음"}
+{"form":"저릿","axis":"자극","level":2,"body":"손발","notes":"감각이 둔해지는 쪽"}
+{"form":"저릿저릿","axis":"자극","level":3,"body":"손발·허리","notes":"반복되며 쌓임"}
+{"form":"찌잉","axis":"자극","level":3,"body":"머릿속","notes":"소리처럼 남는 여운"}
+{"form":"찡","axis":"자극","level":2,"body":"코끝·가슴","notes":"울컥에 가까움"}
+{"form":"화끈","axis":"열","level":2,"body":"뺨·귀","notes":"한 번에 달아오름"}
+{"form":"화르르","axis":"열","level":3,"body":"얼굴·목","notes":"번지며 오름"}
+{"form":"확","axis":"열","level":2,"body":"전신","notes":"부사형. 급격"}
+{"form":"후끈","axis":"열","level":2,"body":"목덜미","notes":"뭉근하게 오름"}
+{"form":"달아오름","axis":"열","level":2,"body":"얼굴","notes":"명사형 서술용"}
+{"form":"뜨끈","axis":"열","level":1,"body":"손바닥","notes":"낮은 온도"}
+{"form":"뜨끔","axis":"자극","level":2,"body":"가슴","notes":"찔린 결. 죄책감과 겸용"}
+{"form":"스르륵","axis":"움직임","level":1,"body":"손·옷","notes":"마찰 없이 미끄러짐"}
+{"form":"스르르","axis":"움직임","level":2,"body":"몸·눈꺼풀","notes":"힘이 빠지며"}
+{"form":"사르르","axis":"이완","level":2,"body":"전신","notes":"녹듯이 풀림"}
+{"form":"흐물","axis":"이완","level":3,"body":"다리·허리","notes":"형태를 잃음"}
+{"form":"흐물흐물","axis":"이완","level":4,"body":"전신","notes":"버티지 못함"}
+{"form":"녹진","axis":"이완","level":3,"body":"전신","notes":"점도가 있는 이완"}
+{"form":"나른","axis":"이완","level":2,"body":"전신","notes":"사후·여운 구간"}
+{"form":"꽉","axis":"억제","level":1,"body":"손·이","notes":"힘을 줌"}
+{"form":"꾹","axis":"억제","level":1,"body":"입술·손","notes":"눌러 참음"}
+{"form":"질끈","axis":"억제","level":2,"body":"눈","notes":"감아버림"}
+{"form":"바짝","axis":"긴장","level":1,"body":"전신","notes":"거리·자세 겸용"}
+{"form":"빠짝","axis":"긴장","level":2,"body":"전신","notes":"바짝의 강조형"}
+{"form":"지긋이","axis":"정지","level":1,"body":"시선·손","notes":"오래 머묾"}
+{"form":"물끄러미","axis":"정지","level":1,"body":"시선","notes":"목적 없이 봄"}
+{"form":"멀뚱","axis":"정지","level":1,"body":"시선","notes":"반응이 늦음"}
+{"form":"움찔","axis":"반사","level":2,"body":"어깨·손","notes":"의지 이전의 반응"}
+{"form":"흠칫","axis":"반사","level":2,"body":"전신","notes":"놀라 굳음"}
+{"form":"멈칫","axis":"반사","level":1,"body":"발·손","notes":"하려다 멈춤"}
+{"form":"움츠","axis":"반사","level":2,"body":"어깨","notes":"작아짐"}
+{"form":"오므","axis":"반사","level":2,"body":"손가락·발가락","notes":"안으로 말림"}
+{"form":"곱송","axis":"반사","level":2,"body":"손발","notes":"오므리며 굳음"}
+{"form":"꿈틀","axis":"반사","level":3,"body":"허리·손가락","notes":"의지와 무관한 움직임"}
+{"form":"꼼지락","axis":"반사","level":2,"body":"손발가락","notes":"작게 계속"}
+{"form":"쿵","axis":"심장","level":2,"body":"심장","notes":"한 번 크게"}
+{"form":"쿵—","axis":"심장","level":3,"body":"심장","notes":"박자가 어긋남"}
+{"form":"쿵쾅","axis":"심장","level":2,"body":"심장","notes":"연속"}
+{"form":"쿵쿵","axis":"심장","level":2,"body":"심장","notes":"들릴 만큼"}
+{"form":"두근","axis":"심장","level":1,"body":"심장","notes":"기본형"}
+{"form":"두근두근","axis":"심장","level":2,"body":"심장","notes":"반복. 남용 주의"}
+{"form":"덜컥","axis":"심장","level":2,"body":"심장·가슴","notes":"내려앉음"}
+{"form":"철렁","axis":"심장","level":2,"body":"가슴","notes":"떨어지는 감각"}
+{"form":"울렁","axis":"내부","level":2,"body":"명치","notes":"파도 결"}
+{"form":"울컥","axis":"내부","level":3,"body":"목·가슴","notes":"치밀어 오름"}
+{"form":"뭉클","axis":"내부","level":2,"body":"가슴","notes":"덩어리 결"}
+{"form":"간질","axis":"자극","level":2,"body":"목덜미·귀","notes":"참기 어려움"}
+{"form":"간질간질","axis":"자극","level":3,"body":"목덜미·아래","notes":"쌓이며 못 견딤"}
+{"form":"근질","axis":"자극","level":2,"body":"손끝","notes":"하고 싶어짐"}
+{"form":"살살","axis":"접촉","level":2,"body":"피부","notes":"약한 반복 접촉"}
+{"form":"슬쩍","axis":"접촉","level":1,"body":"손","notes":"의도를 숨김"}
+{"form":"슬며시","axis":"접촉","level":1,"body":"손","notes":"천천히 드러남"}
+{"form":"쓱","axis":"접촉","level":1,"body":"손","notes":"빠르게 지나감"}
+{"form":"쓰윽","axis":"접촉","level":2,"body":"손","notes":"느리게 끄는 결"}
+{"form":"스윽","axis":"접촉","level":2,"body":"손·시선","notes":"미끄러지듯"}
+{"form":"훑","axis":"접촉","level":3,"body":"등·허리","notes":"면을 따라 지나감"}
+{"form":"쓸","axis":"접촉","level":2,"body":"손바닥","notes":"마찰이 있음"}
+{"form":"문질","axis":"접촉","level":3,"body":"손·피부","notes":"반복 마찰"}
+{"form":"비비","axis":"접촉","level":3,"body":"몸","notes":"밀착 상태의 마찰"}
+{"form":"부비","axis":"접촉","level":3,"body":"뺨·목","notes":"응석 결"}
+{"form":"쥐","axis":"접촉","level":2,"body":"손","notes":"힘이 들어감"}
+{"form":"움켜","axis":"접촉","level":3,"body":"손","notes":"놓지 않음"}
+{"form":"거머","axis":"접촉","level":3,"body":"손","notes":"강한 포획"}
+{"form":"휘감","axis":"접촉","level":3,"body":"팔·다리","notes":"둘러 감음"}
+{"form":"옭","axis":"접촉","level":3,"body":"전신","notes":"빠져나갈 수 없음"}
+{"form":"파고","axis":"접촉","level":3,"body":"품","notes":"안으로 들어감"}
+{"form":"묻","axis":"접촉","level":2,"body":"얼굴","notes":"숨기며 기댐"}
+{"form":"기대","axis":"접촉","level":2,"body":"어깨·가슴","notes":"체중을 넘김"}
+{"form":"무너","axis":"붕괴","level":4,"body":"무릎·허리","notes":"버티지 못함"}
+{"form":"풀썩","axis":"붕괴","level":3,"body":"다리","notes":"주저앉음"}
+{"form":"털썩","axis":"붕괴","level":3,"body":"전신","notes":"소리가 남"}
+{"form":"휘청","axis":"붕괴","level":3,"body":"다리","notes":"중심을 잃음"}
+{"form":"비틀","axis":"붕괴","level":3,"body":"다리","notes":"걸음이 흐트러짐"}
+{"form":"흐트러","axis":"붕괴","level":3,"body":"머리·옷","notes":"흔적으로 남음"}
+{"form":"젖","axis":"붕괴","level":4,"body":"피부·옷","notes":"금지 4항 확인 필요"}
+{"form":"축축","axis":"붕괴","level":4,"body":"피부·옷","notes":"땀·물기 겸용. 상품 장면 금지"}
+{"form":"촉촉","axis":"상태","level":3,"body":"입술·눈","notes":"수위 낮은 축축"}
+{"form":"흥건","axis":"붕괴","level":4,"body":"등·목","notes":"땀 서술로 사용"}
+{"form":"주르륵","axis":"붕괴","level":4,"body":"관자놀이·등","notes":"흐름. 방향이 있음"}
+{"form":"또르륵","axis":"붕괴","level":3,"body":"뺨","notes":"한 줄기"}
+{"form":"뚝","axis":"붕괴","level":3,"body":"눈물·땀","notes":"떨어짐"}
+{"form":"뚝뚝","axis":"붕괴","level":4,"body":"턱·손끝","notes":"계속 떨어짐"}
+{"form":"절로","axis":"통제 불가","level":3,"body":"손·눈","notes":"부사. 의지 부정에 직결"}
+{"form":"저절로","axis":"통제 불가","level":3,"body":"전신","notes":"절로의 강조"}
+{"form":"멋대로","axis":"통제 불가","level":3,"body":"몸","notes":"주체가 몸으로 넘어감"}
+{"form":"제멋대로","axis":"통제 불가","level":4,"body":"몸","notes":"완전한 역전"}
+{"form":"저도 모르게","axis":"통제 불가","level":3,"body":"전신","notes":"관용구. 남용 주의"}
+{"form":"나도 모르게","axis":"통제 불가","level":3,"body":"전신","notes":"1인칭 시점"}
+{"form":"어느새","axis":"통제 불가","level":2,"body":"전신","notes":"시간 건너뛰기 금지와 충돌 주의"}
+{"form":"불쑥","axis":"통제 불가","level":3,"body":"손·말","notes":"예고 없이"}
+{"form":"덜컥","axis":"통제 불가","level":3,"body":"손","notes":"심장 결과 동형이의"}
+{"form":"턱","axis":"접촉","level":3,"body":"손목","notes":"붙잡는 소리"}
+{"form":"탁","axis":"접촉","level":2,"body":"손","notes":"짧고 단단함"}
+{"form":"콱","axis":"접촉","level":3,"body":"손","notes":"거칠게"}
+{"form":"확—","axis":"통제 불가","level":3,"body":"몸","notes":"당겨지는 방향"}
+{"form":"휙","axis":"움직임","level":2,"body":"몸·시선","notes":"빠른 전환"}
+{"form":"화들짝","axis":"반사","level":2,"body":"전신","notes":"놀라 튐"}
+{"form":"쭈뼛","axis":"반사","level":2,"body":"목덜미","notes":"털이 섬"}
+{"form":"곤두","axis":"반사","level":3,"body":"신경·털","notes":"전부 서는 결"}
+{"form":"팽팽","axis":"긴장","level":2,"body":"공기·줄","notes":"배경 투사 겸용"}
+{"form":"팽","axis":"긴장","level":2,"body":"공기","notes":"끊어질 듯"}
+{"form":"조여","axis":"긴장","level":3,"body":"가슴·목","notes":"압박"}
+{"form":"옥죄","axis":"긴장","level":3,"body":"가슴","notes":"조여의 강조"}
+{"form":"막막","axis":"긴장","level":2,"body":"가슴","notes":"숨이 안 나감"}
+{"form":"턱—","axis":"긴장","level":3,"body":"목","notes":"숨이 걸림"}
+{"form":"컥","axis":"긴장","level":3,"body":"목","notes":"숨이 막힘"}
+{"form":"삼키","axis":"억제","level":2,"body":"목","notes":"소리를 삼킴"}
+{"form":"꿀꺽","axis":"억제","level":2,"body":"목","notes":"침 삼키는 소리"}
+{"form":"꿀꺽—","axis":"억제","level":3,"body":"목","notes":"상대에게 들림"}
+{"form":"새어","axis":"누수","level":3,"body":"입술 사이","notes":"2단계의 핵심 동사"}
+{"form":"흘러","axis":"누수","level":3,"body":"입·몸","notes":"방향이 있는 누수"}
+{"form":"터져","axis":"붕괴","level":4,"body":"성대·감정","notes":"억제 실패의 종점"}
+{"form":"끊겨","axis":"누수","level":3,"body":"숨·말","notes":"중간에서 잘림"}
+{"form":"갈라","axis":"누수","level":3,"body":"목소리","notes":"음이 흔들림"}
+{"form":"잠겨","axis":"누수","level":2,"body":"목소리","notes":"낮게 내려앉음"}
+{"form":"쉬어","axis":"누수","level":3,"body":"목소리","notes":"소리가 상함"}
+{"form":"떨려","axis":"떨림","level":2,"body":"목소리·손","notes":"기본 동사형"}
+{"form":"흔들려","axis":"떨림","level":2,"body":"시선·목소리","notes":"방향을 잃음"}
+{"form":"헐떡","axis":"호흡","level":3,"body":"폐","notes":"고른 숨 실패"}
+{"form":"가쁘","axis":"호흡","level":2,"body":"폐","notes":"서술형"}
+{"form":"거칠","axis":"호흡","level":3,"body":"폐","notes":"소리가 섞임"}
+{"form":"짧아","axis":"호흡","level":2,"body":"폐","notes":"길이 축"}
+{"form":"멎","axis":"호흡","level":3,"body":"폐","notes":"정지"}
+{"form":"막혀","axis":"호흡","level":3,"body":"목","notes":"내보내지 못함"}
+{"form":"토해","axis":"호흡","level":3,"body":"폐","notes":"참던 것을 한번에"}
+{"form":"뜨거운 숨","axis":"호흡","level":3,"body":"입","notes":"체온 + 호흡 복합"}
+{"form":"숨결","axis":"호흡","level":2,"body":"입","notes":"거리 해상도와 결합"}
+{"form":"입김","axis":"호흡","level":2,"body":"입","notes":"보이는 숨. 계절 주의"}
+{"form":"아득","axis":"의식","level":3,"body":"머릿속","notes":"멀어짐"}
+{"form":"멍","axis":"의식","level":3,"body":"머릿속","notes":"비어버림"}
+{"form":"하얘","axis":"의식","level":4,"body":"머릿속","notes":"사고 정지"}
+{"form":"흐릿","axis":"의식","level":3,"body":"시야","notes":"초점 상실"}
+{"form":"핑","axis":"의식","level":3,"body":"머릿속","notes":"어지러움"}
+{"form":"어질","axis":"의식","level":3,"body":"머릿속","notes":"중심 상실"}
+{"form":"녹아","axis":"의식","level":4,"body":"전신","notes":"경계 소실"}
+{"form":"빨려","axis":"통제 불가","level":3,"body":"시선·전신","notes":"끌림의 방향"}
+{"form":"끌려","axis":"통제 불가","level":3,"body":"몸","notes":"저항 실패"}
+{"form":"홀린","axis":"통제 불가","level":3,"body":"의식","notes":"판단 정지"}
+{"form":"탐닉","axis":"통제 불가","level":4,"body":"의식","notes":"자발적 함몰"}
+{"form":"빠져","axis":"통제 불가","level":3,"body":"의식","notes":"돌아오지 못함"}
+{"form":"잠기","axis":"통제 불가","level":3,"body":"전신","notes":"천천히 잠식"}
+{"form":"휩쓸","axis":"통제 불가","level":4,"body":"전신","notes":"저항 자체가 없음"}
+{"form":"덮쳐","axis":"통제 불가","level":4,"body":"전신","notes":"외부에서 옴"}
+{"form":"밀려","axis":"통제 불가","level":3,"body":"전신","notes":"파도 결"}
+{"form":"차올라","axis":"통제 불가","level":3,"body":"가슴·아래","notes":"쌓이는 결"}
+{"form":"넘쳐","axis":"붕괴","level":4,"body":"전신","notes":"용량 초과"}
+{"form":"터질 듯","axis":"긴장","level":3,"body":"가슴","notes":"임계 직전"}
+{"form":"참지 못하고","axis":"누수","level":3,"body":"전신","notes":"서술형. 표기 병용 권장"}
+{"form":"버티지 못하고","axis":"붕괴","level":4,"body":"다리·전신","notes":"물리적 실패"}
+{"form":"지그시","axis":"접촉","level":2,"body":"손·입술","notes":"누르는 힘"}
+{"form":"꾸욱","axis":"접촉","level":3,"body":"손","notes":"길게 누름"}
+{"form":"살포시","axis":"접촉","level":1,"body":"손","notes":"거의 닿지 않음"}
+{"form":"닿을 듯","axis":"접촉 직전","level":2,"body":"손끝","notes":"정지 시간과 결합"}
+{"form":"스칠 듯","axis":"접촉 직전","level":2,"body":"피부","notes":"거리 해상도"}
+{"form":"머뭇","axis":"접촉 직전","level":2,"body":"손","notes":"의지가 남아 있음"}
+{"form":"주춤","axis":"접촉 직전","level":1,"body":"발","notes":"물러섬"}
+{"form":"멈춘 채","axis":"정지","level":2,"body":"전신","notes":"정지 시간 축"}
+{"form":"굳은 채","axis":"정지","level":2,"body":"전신","notes":"움직일 수 없음"}
+{"form":"박힌 듯","axis":"정지","level":3,"body":"발·시선","notes":"떼지 못함"}
+{"form":"떼지 못한","axis":"정지","level":3,"body":"시선·손","notes":"통제 불가와 결합"}
+{"form":"헤","axis":"이완","level":3,"body":"입","notes":"풀린 표정. 낮은 격"}
+{"form":"흐흣","axis":"이완","level":2,"body":"성대","notes":"낮은 웃음"}
+{"form":"후훗","axis":"이완","level":1,"body":"성대","notes":"여유"}
+{"form":"픽","axis":"이완","level":1,"body":"입","notes":"짧은 실소"}
+{"form":"쿡","axis":"이완","level":1,"body":"성대","notes":"참는 웃음"}
+{"form":"울먹","axis":"누수","level":3,"body":"목·눈","notes":"감정 붕괴 직전"}
+{"form":"훌쩍","axis":"누수","level":3,"body":"코","notes":"소리로 드러남"}
+{"form":"글썽","axis":"누수","level":2,"body":"눈","notes":"차오름"}
+{"form":"그렁","axis":"누수","level":3,"body":"눈","notes":"넘치기 직전"}
+{"form":"촤악","axis":"소리","level":2,"body":"물·천","notes":"배경음"}
+{"form":"바스락","axis":"소리","level":2,"body":"옷·천","notes":"움직임의 증거"}
+{"form":"사각","axis":"소리","level":1,"body":"천","notes":"마찰음"}
+{"form":"스적","axis":"소리","level":2,"body":"옷","notes":"스치는 소리"}
+{"form":"부스럭","axis":"소리","level":2,"body":"옷·이불","notes":"뒤척임"}
+{"form":"삐걱","axis":"소리","level":2,"body":"문·바닥","notes":"긴장 배경"}
+{"form":"툭","axis":"소리","level":2,"body":"물건","notes":"떨어뜨림. 통제 상실 증거"}
+{"form":"쨍그랑","axis":"소리","level":3,"body":"유리","notes":"놓친 결과"}
+{"form":"웅웅","axis":"소리","level":1,"body":"장치","notes":"상품 장면 화이트리스트"}
+{"form":"잦아들","axis":"소리","level":1,"body":"소음","notes":"해소 감각어"}

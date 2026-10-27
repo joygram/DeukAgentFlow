@@ -1,90 +1,77 @@
-import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync, unlinkSync, rmSync, statSync } from "fs";
-import { basename, dirname, relative, resolve, sep, win32, posix } from "path";
-import { homedir } from "os";
-import { pathToFileURL, fileURLToPath } from "url";
-import { createInterface } from "readline";
 import { createHash } from "crypto";
+import { existsSync,mkdirSync,readdirSync,readFileSync,statSync,writeFileSync } from "fs";
+import { homedir } from "os";
+import { basename,dirname,posix,relative,resolve,win32 } from "path";
+import { fileURLToPath,pathToFileURL } from "url";
 import YAML from "yaml";
 
-// Loose options bag — all CLI functions accept this so callers don't need to list every key.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type CliOpts = Record<string, any>;
 
-// #622: cli-ticket-home.mjs registers itself here at import time to avoid a static
-// circular import (home imports utils). detectConsumerTicketDir uses it when present.
+export type SurfaceKind = "global" | "spoke" | "ticket" | "skill";
+export type SurfaceArea = "entry" | "rules" | "phase1" | "phase2" | "phase3" | "phase4";
+
+export type SurfaceContext = {
+  platform: "claude" | "codex" | "cursor" | "copilot" | "antigravity";
+  surfaceKind: SurfaceKind;
+  area: SurfaceArea;
+  workspace: string | null;
+  activeTicketId: string | null;
+  roleIdentity: string | null;
+  exposedSkills: string[];
+  coreRules: string;
+  agentRules: string;
+  skillRules: string;
+  dynamicContext: string;
+  budgetLines: number;
+};
+
+export function countSurfaceLines(content: string) {
+  return String(content || "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .length;
+}
+
+export function composeSurfaceWithinBudget(
+  blocks: Array<{ id: string; content: string; priority: number; required?: boolean }>,
+  budgetLines: number,
+) {
+  const sortedBlocks = [...blocks]
+    .filter((block) => String(block.content || "").trim().length > 0)
+    .sort((left, right) => {
+      if (left.required !== right.required) return left.required ? -1 : 1;
+      return left.priority - right.priority;
+    });
+
+  const included: string[] = [];
+  let usedLines = 0;
+
+  for (const block of sortedBlocks) {
+    const blockLines = countSurfaceLines(block.content);
+    if (block.required || usedLines + blockLines <= budgetLines) {
+      included.push(block.content);
+      usedLines += blockLines;
+    }
+  }
+
+  return included.join("\n\n");
+}
+
 let _ticketHomeModule = null;
 export function registerTicketHomeModule(mod) { _ticketHomeModule = mod; }
 
-// #879 No-Fallback Gate SSOT: 흩어져 있던 `JSON.parse(readFileSync(...)) catch { 기본값 }`
-// 폴백을 한 곳으로 통합한다. 파일이 없으면 호출부가 넘긴 초기값(명시적 부재 처리)을
-// 쓰고, 파일이 있는데 JSON이 깨졌으면 **던진다** — 조용히 초기값으로 갈음해 손상 상태를
-// "없는 척" 통과시키지 않는다. 읽기 예외(권한 등)도 삼키지 않고 전파한다.
 export function readJsonFile(absPath, initial = null) {
   if (!existsSync(absPath)) return initial;
   const raw = readFileSync(absPath, "utf8");
   try {
     return JSON.parse(raw);
   } catch (err) {
-    throw new Error(`corrupt JSON at ${absPath}: ${err.message} — fix or remove the file (No-Fallback Gate: not silently defaulted)`);
+    throw new Error(localized(UTIL_TEXT.corruptJson, { path: absPath, message: err.message }));
   }
 }
 
-// #879: 텍스트 파일 읽기 SSOT. 없으면 "" (명시적 부재), 있으면 읽되 예외는 전파.
-export function readTextFile(absPath) {
-  if (!existsSync(absPath)) return "";
-  return readFileSync(absPath, "utf8");
-}
-
-// 턴 스로틀링 SSOT: always-게이트/persona 블록이 매 턴 풀사이즈로 재주입되는 비용을
-// 줄이기 위해, "이번이 몇 턴째인지"를 파일에 저장해 N턴 주기로만 풀 출력하고 그 사이는
-// 축약 리마인더만 내보낸다. CLI는 매번 새 프로세스라 in-memory 카운터가 불가능 — 반드시
-// 파일로 영속화해야 한다. hook stdin의 session_id로 세션 경계를 감지해 카운터를 리셋한다
-// (다른 세션의 turnCount를 이어받지 않기 위함). 손상된 상태 파일은 readJsonFile의
-// No-Fallback Gate에 따라 조용히 기본값으로 넘어가지 않고 던진다.
-//
-// 스코프는 세션이지 워크스페이스/티켓이 아니다 — 턴 카운터는 "이 세션이 몇 턴째인가"를
-// 추적하는 것이지 어떤 티켓이 진행 중인지와 무관하다. sessionStatePath(아래, DEUK_ROOT_DIR
-// 정의 이후로 옮겨 정의됨)가 실제 파일 경로를 만든다 — 티켓 디렉토리에 얹지 않는 이유는
-// 그 정의부의 주석 참고.
-export interface TurnState {
-  sessionKey: string;
-  turnCount: number;
-  lastFullAt: number;
-}
-
-export function readTurnState(absPath: string): TurnState {
-  const initial: TurnState = { sessionKey: "", turnCount: 0, lastFullAt: 0 };
-  return readJsonFile(absPath, initial) as TurnState;
-}
-
-// sessionKey가 바뀌면(새 세션) turnCount를 0에서 다시 시작한다. 반환값은 "이번 턴이
-// 몇 턴째인가"(1-based)와, 이번 턴에 풀 출력을 해야 하는지(shouldRenderFull)다.
-// 사용자 결정(2026-07-16): 풀 렌더는 세션당 딱 1번(첫 턴)만 — 이후로는 세션이
-// 끝날 때까지 계속 축약. "N턴마다 반복 풀렌더"는 안전게이트 노출을 늘리려는
-// 의도였지만, 실측 결과 장시간 세션에서 반복 풀렌더 자체가 도로 큰 비용으로
-// 돌아온다는 게 확인돼(74% 절감에 그침) 반복 주기를 없앤다.
-export function advanceTurnState(
-  absPath: string,
-  sessionKey: string,
-): { state: TurnState; shouldRenderFull: boolean } {
-  const prev = readTurnState(absPath);
-  const isNewSession = !sessionKey || prev.sessionKey !== sessionKey;
-  const turnCount = isNewSession ? 1 : prev.turnCount + 1;
-  // 새 세션의 첫 턴만 풀 출력(세션 진입 시 안전게이트/톤을 한 번은 보여준다).
-  // 이후 턴은 세션이 끝날 때까지 계속 축약 — lastFullAt은 "몇 턴째에 풀렌더했는지"
-  // 기록용으로만 남긴다(향후 재조정 대비, 현재 로직은 참조하지 않는다).
-  const shouldRenderFull = isNewSession;
-  const state: TurnState = {
-    sessionKey,
-    turnCount,
-    lastFullAt: shouldRenderFull ? turnCount : prev.lastFullAt,
-  };
-  mkdirSync(dirname(absPath), { recursive: true });
-  writeFileSync(absPath, JSON.stringify(state, null, 0) + "\n", "utf8");
-  return { state, shouldRenderFull };
-}
 function ticketHomeModule() {
-  if (!_ticketHomeModule) throw new Error("ticket home module not registered");
+  if (!_ticketHomeModule) throw new Error(localized(UTIL_TEXT.ticketHomeUnregistered));
   return _ticketHomeModule;
 }
 
@@ -93,63 +80,25 @@ export function toFileUri(absPath) {
   return pathToFileURL(absPath).href;
 }
 
-/** Converts an absolute path to a vscode://file/ URI (clickable in VSCode terminal) */
-export function toVscodeFileUri(absPath) {
-  const posixPath = absPath.replace(/\\/g, "/");
-  const normalized = posixPath.startsWith("/") ? posixPath : `/${posixPath}`;
-  return `vscode://file${normalized}`;
-}
-
 /** writeFileSync wrapper that always normalizes to LF before writing */
 export function writeFileLF(path: string, content: string, encoding: BufferEncoding = "utf8") {
   const normalized = String(content).replace(/\r\n/g, "\n");
   writeFileSync(path, normalized, encoding);
 }
 
-// #713: The deuk home root fragment (the directory name under the user home / workspace).
-// Holds deuk-family-wide assets (tickets/registry/...). VALUE switched .deuk-agent→.deuk
-// (#710 renamed the symbol AGENT_ROOT_DIR→DEUK_ROOT_DIR; #713 flips the value). The legacy
-// ~/.deuk-agent directory is migrated to ~/.deuk by init auto-migration (cli-init-migrate).
-// The AGENT_ROOT_DIR alias is removed — all .ts call sites use DEUK_ROOT_DIR.
 export const DEUK_ROOT_DIR = ".deuk";
 export const WORKSPACE_MARKER_FILE = ".deuk-workspace-id";
 export const TICKET_SUBDIR = "tickets";
-export const RULES_SUBDIR = "rules";
 export const WORKFLOW_MODE_PLAN = "plan";
 export const WORKFLOW_MODE_EXECUTE = "execute";
 
-// #710: relative path under the deuk root. The SINGLE place that joins DEUK_ROOT_DIR with
-// sub-segments — callers pass fragments only (TICKET_SUBDIR, ...) and never re-assemble the
-// root themselves. Replaces the assembled constants (TICKET_DIR_NAME/PLAN_LINKS_DIR/...) that
-// baked the root into SSOT and forced double-assembly across call sites (708 design).
 export function deukRel(...segments: string[]): string {
   return makePath(DEUK_ROOT_DIR, ...segments);
 }
 
-// 턴 스로틀링 상태 파일 경로: session_id 자체를 파일명으로 쓰는 독립 디렉토리
-// (~/.deuk/sessions/)에 저장한다. 티켓 디렉토리(tickets/{uuid}/)에 얹지 않는 이유 —
-// 턴 카운터는 "이 세션이 몇 턴째인가"를 추적하는 것이지 어떤 티켓이 진행 중인지와
-// 무관하다: (a) 티켓이 없는 세션(entry phase, 워크스페이스 미등록)엔 저장할 곳이 없고
-// (b) 세션 도중 티켓이 바뀌면 같은 세션인데 다른 파일을 보게 되는 오결합이 생긴다.
-// 티켓·워크스페이스 유무와 무관하게 항상 저장 가능하고, 세션이 끝나면 그냥 방치되는
-// (필요시 정리되는) 순수 휘발성 상태다. filename으로 게이트용/persona용을 구분한다
-// (예: `${sessionId}.gate-turn-state.json`, `${sessionId}.persona-turn-state.json`).
-export function sessionStatePath(homeDir: string, sessionId: string, filename: string) {
-  const safeId = String(sessionId || "no-session").replace(/[^a-zA-Z0-9_-]/g, "_");
-  return makePath(homeDir, DEUK_ROOT_DIR, "sessions", `${safeId}.${filename}`);
-}
-
 export const TICKET_INDEX_FILENAME = "INDEX.json";
 export const TICKET_LIST_FILENAME = "TICKET_LIST.md";
-export const DOCS_SUBDIR = "docs";
-export const PLANS_SUBDIR = "plan";
 
-// #713: SINGLE source of truth for everything about the OLD (.deuk-agent-era) layout.
-// All legacy-cleanup / scan-exclude / migration code reads from this one object instead of
-// scattered consts — add a future legacy name here once and every site follows. These are the
-// OLD names (fixed); they must NEVER follow DEUK_ROOT_DIR (the current ".deuk"), or cleanup
-// code would start treating the new dir as legacy and delete it. `dirs` = old directory names
-// that purge/scan/ignore logic must recognize (most-specific first).
 export const LEGACY_DEUK = {
   rootDir: ".deuk-agent",
   templateDir: ".deuk-agent-templates",
@@ -175,14 +124,8 @@ const LEGACY_TICKET_GROUPS = new Set<string>([
   "tickets"
 ]);
 
-/**
- * Computes the canonical repository-relative path for a ticket based on its state.
- */
+/** Computes the canonical repository-relative path for a ticket based on its state. */
 export function computeTicketPath(entry) {
-  // #080: paths are relative to the TICKET ROOT (the home store key dir,
-  // ~/.deuk-agent/tickets/{key}/). The legacy `.deuk-agent/tickets/` prefix dates
-  // from in-workspace storage; keeping it nested every self-heal/create one level
-  // deeper inside the store ({key}/.deuk-agent/tickets/main/...).
   const isArchived = entry.status === "archived";
   const group = normalizeTicketGroup(entry.group, "sub");
   const fileStem = entry.fileName
@@ -216,29 +159,8 @@ export function normalizeTicketGroup(rawGroup, fallback = "sub") {
 }
 
 export const CONFIG_FILENAME = "config.json";
-export const GLOBAL_CONFIG_DIR_NAME = "deuk-agent-flow";
 export const GLOBAL_CONFIG_FILENAME = "config.json";
 export const INIT_CONFIG_VERSION = 1;
-
-export const WORKSPACE_KINDS = [
-  { label: "Product planning / strategy / specs", value: "planning" },
-  { label: "Software engineering / coding", value: "coding" },
-  { label: "Systems engineering / operations", value: "systems" },
-  { label: "Research / analysis / knowledge work", value: "research" },
-  { label: "Mixed team workspace", value: "mixed" },
-  { label: "Other / decide later", value: "other" },
-];
-
-export const STACKS = [
-  { label: "Not primarily a code repo", value: "none" },
-  { label: "Web / product app", value: "web" },
-  { label: "Backend / service / API", value: "backend" },
-  { label: "Unity / game / simulation", value: "unity" },
-  { label: "Data / ML / analysis", value: "data" },
-  { label: "Infrastructure / platform / SRE", value: "infra" },
-  { label: "Hybrid / multiple stacks", value: "hybrid" },
-  { label: "Other / skip", value: "other" },
-];
 
 export const AGENT_TOOLS = [
   { label: "OpenAI Codex", value: "codex" },
@@ -260,12 +182,6 @@ export const SPOKE_REGISTRY = [
   { id: "antigravity", detect: (cwd, tools = []) => tools.includes("gemini") || existsSync(makePath(cwd, "GEMINI.md")) || existsSync(makePath(cwd, ".gemini")) || existsSync(makePath(cwd, ".mcp.json")), legacy: "AGENTS.md", target: "GEMINI.md", format: "markdown" }
 ];
 
-export const DOC_LANGUAGE_CHOICES = [
-  { label: "Auto (match system locale)", value: "auto" },
-  { label: "Korean", value: "ko" },
-  { label: "English", value: "en" },
-];
-
 export function normalizeDocsLanguage(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized || normalized === "auto") return "auto";
@@ -274,19 +190,17 @@ export function normalizeDocsLanguage(value) {
   return "auto";
 }
 
+const NEUTRAL_POSIX_LOCALE = /^(c|posix)(\.|@|$)/;
+
 export function inferDocsLanguageFromEnv(env = process.env) {
-  // 1) POSIX 환경변수 우선(Linux/macOS, 또는 사용자가 Windows에서 명시 설정한 경우).
   const posix = String(env.LANG || env.LC_ALL || env.LC_MESSAGES || "").toLowerCase();
-  if (posix) return posix.includes("ko") ? "ko" : "en";
-  // 2) Windows 등 LANG 부재 환경: Node가 OS 로케일을 반영하는 Intl로 폴백.
+  if (posix && !NEUTRAL_POSIX_LOCALE.test(posix)) return posix.includes("ko") ? "ko" : "en";
   try {
     const osLocale = String(Intl.DateTimeFormat().resolvedOptions().locale || "").toLowerCase();
     if (osLocale.includes("ko")) return "ko";
     if (osLocale) return "en";
   } catch {
-    // Intl 미지원(초경량 런타임) 시 최종 폴백으로.
   }
-  // 3) 최종 폴백.
   return "en";
 }
 
@@ -306,6 +220,41 @@ export function resolveDocsLanguage(value, env = process.env) {
   if (normalized === "auto") return inferDocsLanguageFromEnv(env);
   return normalized;
 }
+
+let _surfaceLocale: string | null = null;
+
+export function setSurfaceLocale(docsLanguage) {
+  _surfaceLocale = resolveDocsLanguage(docsLanguage);
+}
+
+export function surfaceLocale() {
+  if (_surfaceLocale) return _surfaceLocale;
+  _surfaceLocale = resolveDocsLanguage(loadInitConfig(null)?.docsLanguage || "auto");
+  return _surfaceLocale;
+}
+
+export function localized(entry: { ko: string; en: string }, replacements: Record<string, string> = {}) {
+  const text = surfaceLocale() === "en" ? entry.en : entry.ko;
+  return Object.entries(replacements).reduce(
+    (acc, [key, value]) => acc.split(`{${key}}`).join(String(value)),
+    text,
+  );
+}
+
+export const UTIL_TEXT = {
+  surfaceContextMissing: { ko: "surface context 에 필수 필드가 없다: {fields}", en: "surface context missing required field(s): {fields}" },
+  corruptJson: {
+    ko: "{path} 의 JSON 이 깨졌다: {message} — 파일을 고치거나 지워라(No-Fallback Gate: 조용히 기본값으로 메우지 않는다)",
+    en: "corrupt JSON at {path}: {message} — fix or remove the file (No-Fallback Gate: not silently defaulted)",
+  },
+  ticketHomeUnregistered: { ko: "ticket home 모듈이 등록되지 않았다", en: "ticket home module not registered" },
+  interactiveRequired: { ko: "대화형 터미널이 필요하다.", en: "Interactive terminal required." },
+  refNotFound: { ko: "--ref 파일을 찾을 수 없다: ", en: "--ref file not found: " },
+  slugValidation: {
+    ko: "[검증 실패] {field} 는 비어 있지 않은 ASCII 슬러그를 만들어야 한다. 받은 값: {received}. \"basic-protocol-pack-unpack-test-redefinition\" 같은 ASCII 제목을 쓰라.",
+    en: "[VALIDATION FAILED] {field} must produce a non-empty ASCII slug. Received: {received}. Use an ASCII title such as \"basic-protocol-pack-unpack-test-redefinition\".",
+  },
+} as const;
 
 export function selectLocalizedTemplatePath(baseDir, templateName, docsLanguage = "en") {
   const normalized = resolveDocsLanguage(docsLanguage);
@@ -340,57 +289,11 @@ export function loadInitConfig(cwd, opts: CliOpts = {}) {
   return null;
 }
 
-export function writeInitConfig(cwd, opts) {
-  const p = getUserInitConfigPath(opts);
-  const dir = dirname(p);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-  const existing = loadInitConfig(cwd) || {};
-  const workflowMode = normalizeWorkflowMode(opts.workflowMode ?? opts.workflow ?? opts.approvalState ?? opts.approval);
-  const data = {
-    version: INIT_CONFIG_VERSION,
-    workflowMode,
-    approvalState: workflowMode === WORKFLOW_MODE_EXECUTE ? "approved" : "pending",
-    workspaceKind: opts.workspaceKind ?? opts.kind ?? existing.workspaceKind ?? existing.kind,
-    stack: opts.stack ?? existing.stack,
-    kind: opts.workspaceKind ?? opts.kind ?? existing.workspaceKind ?? existing.kind,
-    agentTools: opts.agentTools ?? existing.agentTools,
-    docsLanguage: normalizeDocsLanguage(opts.docsLanguage ?? existing.docsLanguage ?? "auto"),
-    scmIgnoreDeukAgent: opts.scmIgnoreDeukAgent ?? existing.scmIgnoreDeukAgent ?? !Boolean(opts.shareTickets ?? existing.shareTickets ?? false),
-    shareTickets: opts.shareTickets ?? existing.shareTickets ?? false,
-    contextMcp: opts.contextMcp ?? existing.contextMcp ?? "skip",
-    remoteSync: opts.remoteSync ?? existing.remoteSync ?? false,
-    pipelineUrl: opts.pipelineUrl,
-    ignoreDirs: opts.ignoreDirs || existing.ignoreDirs || DEFAULT_IGNORE_DIRS,
-    updatedAt: new Date().toISOString(),
-  };
-  writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
-}
-
-// Single source of truth for the current user's home directory. Every home-derived
-// path (global agent pointers, Claude settings hook, workspace registry) must route
-// through here so platform/env home policy lives in one place instead of being
-// sprawled across call sites with divergent fallbacks.
-//
-// process.env.HOME is intentionally NOT consulted: the ~/bin/node wrapper delegates
-// to the Windows node.exe, so homedir() already resolves to the shared Windows home
-// (C:\Users\joy) under both Windows and WSL. Honoring env.HOME would make a native
-// WSL node pick /home/joy and break that shared-home contract. Tests inject opts.homeDir.
 export function resolveUserHome(opts: CliOpts = {}) {
   return opts.homeDir || homedir();
 }
 
-// The project's single path-construction primitive. Joins segments and normalizes
-// the result to the target platform's convention (canonical form = platform-native:
-// win32 -> "\\", posix -> "/"), regardless of how the inputs were stored ??mixed or
-// foreign separators are accepted. platform defaults to the running platform; pass
-// opts.platform to build a path for another platform deterministically (used by
-// tests so they compare via this same function and stay platform-agnostic).
 export function makePath(...args) {
-  // Variadic drop-in for path.join: makePath(a, b, c). Also accepts a single
-  // segments array and/or a trailing { platform } options object:
-  //   makePath([a, b], { platform: "win32" })  |  makePath(a, b, { platform })
   let opts: CliOpts = {};
   if (args.length > 1 && args[args.length - 1] && typeof args[args.length - 1] === "object" && !Array.isArray(args[args.length - 1])) {
     opts = args.pop();
@@ -398,8 +301,6 @@ export function makePath(...args) {
   const segments = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
   const platform = opts.platform || process.platform;
   const mod = platform === "win32" ? win32 : posix;
-  // Swap the *foreign* separator to the target's (no collapsing ??keeps leading
-  // "\\\\" UNC prefixes like \\wsl.localhost\... intact); the join then normalizes.
   const foreign = platform === "win32" ? /\//g : /\\/g;
   const parts = segments
     .map(part => String(part ?? ""))
@@ -408,20 +309,12 @@ export function makePath(...args) {
   return mod.join(...parts);
 }
 
-// #709: Single source of truth for the package root. Historically 10 call sites computed
-// this five different ways (dirname(dirname(import.meta.url)), makePath(__dirname, ".."),
-// resolve(dirname(fileURLToPath()), ".."), ...). Those bake in a fixed directory depth, so
-// the tsc build output (scripts/out/scripts/) shifted the depth and broke docs/ resolution
-// ("CLI surface document not found: scripts/out/docs/..."). This walks UP from the caller's
-// file looking for the package.json marker, so it returns the SAME root whether the code runs
-// from source (scripts/) or build output (scripts/out/scripts/) — location-independent.
 let _packageRootCache: string | null = null;
 export function resolvePackageRoot(opts: CliOpts = {}): string {
   if (opts.packageRoot) return opts.packageRoot;
   if (!opts.noCache && _packageRootCache) return _packageRootCache;
   const startFile = opts.fromUrl ? fileURLToPath(opts.fromUrl) : fileURLToPath(import.meta.url);
   let dir = dirname(startFile);
-  // Walk up until a package.json is found; stop at filesystem root.
   while (true) {
     if (existsSync(makePath(dir, "package.json"))) break;
     const parent = dirname(dir);
@@ -432,66 +325,45 @@ export function resolvePackageRoot(opts: CliOpts = {}): string {
   return dir;
 }
 
-// #632: OS-agnostic basename. path.basename uses the CURRENT runtime's separator, so
-// under a POSIX node (WSL / Git Bash) it cannot split a Windows path — basename(
-// "D:\\workspace\\DeukPack") wrongly returns "workspaceDeukPack". normalizeRegistryPath
-// emits Windows-style paths regardless of runtime, so any code deriving a name from one
-// (e.g. computeTicketKey) must split on BOTH separators. Mirrors makePath's cross-OS intent.
 export function basenameAnyOS(value) {
   return String(value ?? "").split(/[\\/]/).filter(Boolean).pop() || "";
 }
 
-export function getUserConfigDir(opts: CliOpts = {}) {
+function legacyRoamingConfigDir(opts: CliOpts = {}) {
   const platform = opts.platform || process.platform;
   const env = opts.env || process.env;
   const homeDir = resolveUserHome(opts);
+  if (platform !== "win32") return "";
+  const base = env.APPDATA || makePath([homeDir, "AppData", "Roaming"], { platform });
+  return makePath([base, "deuk-agent-flow"], { platform });
+}
 
-  if (platform === "win32") {
-    const base = env.APPDATA || makePath([homeDir, "AppData", "Roaming"], { platform });
-    return makePath([base, GLOBAL_CONFIG_DIR_NAME], { platform });
-  }
-
-  const base = env.XDG_CONFIG_HOME || makePath([homeDir, ".config"], { platform });
-  return makePath([base, GLOBAL_CONFIG_DIR_NAME], { platform });
+function migrateLegacyRoamingConfig(targetPath: string, opts: CliOpts = {}) {
+  if (existsSync(targetPath)) return;
+  const legacyDir = legacyRoamingConfigDir(opts);
+  if (!legacyDir) return;
+  const legacyPath = makePath([legacyDir, GLOBAL_CONFIG_FILENAME], opts);
+  if (!existsSync(legacyPath)) return;
+  mkdirSync(dirname(targetPath), { recursive: true });
+  writeFileSync(targetPath, readFileSync(legacyPath, "utf8"));
 }
 
 export function getUserInitConfigPath(opts: CliOpts = {}) {
-  return makePath([getUserConfigDir(opts), GLOBAL_CONFIG_FILENAME], opts);
+  const targetPath = makePath([resolveUserHome(opts), DEUK_ROOT_DIR, GLOBAL_CONFIG_FILENAME], opts);
+  migrateLegacyRoamingConfig(targetPath, opts);
+  return targetPath;
 }
 
-// Global, workspace-independent directory for user-forked/custom skills.
-// Lives alongside the global config so personalized skills follow the user
-// across every workspace (win: %APPDATA%\deuk-agent-flow\skills,
-// posix: $XDG_CONFIG_HOME|~/.config/deuk-agent-flow/skills).
 export function getUserSkillsDir(opts: CliOpts = {}) {
   return makePath([resolveUserHome(opts), DEUK_ROOT_DIR, "skills"], opts);
 }
 
-// Global, workspace-independent path for skill install state (the `installed`
-// array). Lives next to the global skills dir so a skill installed once shows
-// the same state across every editor/workspace. Exposure stays per-workspace
-// because it is physically injected into agent rule files.
 export function getUserSkillsConfigPath(opts: CliOpts = {}) {
   return makePath([resolveUserHome(opts), DEUK_ROOT_DIR, "skills.json"], opts);
 }
 
 export function getWorkspaceInitConfigPath(cwd) {
   return makePath(cwd, deukRel(CONFIG_FILENAME));
-}
-
-export function migrateWorkspaceInitConfigToUserConfig(cwd, opts: CliOpts = {}) {
-  const workspaceConfig = getWorkspaceInitConfigPath(cwd);
-  if (!existsSync(workspaceConfig)) return false;
-
-  const dryRun = Boolean(opts.dryRun);
-  const silent = Boolean(opts.silent);
-
-  if (!dryRun) unlinkSync(workspaceConfig);
-  if (!silent) {
-    const relWorkspaceConfig = toRepoRelativePath(cwd, workspaceConfig);
-    console.log(`[MIGRATE] ${dryRun ? "Would remove" : "Removed"} legacy workspace config: ${relWorkspaceConfig}`);
-  }
-  return dryRun ? "dry-run-remove-workspace-config" : "removed-workspace-config";
 }
 
 export function normalizeWorkflowMode(value) {
@@ -506,12 +378,6 @@ export function normalizeWorkflowMode(value) {
   return normalized === WORKFLOW_MODE_EXECUTE ? WORKFLOW_MODE_EXECUTE : WORKFLOW_MODE_PLAN;
 }
 
-// DR-03 SSOT: 워크플로 모드/승인의 입력 소스는 여기 한 곳에서만 정의한다. CLI 실입력은
-// 두 개뿐이다 — opts.workflowMode(←--workflow)와 opts.approval(←--approval). 과거 체인에
-// 섞여 있던 opts.workflow·opts.approvalState는 어떤 CLI 경로도 채우지 않는 죽은 별칭이라
-// 제거했다(cli-args.ts에 해당 플래그 없음). savedConfig는 저장된 설정 소스로 별개다.
-// 이 배열이 정본 우선순위이며, 모든 소비처(isWorkflowExecute/resolveWorkflowMode/
-// evidence-validators/cli-prompts)가 이 함수를 거친다 — 폴백 체인을 곳곳에 복제하지 않는다.
 function workflowModeInput(opts: CliOpts = {}, savedConfig = null) {
   return opts.workflowMode ?? opts.approval ?? savedConfig?.workflowMode;
 }
@@ -524,33 +390,6 @@ export function isWorkflowExecute(opts: CliOpts = {}, savedConfig = null) {
   return resolveWorkflowMode(opts, savedConfig) === WORKFLOW_MODE_EXECUTE;
 }
 
-/**
- * Strips dynamically appended rule modules from content.
- */
-export function pruneRuleModules(content) {
-  const marker = "<!-- RULE MODULE: ";
-  const idx = content.indexOf(marker);
-  if (idx !== -1) {
-    return content.substring(0, idx).trimEnd();
-  }
-  return content.trimEnd();
-}
-
-/**
- * Higher-order function to wrap interactive readline sessions.
- */
-export async function withReadline(callback) {
-  if (!process.stdout.isTTY) {
-    throw new Error("Interactive terminal required.");
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return await callback(rl);
-  } finally {
-    rl.close();
-  }
-}
-
 export function toPosixPath(p) {
   return p.replace(/\\/g, "/");
 }
@@ -559,27 +398,15 @@ export function toRepoRelativePath(cwd, absPath) {
   return toPosixPath(relative(cwd, absPath));
 }
 
-/** ?덉??ㅽ듃由?湲곕컲 ?뚰겕?ㅽ럹?댁뒪 猷⑦듃 湲곗? ?곷?寃쎈줈 ??留곹겕/寃쎈줈 異쒕젰???ъ슜 */
-// #746: 티켓은 홈 스토어(~/.deuk/tickets/{uuid}/, 보통 C:)에 살고 워크스페이스 cwd는
-// 다른 드라이브(D:)일 수 있다. 그 경우 relative(wsRoot, abs)는 상대경로를 만들지 못하고
-// "C:/..." 절대경로로 폴백하는데, 그 drive-prefixed 링크는 채팅·webview 어느 쪽에서도
-// 열리지 않는다(클릭 실측). 카드 링크(formatTicketFlowLine)와 동일하게 drive-letter만
-// 떼어낸 슬래시-루트 절대경로("C:/Users/..." → "/Users/...")로 통일하면 양쪽에서 열린다.
-// NOTE(후속): 같은 드라이브일 때 ../상대경로 최적화·linux 동작은 별도 티켓에서 고민.
+/** ?덉??ㅽ듃由?湲곕컲 ?뚰겕?ㅽ럹?댁뒪 猷⑦듃 湲곗? ?곷?寃쎈줈 ??留곹겕/寃쎈줈 異쒕젰???ъ슜 티켓은 홈 스토어(~/.deuk/tickets/{uuid}/, 보통 C:)에 살고 워크스페이스 cwd는 */
 export function toWsRelativePath(_cwd, absPath) {
   return toPosixPath(makePath(resolve(absPath))).replace(/^[a-zA-Z]:/, "");
 }
 
-// #815: 채팅 패널 클릭용 ②형식(drive-stripped, toWsRelativePath)은 셸·에이전트가
-// cat/Read로 열 수 없다(drive 정보 손실). 사람이 읽는 Path:/Source: 라인에는 ②
-// 클릭 링크와 함께 ①형식(drive 포함 절대경로)을 병기해 양쪽 소비자를 모두 만족시킨다.
-// 이 함수는 그 ①형식(예: "C:/Users/..." )을 반환한다.
 export function toDriveAbsolutePath(absPath) {
   return toPosixPath(makePath(resolve(absPath)));
 }
 
-// Hangul syllable \u2192 Latin transliteration (Revised Romanization, simplified).
-// Used as a fallback so non-ASCII titles still produce a usable slug.
 const HANGUL_CHO = ["g","kk","n","d","tt","r","m","b","pp","s","ss","","j","jj","ch","k","t","p","h"];
 const HANGUL_JUNG = ["a","ae","ya","yae","eo","e","yeo","ye","o","wa","wae","oe","yo","u","wo","we","wi","yu","eu","ui","i"];
 const HANGUL_JONG = ["","g","kk","gs","n","nj","nh","d","l","lg","lm","lb","ls","lt","lp","lh","m","b","bs","s","ss","ng","j","ch","k","t","p","h"];
@@ -613,7 +440,6 @@ function asciiSlug(input) {
 export function toSlug(input) {
   const slug = asciiSlug(input);
   if (slug) return slug;
-  // Fallback: transliterate Hangul, then slug again. Keeps Korean titles usable.
   return asciiSlug(hangulToRoman(input));
 }
 
@@ -653,10 +479,6 @@ export function buildWorkspaceAliases(id, workspacePath, extraAliases = []) {
         aliases.add(withoutDeuk);
         aliases.add(withoutDeukParts.join(" "));
       }
-      // The bare last part (e.g. "flow", "pack") stays available for explicit
-      // `--workspace <name>` queries, which are intentional and exact-matched.
-      // It is filtered out of prompt-scan aliases (buildPromptWorkspaceAliases)
-      // so it cannot hijack free-form prompt text.
       const lastPart = parts[parts.length - 1];
       if (lastPart) aliases.add(lastPart);
     }
@@ -690,19 +512,11 @@ export function buildPromptWorkspaceAliases(workspace) {
     }
   }
 
-  // Existing registry data may contain over-generic single-word aliases
-  // (e.g. "Flow", "Pack") that would match unrelated free-form prompt text and
-  // redirect to the wrong workspace. Only accept registry aliases specific
-  // enough for prompt matching: multi-token (space/hyphen) or sharing the
-  // canonical id/basename stem.
   const canonicalSlugs = rawCanonicalNames.map(name => toSlug(name)).filter(Boolean);
   const isSpecificPromptAlias = (alias) => {
     if (/[\s-]/.test(alias)) return true;
     const slug = toSlug(alias);
     if (!slug) return false;
-    // Accept only if the alias equals or is more specific than (contains) a
-    // canonical slug. Reject bare fragments like "flow" that are merely a
-    // substring of the canonical id ("deukagentflow").
     return canonicalSlugs.some(canonical => slug === canonical || slug.includes(canonical));
   };
   for (const registryAlias of workspace?.registryAliases || []) {
@@ -714,18 +528,9 @@ export function buildPromptWorkspaceAliases(workspace) {
 }
 
 export function hasWorkspaceMarker(candidatePath) {
-  // #827: 워크스페이스 마커는 .deuk-workspace-id 파일 하나뿐이다. .deuk 폴더는 글로벌
-  // 스토어(~/.deuk) 이름이라 이걸 마커로 인정하면 home 디렉토리가 스토어를 소유한다는
-  // 이유만으로 워크스페이스로 오인·ghost 등록된다(joy 오인등록). .deuk 폴더 존재는
-  // 마커가 아니므로 판정에서 제외 — home과 워크스페이스가 파일 마커로 자연히 구분된다.
   return existsSync(makePath(candidatePath, WORKSPACE_MARKER_FILE));
 }
 
-// #950: package.json 단독 판정을 제거했다. 모노레포 워크스페이스(DeukWriter 등)는
-// 서브패키지마다 package.json을 갖는데, 이걸 경계로 인정하면 서브디렉토리에서 init을
-// 실행했을 때 그 서브디렉토리가 독립 워크스페이스로 자체 등록되며 PROJECT_RULE.md
-// 사본을 또 만들어냈다(#824 이후 실증: DeukWriter 10개소, DeukPack 14개소, DeukHwp 8개소).
-// .git/AGENTS.md/docs/PROJECT_RULE.md만 실제 프로젝트 경계로 인정한다.
 function hasLocalProjectBoundary(candidatePath) {
   return existsSync(makePath(candidatePath, ".git")) ||
     existsSync(makePath(candidatePath, "AGENTS.md")) ||
@@ -742,20 +547,11 @@ function directProjectRoot(startDir) {
 
 export function normalizeRegistryPath(value) {
   let p = String(value || "").trim();
-  // WSL2: /mnt/d/... ??D:\...
   const wsl2 = p.match(/^\/mnt\/([a-zA-Z])(\/.*)?$/);
   if (wsl2) p = wsl2[1].toUpperCase() + ":" + (wsl2[2] || "\\").replace(/\//g, "\\");
-  // WSL1 / Git Bash: /d/... ??D:\...
   const wsl1 = p.match(/^\/([a-zA-Z])(\/.*)?$/);
   if (wsl1) p = wsl1[1].toUpperCase() + ":" + (wsl1[2] || "\\").replace(/\//g, "\\");
-  // Windows drive letter: normalize to uppercase
   p = p.replace(/^([a-z]):/, (_, d) => d.toUpperCase() + ":");
-  // #632: a drive-letter path (e.g. D:\workspace\DeukPack) is ABSOLUTE on Windows, but
-  // POSIX resolve() — what runs under WSL / Git Bash — does not recognize "X:\" as a root
-  // and treats the whole string as relative, prepending process.cwd() and mangling the
-  // backslashes into one segment (".../scripts/workspaceDeukPack"). That poisons the
-  // ticketKey and makes reconcile fire every command. Resolve drive-letter paths with the
-  // win32 resolver so they stay absolute and segmented regardless of the host OS.
   if (/^[A-Za-z]:[\\/]/.test(p)) return win32.resolve(p);
   return resolve(p);
 }
@@ -794,9 +590,6 @@ export function loadRegistrySiblingWorkspaceCandidates(startDir, opts: CliOpts =
       const workspacePath = normalizeRegistryPath(String(record?.path || ""));
       const id = String(record?.name || basename(workspacePath)).trim();
       if (!id || !workspacePath || !hasWorkspaceMarker(workspacePath)) continue;
-      // #080: the user home dir owns ~/.deuk-agent (the STORE) and so passes the marker
-      // check above — but home and anything inside the store are never workspaces.
-      // Stale "joy"/".deuk-agent" records otherwise hijack workspace dispatch.
       if (isInsideHomeStore(workspacePath)) continue;
       const registryAliases = Array.isArray(record?.aliases)
         ? record.aliases.map(value => String(value || "").trim()).filter(Boolean)
@@ -817,14 +610,6 @@ export function loadRegistrySiblingWorkspaceCandidates(startDir, opts: CliOpts =
   return { path: registryDir, root: parentRoot, workspaces, discovered: false, registry: true };
 }
 
-// #638: the workspace candidate source is the home ticket store itself —
-// ~/.deuk-agent/tickets/{uuid}/workspace.json. Each folder is self-describing
-// ({uuid,path,name}); the folder's existence IS the registration (single source of
-// truth). No ~/.agent-flow registry, no registry.json fallback — those caches went
-// stale and spawned ambiguous ghosts. A folder without workspace.json simply isn't
-// a candidate yet; it self-heals into one the next time a command runs in it (reconcile
-// writes workspace.json). One readdir + one small JSON per workspace (tens, not
-// thousands) — negligible cost, nothing to drift.
 export function loadAllRegistryWorkspaceCandidates(opts: CliOpts = {}) {
   const homeDir = resolveUserHome(opts);
   const ticketsRoot = makePath([homeDir, DEUK_ROOT_DIR, "tickets"], opts);
@@ -836,7 +621,6 @@ export function loadAllRegistryWorkspaceCandidates(opts: CliOpts = {}) {
       if (!ent.isDirectory()) continue;
       const dir = makePath(ticketsRoot, ent.name);
 
-      // Authoritative, self-describing source: workspace.json. No fallback.
       let workspacePath = "", name = "", aliases = [];
       try {
         const meta = JSON.parse(readFileSync(makePath(dir, "workspace.json"), "utf8"));
@@ -845,13 +629,8 @@ export function loadAllRegistryWorkspaceCandidates(opts: CliOpts = {}) {
         if (Array.isArray(meta?.aliases)) aliases = meta.aliases.map(a => String(a || "").trim()).filter(Boolean);
       } catch { continue; }  // no workspace.json → not a candidate yet
 
-      // Path must still exist with a workspace marker, and not be the home store.
       if (!workspacePath || !hasWorkspaceMarker(workspacePath)) continue;
       if (isInsideHomeStore(workspacePath)) continue;
-      // #638: the user home dir is NOT where workspaces live. Past cwd-fallback bugs
-      // minted ghost markers at ~/{Name} (e.g. C:\Users\joy\DeukAgentFlow) that
-      // collide by name with the real D:\workspace\{Name}. A workspace directly under
-      // the home dir is never a real candidate — exclude it.
       if (isHomeDirectChild(workspacePath, opts)) continue;
       if (!name) name = basename(workspacePath);
 
@@ -866,9 +645,6 @@ export function loadAllRegistryWorkspaceCandidates(opts: CliOpts = {}) {
     return null;
   }
 
-  // #638: drop nested ghosts — a workspace path that sits INSIDE another candidate's
-  // path (e.g. D:\workspace\DeukAgentFlow\DeukAgentFlow under D:\workspace\DeukAgentFlow)
-  // is an accidental nested registration, not a real workspace. Keep only top-level paths.
   const all = Array.from(byPath.values());
   const paths = all.map(w => w.path);
   const kept = all.filter(w => !paths.some(p =>
@@ -911,12 +687,6 @@ export function loadSiblingWorkspaceCandidates(startDir) {
 }
 
 export function loadWorkspaceCandidates(startDir, opts: CliOpts = {}) {
-  // #645: SSOT-only, NO fallback. The only source of workspace candidates is the
-  // home ticket store's workspace.json records (loadAllRegistryWorkspaceCandidates).
-  // Every cwd-based fallback (sibling scan, ~/.agent-flow cache) was a ghost
-  // factory — a command run in any directory would "discover" and register it.
-  // A workspace exists iff it was explicitly registered via `init`. If nothing is
-  // registered yet, there are simply no candidates — we never invent them from cwd.
   return loadAllRegistryWorkspaceCandidates(opts);
 }
 
@@ -955,13 +725,7 @@ export function findPromptWorkspaceMatches(prompt, candidates) {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-
 export function resolveWorkspaceTarget(query, opts: CliOpts = {}) {
-  // #645: SSOT-only (workspace.json records). No cwd-based sibling fallback.
-  // #685: LangGraph 진입 원칙 — workspace는 사람이 --workspace로 명시한다. sessionId
-  // 쿠키나 "지난번 워크스페이스" 앵커로 추측하는 폴백은 없다(env 미전파 환경에서 default로
-  // 무너지는 근원, §6.0.5/#871-followup이 재도입했다가 세션 간 워크스페이스 오염 사고로
-  // 재차 폐기됨). query가 없으면 추측하지 않고 missing-query 노드로 떨어진다.
   const candidates = opts.candidates || loadAllRegistryWorkspaceCandidates(opts);
 
   if (!candidates) return null;
@@ -976,10 +740,6 @@ export function resolveWorkspaceTarget(query, opts: CliOpts = {}) {
 
   if (matches.length === 0) return { candidates, target: null, reason: "no-match" };
   if (matches.length > 1) {
-    // Normalized lookup collapses separators, so distinct names like
-    // ".deuk-agent" (home store) and "DeukAgent" (workspace) both reduce to
-    // "deukagent" and tie. Break the tie with a case-insensitive exact match
-    // on an original (non-normalized) alias before declaring it ambiguous.
     const exact = matches.filter(workspace =>
       (workspace.aliases || []).some(
         alias => String(alias).toLowerCase() === rawQuery.toLowerCase()
@@ -999,29 +759,7 @@ export function requireNonEmptySlug(input, fieldName = "value") {
   if (slug) return slug;
 
   const received = String(input || "").trim() || "(empty)";
-  throw new Error(
-    `[VALIDATION FAILED] ${fieldName} must produce a non-empty ASCII slug. ` +
-    `Received: ${JSON.stringify(received)}. ` +
-    `Use an ASCII title such as "basic-protocol-pack-unpack-test-redefinition".`
-  );
-}
-
-export function toSnakeCaseKey(input) {
-  return toSlug(input).replace(/-/g, "_");
-}
-
-export function formatTimestampForFile(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${y}${m}${day}-${hh}${mm}${ss}`;
-}
-
-export function makeEntryId() {
-  return `000-generated-${Date.now().toString(36)}`;
+  throw new Error(localized(UTIL_TEXT.slugValidation, { field: fieldName, received: JSON.stringify(received) }));
 }
 
 export function findFileRecursively(dir, fileName) {
@@ -1056,7 +794,6 @@ export function detectProjectFromBody(body) {
 
 export function deriveTopicFromBaseName(baseName) {
   const raw = String(baseName || "").split(".")[0];
-  // Remove trailing timestamp if present (e.g. title-20260426-071208)
   const parts = raw.split("-");
   if (parts.length >= 3) {
     const last = parts[parts.length - 1];
@@ -1070,16 +807,16 @@ export function deriveTopicFromBaseName(baseName) {
 
 export function resolveReferencedTicketPath(opts) {
   if (!opts.ref) return null;
-  const refAbs = makePath(opts.cwd, opts.ref);
+  const refAbs = makePath(opts.workspaceRoot, opts.ref);
   if (!existsSync(refAbs)) {
-    throw new Error("--ref file not found: " + opts.ref);
+    throw new Error(localized(UTIL_TEXT.refNotFound) + opts.ref);
   }
-  return toRepoRelativePath(opts.cwd, refAbs);
+  return toRepoRelativePath(opts.workspaceRoot, refAbs);
 }
 
 export function inferRefTitleAndTopic(opts) {
   if (!opts.ref) return null;
-  const refAbs = makePath(opts.cwd, opts.ref);
+  const refAbs = makePath(opts.workspaceRoot, opts.ref);
 
   let body = "";
   try {
@@ -1111,7 +848,23 @@ export function inferRefTitleAndTopic(opts) {
   };
 }
 
+const frontMatterCache = new Map<string, { meta: any; content: string; parseError: string | null }>();
+const FRONT_MATTER_CACHE_LIMIT = 512;
+
 export function parseFrontMatter(content) {
+  const cacheKey = typeof content === "string" ? content : null;
+  if (cacheKey === null) return parseFrontMatterUncached(content);
+
+  let hit = frontMatterCache.get(cacheKey);
+  if (!hit) {
+    hit = parseFrontMatterUncached(content);
+    if (frontMatterCache.size >= FRONT_MATTER_CACHE_LIMIT) frontMatterCache.clear();
+    frontMatterCache.set(cacheKey, hit);
+  }
+  return { meta: structuredClone(hit.meta), content: hit.content, parseError: hit.parseError };
+}
+
+function parseFrontMatterUncached(content) {
   const lines = content.split(/\r?\n/);
   if (lines.length < 3 || lines[0].trim() !== "---") {
     return { meta: {}, content, parseError: null };
@@ -1137,13 +890,8 @@ export function parseFrontMatter(content) {
   }
 }
 
-// Strip a leading frontmatter block from content so that round-tripping through
-// parseFrontMatter ??stringifyFrontMatter never produces a double-frontmatter file.
 export function stripLeadingFrontMatter(content) {
   const original = String(content || "");
-  // Skip leading whitespace/newlines: parseFrontMatter leaves a blank line in
-  // front of any second frontmatter block (e.g. a duplicated header from a broken
-  // migration), so the "---" we want to strip is not necessarily at index 0.
   const s = original.replace(/^\s+/, "");
   if (!s.startsWith("---")) return original;
   const rest = s.slice(3);
@@ -1156,7 +904,6 @@ export function stringifyFrontMatter(meta, content) {
   const cleanMeta = sanitizeFrontMatterMeta(meta);
   const yamlStr = YAML.stringify(cleanMeta).trim();
   const cleanContent = stripLeadingFrontMatter(content);
-  // Double newline after frontmatter to ensure markdown rendering integrity
   return `---\n${yamlStr}\n---\n\n\n${cleanContent.trim()}\n`;
 }
 
@@ -1176,63 +923,18 @@ export function sanitizeFrontMatterMeta(meta: CliOpts = {}) {
   ]) {
     delete cleanMeta[key];
   }
-  // Remove redundant or default fields to keep frontmatter slim
   if (cleanMeta.project === 'global') delete cleanMeta.project;
   if (!cleanMeta.submodule) delete cleanMeta.submodule;
   
-  // Normalize date format if it looks like an ISO string
   if (typeof cleanMeta.createdAt === 'string' && cleanMeta.createdAt.includes('T')) {
     cleanMeta.createdAt = cleanMeta.createdAt.replace('T', ' ').split('.')[0];
   }
   return cleanMeta;
 }
 
-/**
- * Returns true if semver a is less than b
- */
-export function semverLt(a, b) {
-  const pa = String(a || "0").replace(/[^0-9.]/g, "").split(".").map(Number);
-  const pb = String(b || "0").replace(/[^0-9.]/g, "").split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    const na = pa[i] ?? 0, nb = pb[i] ?? 0;
-    if (na !== nb) return na < nb;
-  }
-  return false;
-}
-
-export async function checkUpdateNotifier() {
-  try {
-    const { fileURLToPath } = await import("url");
-    const pkgPath = makePath(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-    const currentVersion = pkg.version;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 800);
-    if (typeof timeoutId.unref === "function") timeoutId.unref();
-    const res = await fetch("https://registry.npmjs.org/deuk-agent-flow/latest", {
-      signal: controller.signal
-    }).finally(() => {
-      clearTimeout(timeoutId);
-    });
-    if (res.ok) {
-      const data = await res.json() as CliOpts;
-      // Only notify when registry version is strictly newer than local (handles local dev symlink case)
-      if (data.version && semverLt(currentVersion, data.version)) {
-        console.warn(`\n\x1b[33m?뮕 Update available! ${currentVersion} ??${data.version}\x1b[0m`);
-        console.warn(`\x1b[36mRun 'npm install -g deuk-agent-flow', then 'deuk-agent-flow init' from the repo or workspace root.\x1b[0m\n`);
-      }
-    }
-  } catch(e) {
-    // Ignore timeout or network errors silently
-  }
-}
-
 export const DEFAULT_IGNORE_DIRS = ["node_modules", ".git", DEUK_ROOT_DIR, "tmp", "temp", ".tmp", ".cache"];
 
-/**
- * Resolves all potential ticket directories for a given path.
- * Returns { primary, legacy: [] }
- */
+/** Resolves all potential ticket directories for a given path. */
 export function resolveTicketSystemPaths(cwd) {
   return {
     primary: makePath(cwd, DEUK_ROOT_DIR, TICKET_SUBDIR),
@@ -1240,13 +942,7 @@ export function resolveTicketSystemPaths(cwd) {
   };
 }
 
-// Finds the nearest ancestor that owns a .deuk-agent dir (the workspace root).
-// Exported so commands can locate the workspace WITHOUT going through
-// detectConsumerTicketDir (which now returns the home ticket dir, #622).
 export function findWorkspaceRoot(startDir) {
-  // #080: the user home dir owns ~/.deuk-agent (the ticket STORE, not a workspace
-  // marker). Climbing past a non-workspace cwd must never land on home — that minted
-  // a "joy"-style ghost workspace and nested ticket dirs inside the store.
   const home = resolve(resolveUserHome());
   let curr = resolve(startDir);
   while (curr && curr !== dirname(curr)) {
@@ -1259,37 +955,17 @@ export function findWorkspaceRoot(startDir) {
   return null;
 }
 
-// #622/#623: ticket data lives in ~/.deuk-agent/tickets/{ticketKey}/, NOT in the
-// workspace git tree. detectConsumerTicketDir is a PURE READ — it resolves the home
-// ticket dir for the workspace WITHOUT side effects (no marker creation, no file
-// moves, no registry writes). The actual migration (reconcile) is triggered once on
-// ticket-command entry and on init via ensureWorkspaceMigrated() (#623), so the many
-// detect callers (index/scan/parser/document reads) never mutate state.
 export function detectConsumerTicketDir(startDir, opts: CliOpts = {}) {
   const root = findWorkspaceRoot(startDir);
   if (!root) return null;
-  // #626: findWorkspaceRoot walks ANCESTORS for a .deuk-agent dir. From a non-workspace
-  // cwd (e.g. %TEMP%\foo) it climbs all the way to ~/.deuk-agent and returns the HOME
-  // dir itself — which is the ticket STORE, not a workspace. Treating it as one yields a
-  // doubled `tickets/.deuk-agent/tickets/main` path and scatters reads. A non-workspace
-  // cwd has no ticket dir to read: return null rather than mis-resolving onto the store.
   try {
     const home = ticketHomeModule();
     if (home.isHomeStoreRoot(root, opts)) return null;
   } catch { /* fall through to legacy resolution below */ }
   try {
     const home = ticketHomeModule();
-    // Resolve the home ticket dir from already-known state only. Prefer the registry
-    // entry (keyed by the existing marker id); fall back to basename when not yet
-    // migrated. Crucially, this reads — it does not create a marker or move files.
     return home.resolveHomeTicketDirForWorkspace(root, opts);
   } catch (e) {
-    // If home resolution fails for any reason, fall back to the in-workspace path
-    // so the tool keeps working rather than losing the ticket system entirely.
-    // #829: this fallback used to be silent, which let tickets accumulate in a
-    // path the CLI's own discard/use/show lookups never scan (home is canonical).
-    // Surface it loudly so the mismatch is diagnosed immediately, not reverse-
-    // engineered from filesystem archaeology later.
     const fallback = resolveTicketSystemPaths(root).primary;
     console.warn(`\x1b[33m[deuk-agent-flow] warning: home ticket dir resolution failed (${e && e.message ? e.message : e}); falling back to in-workspace path: ${fallback}\x1b[0m`);
     console.warn(`\x1b[33m[deuk-agent-flow] tickets written here will NOT be visible to home-store lookups (discard/use/show). Investigate the home resolution failure before continuing.\x1b[0m`);
@@ -1297,18 +973,10 @@ export function detectConsumerTicketDir(startDir, opts: CliOpts = {}) {
   }
 }
 
-// The WORKSPACE root (where .deuk-agent lives) — distinct from where tickets are
-// stored. Since #622 moved ticket storage to home, this must use findWorkspaceRoot
-// directly; deriving it from detectConsumerTicketDir would now yield the home dir
-// and corrupt every workspace breadcrumb/identity that depends on it.
 export function resolveConsumerTicketRoot(startDir, opts: CliOpts = {}) {
   return findWorkspaceRoot(startDir);
 }
 
-// #080: true when cwd is the user's ~/.deuk-agent store or anywhere inside it. The
-// store holds ticket data ({key}/...), NOT workspaces; registering any path under it
-// nests tickets/{key}/.deuk-agent/tickets and mints ghost keys. Mirrors the home guard
-// in cli-ticket-home.isHomeStoreRoot but lives here to avoid a circular import.
 function isInsideHomeStore(cwd, opts: CliOpts = {}) {
   const here = normalizeRegistryPath(resolve(String(cwd || "")));
   const home = normalizeRegistryPath(resolveUserHome(opts));
@@ -1317,12 +985,7 @@ function isInsideHomeStore(cwd, opts: CliOpts = {}) {
   return here === store || here.startsWith(store + "/");
 }
 
-// #638: true when path is a DIRECT child of the user home dir (e.g. ~/DeukAgentFlow).
-// Workspaces live in project dirs (D:\workspace\...), never directly under home;
-// such paths are ghost markers minted by past cwd-fallback bugs.
 export function isHomeDirectChild(p, opts: CliOpts = {}) {
-  // normalizeRegistryPath already yields the canonical (Windows-style) path; do NOT
-  // run it through path.resolve under POSIX node — that mangles "C:\..\.." (#632).
   const here = normalizeRegistryPath(String(p || ""));
   const home = normalizeRegistryPath(resolveUserHome(opts));
   for (const sep of ["/", "\\"]) {
@@ -1334,35 +997,13 @@ export function isHomeDirectChild(p, opts: CliOpts = {}) {
   return false;
 }
 
-// #626: the authoritative answer to "is this cwd a real workspace I may register?".
-// findWorkspaceRoot only finds an ancestor that ALREADY owns a .deuk-agent marker, so
-// callers used `findWorkspaceRoot(cwd) || cwd` to also cover first-time registration —
-// but that `|| cwd` fallback turns ANY cwd (a %TEMP% dir, an arbitrary subfolder) into
-// a "workspace", spawning ghost ticketKeys and scattering tickets. Replace that pattern
-// with this: return the marker-owning root if one exists; otherwise accept cwd ONLY when
-// it is itself a project boundary (.git / package.json / AGENTS.md / PROJECT_RULE.md) —
-// i.e. a place worth migrating on first run. Return null for everything else so reconcile
-// is skipped rather than minting a ghost. An explicit --workspace always wins.
 export function resolveRealWorkspaceRoot(cwd, opts: CliOpts = {}) {
   if (opts && opts.workspace) return normalizeRegistryPath(opts.workspace);
-  // #080: NEVER register anything inside the home ticket store (~/.deuk-agent).
-  // Each {key}/ folder there carries its own .deuk-agent subtree, so findWorkspaceRoot
-  // would treat it as a workspace and recurse — nesting tickets/{key}/.deuk-agent/tickets
-  // and spawning ghost keys. Guard the whole store subtree up front.
   if (isInsideHomeStore(cwd, opts)) return null;
-  // #645: a workspace is ONLY a directory that already owns a .deuk-agent marker
-  // (findWorkspaceRoot walks up to find one). We do NOT promote a bare cwd to a new
-  // workspace just because it looks like a project boundary — that cwd-promotion was
-  // a ghost factory. New workspaces are created exclusively by `deuk-agent-flow init`,
-  // which writes the marker; thereafter findWorkspaceRoot finds it. No marker → null.
   return findWorkspaceRoot(cwd) || null;
 }
 
 export function resolveWorkspaceContext(startDir = "") {
-  // #633: NO cwd fallback. If startDir has no real .deuk-agent workspace marker,
-  // root is "" — we must NOT treat the cwd (e.g. the home dir C:\Users\joy) as a
-  // workspace, which would surface a bogus "joy" breadcrumb and drive maintenance
-  // into null-path crashes. Callers that genuinely need a path fall back themselves.
   const root = resolveConsumerTicketRoot(startDir) || "";
   return {
     root,
@@ -1379,16 +1020,6 @@ export function isInsideGitWorkTree(cwd) {
   return isGitWorkTreeMarker(makePath(curr, ".git"));
 }
 
-function resolveGitWorkTreeRoot(startDir) {
-  let curr = resolve(startDir);
-  while (curr && curr !== dirname(curr)) {
-    if (isGitWorkTreeMarker(makePath(curr, ".git"))) return curr;
-    curr = dirname(curr);
-  }
-  if (isGitWorkTreeMarker(makePath(curr, ".git"))) return curr;
-  return null;
-}
-
 function isGitWorkTreeMarker(gitMarkerPath) {
   if (!existsSync(gitMarkerPath)) return false;
   const markerStat = statSync(gitMarkerPath);
@@ -1396,9 +1027,7 @@ function isGitWorkTreeMarker(gitMarkerPath) {
   return existsSync(makePath(gitMarkerPath, "HEAD")) || existsSync(makePath(gitMarkerPath, "commondir"));
 }
 
-/**
- * Unified workspace/submodule discovery.
- */
+/** Unified workspace/submodule discovery. */
 export function discoverAllWorkspaces(baseCwd, ignoreDirs = DEFAULT_IGNORE_DIRS, out: Set<string> = new Set<string>()) {
   if (!existsSync(baseCwd)) return Array.from(out);
 
@@ -1406,8 +1035,6 @@ export function discoverAllWorkspaces(baseCwd, ignoreDirs = DEFAULT_IGNORE_DIRS,
   const isWorkspaceRoot = existsSync(paths.primary) || paths.legacy.length > 0;
   if (isWorkspaceRoot) {
     out.add(baseCwd);
-    // Stop descending once a workspace root is found.
-    // This prevents nested child workspaces from being treated as independent roots.
     return Array.from(out);
   }
 
@@ -1444,10 +1071,7 @@ async function probeMcpUrl(url) {
   return false;
 }
 
-/**
- * Checks if the deuk-agent-context MCP server is active for the given workspace.
- * Detects .mcp.json, .cursor/mcp.json, or .vscode/mcp.json and pings SSE servers if applicable.
- */
+/** Checks if the deuk-agent-context MCP server is active for the given workspace. */
 export function collectMcpConfigStatuses(cwd) {
   const mcpPaths = [
     makePath(cwd, ".mcp.json"),
@@ -1478,10 +1102,7 @@ export function collectMcpConfigStatuses(cwd) {
   return statuses;
 }
 
-/**
- * Checks if the deuk-agent-context MCP server is active for the given workspace.
- * Detects .mcp.json, .cursor/mcp.json, or .vscode/mcp.json and pings SSE servers if applicable.
- */
+/** Checks if the deuk-agent-context MCP server is active for the given workspace. */
 export async function isMcpActive(cwd) {
   const statuses = collectMcpConfigStatuses(cwd);
   for (const status of statuses) {
@@ -1490,5 +1111,3 @@ export async function isMcpActive(cwd) {
   }
   return false;
 }
-
-

@@ -1,4 +1,4 @@
 export {
-  readTicketDocument,
-  resolveTicketEntryOrComputedPath
+readTicketDocument,
+resolveTicketEntryOrComputedPath
 } from "./cli-ticket-document.js";

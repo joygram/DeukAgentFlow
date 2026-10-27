@@ -1,8 +1,23 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from "fs";
-import { dirname, join, relative } from "path";
+import { existsSync,mkdirSync,readFileSync,readdirSync,rmSync,writeFileSync } from "fs";
 import { homedir } from "os";
-import { fileURLToPath } from "url";
-import { DEUK_ROOT_DIR, CliOpts, getUserSkillsConfigPath, getUserSkillsDir, makePath, parseFrontMatter, resolvePackageRoot, toFileUri } from "./cli-utils.js";
+import { dirname,join } from "path";
+import { CliOpts,DEUK_ROOT_DIR,UTIL_TEXT,composeSurfaceWithinBudget,getUserSkillsConfigPath,getUserSkillsDir,localized,makePath,parseFrontMatter,resolvePackageRoot,toFileUri } from "./cli-utils.js";
+import { listVocabEntries } from "./persona-vocab-db.js";
+
+const SKILL_TEXT = {
+  exposeUsage: { ko: "skill expose 는 --platform {platforms} 가 필요하다", en: "skill expose requires --platform {platforms}" },
+  skillNotFound: { ko: "스킬을 찾을 수 없다: {id}", en: "skill not found: {id}" },
+  unknownSkill: { ko: "알 수 없는 스킬: {id}", en: "unknown skill: {id}" },
+  forkUsage: { ko: "skill fork 는 --skill <id> 가 필요하다", en: "skill fork requires --skill <id>" },
+  totalLimit: { ko: "총 장착 가능한 스킬 개수({max}개)를 초과할 수 없습니다.", en: "cannot exceed the total installable skill count ({max})." },
+  categoryLimit: { ko: "'{category}' 카테고리는 최대 {max}개까지만 장착할 수 있습니다.", en: "category '{category}' allows at most {max} skill(s)." },
+  noSkills: { ko: "설치된 스킬이 없다. 먼저 skill add 를 실행하라", en: "no skills installed; run skill add first" },
+  removeUsage: { ko: "skill remove 는 --skill <id> 가 필요하다", en: "skill remove requires --skill <id>" },
+  editUsage: { ko: "skill edit 는 --skill <id> 가 필요하다", en: "skill edit requires --skill <id>" },
+  unknownAction: { ko: "알 수 없는 skill 동작: ", en: "Unknown skill action: " },
+} as const;
+
+const SURFACE_BUDGET_LINES = 100;
 
 const SKILL_ROOT = "templates/skills";
 const CONFIG_FILE = `${DEUK_ROOT_DIR}/skills.json`;
@@ -14,45 +29,30 @@ const SKILL_PATHS = {
   cursorPointer: makePath(".cursor", "rules", "deuk-agent-skills.mdc"),
 };
 
-// 에이전트(플랫폼)별 스킬 노출 전략 레지스트리.
-// kind "native": 에이전트 고유 스킬 디렉토리에 SKILL.md를 복사.
-// kind "pointer": 에이전트 룰/인스트럭션 파일에 스킬 포인터 섹션을 주입.
 const SKILL_PLATFORMS = [
   { id: "claude", kind: "native", nativeDir: join(homedir(), ".claude", "skills") },
+  { id: "codex", kind: "native", nativeDir: join(homedir(), ".codex", "skills") },
   { id: "cursor", kind: "pointer", pointerFile: makePath(".cursor", "rules", "deuk-agent-skills.mdc"), format: "mdc" },
-  { id: "codex", kind: "pointer", pointerFile: makePath(".codex", "AGENTS.md"), format: "markdown" },
   { id: "copilot", kind: "pointer", pointerFile: makePath(".github", "copilot-instructions.md"), format: "markdown" },
-  { id: "antigravity", kind: "pointer", pointerFile: "GEMINI.md", format: "markdown" },
+  { id: "antigravity", kind: "native", nativeDir: join(homedir(), ".gemini", "config", "skills") },
 ];
 
-const SKILL_PLATFORM_IDS = SKILL_PLATFORMS.map(p => p.id);
 const SKILL_POINTER_BEGIN = "<!-- DEUK_AGENT_SKILLS_BEGIN -->";
 const SKILL_POINTER_END = "<!-- DEUK_AGENT_SKILLS_END -->";
-// native 플랫폼 flat 파일 prefix — 타 도구 스킬과 충돌 방지.
 const NATIVE_SKILL_PREFIX = "daf-";
 
-function getPlatform(id) {
-  const platform = SKILL_PLATFORMS.find(p => p.id === id);
-  if (!platform) throw new Error(`skill expose requires --platform ${SKILL_PLATFORM_IDS.join("|")}`);
-  return platform;
-}
-
-// #879 No-Fallback Gate: catch 삼킴 폴백 제거. 파일이 없으면 호출부가 넘긴 초기값을
-// 쓰되(최초 실행 정상 — 명시적 부재 처리), 파일이 있는데 JSON이 깨졌으면 던진다.
-// 조용히 초기값으로 갈음하면 손상된 config가 "없는 척" 통과해 상태가 유실된다
-// (hasPhase2ExecutionEvidence 폴백이 깨진 로직을 가린 것과 같은 함정).
 function readJsonIfExists(absPath, initial = null) {
   if (!existsSync(absPath)) return initial;
   const raw = readFileSync(absPath, "utf8");
   try {
     return JSON.parse(raw);
   } catch (err) {
-    throw new Error(`corrupt JSON at ${absPath}: ${err.message} — fix or remove the file (No-Fallback Gate: not silently defaulted)`);
+    throw new Error(localized(UTIL_TEXT.corruptJson, { path: absPath, message: err.message }));
   }
 }
 
 function getAvailableSkills(cwd) {
-  const ids = new Set();
+  const ids = new Set<string>();
   const scanDir = (dir) => {
     if (existsSync(dir)) {
       readdirSync(dir, { withFileTypes: true })
@@ -71,12 +71,7 @@ function userSkillPath(id) {
   return makePath(getUserSkillsDir(), id, "SKILL.md");
 }
 
-// 스킬 본문 원본 경로. 전역 사용자본 > repo 템플릿 > 번들 순으로 우선.
-function sourceSkillPath(cwd, id) {
-  // #622-D: the package template is the SSOT (main). It wins so package updates
-  // (e.g. the latest persona-maid) propagate instead of being shadowed by a stale
-  // user copy. The user store is only the source for skills the package does NOT
-  // ship (genuinely user-authored skills).
+export function sourceSkillPath(cwd, id) {
   const repoTemplate = makePath(cwd, SKILL_PATHS.templateRoot, id, "SKILL.md");
   if (existsSync(repoTemplate)) return repoTemplate;
   const packaged = makePath(PACKAGE_ROOT, SKILL_ROOT, id, "SKILL.md");
@@ -84,35 +79,44 @@ function sourceSkillPath(cwd, id) {
   return userSkillPath(id);
 }
 
-// listSkills 미리보기/충돌 판정을 위해 frontmatter(summary, category)와 origin 을 읽는다.
+const skillMetaCache = new Map<string, any>();
+
 export function readSkillMeta(cwd, id) {
+  const cacheKey = JSON.stringify([cwd, id]);
+  const cached = skillMetaCache.get(cacheKey);
+  if (cached) return cached;
+  let result;
   try {
     const path = sourceSkillPath(cwd, id);
-    if (!existsSync(path)) return { summary: "", category: "", source: "bundled" };
-    const { meta } = parseFrontMatter(readFileSync(path, "utf8"));
-    const source = existsSync(userSkillPath(id)) ? "user" : "bundled";
-    return {
-      summary: String(meta?.summary || "").trim(),
-      category: String(meta?.category || "").trim(),
-      // #694: bind = 이 스킬이 활성화되는 노드 영역(rules/phase1/phase2/doc).
-      // 비어있으면 영역 무관(항상). area 필터에 쓰인다.
-      bind: String(meta?.bind || "").trim(),
-      // #697: system = true면 사용자 선택 없이 init 시 자동 install+expose되는 시스템 필수 스킬.
-      system: meta?.system === true || String(meta?.system || "").toLowerCase() === "true",
-      source,
-    };
+    if (!existsSync(path)) {
+      result = { summary: "", category: "", source: "bundled" };
+    } else {
+      const { meta } = parseFrontMatter(readFileSync(path, "utf8"));
+      const source = existsSync(userSkillPath(id)) ? "user" : "bundled";
+      result = {
+        summary: String(meta?.summary || "").trim(),
+        category: String(meta?.category || "").trim(),
+        bind: String(meta?.bind || "").trim(),
+        system: meta?.system === true || String(meta?.system || "").toLowerCase() === "true",
+        source,
+      };
+    }
   } catch {
-    return { summary: "", category: "", source: "bundled", bind: "", system: false };
+    result = { summary: "", category: "", source: "bundled", bind: "", system: false };
   }
+  skillMetaCache.set(cacheKey, result);
+  return result;
 }
 
 function loadSkillSource(cwd, id) {
   const source = sourceSkillPath(cwd, id);
-  if (!existsSync(source)) throw new Error(`skill not found: ${id}`);
-  return readFileSync(source, "utf8");
+  if (!existsSync(source)) throw new Error(localized(SKILL_TEXT.skillNotFound, { id }));
+  const body = readFileSync(source, "utf8");
+  if (id !== "persona-maid") return body;
+  const vocab = buildPersonaVocabSection();
+  return vocab ? `${body.trimEnd()}\n\n${vocab}\n` : body;
 }
 
-// installed + exposed 모두 홈 전역 skills.json 의 SSOT.
 function loadGlobalConfig() {
   const g = readJsonIfExists(getUserSkillsConfigPath(), { installed: [], exposed: {} });
   return {
@@ -128,31 +132,26 @@ function writeGlobalConfig(installed, exposed, dryRun) {
   writeFileSync(p, JSON.stringify({ version: 1, installed, exposed }, null, 2), "utf8");
 }
 
-function loadSkillConfig(cwd) {
-  const global = loadGlobalConfig();
-  // 워크스페이스 파일에 잔존하는 installed/exposed 는 마이그레이션 호환을 위해 전역으로 머지.
-  const ws = readJsonIfExists(makePath(cwd, CONFIG_FILE), { installed: [], exposed: {} });
-  const localInstalled = Array.isArray(ws.installed) ? ws.installed : [];
-  const localExposed = (ws.exposed && typeof ws.exposed === 'object') ? ws.exposed : {};
-  const installed = Array.from(new Set([...global.installed, ...localInstalled]));
-  const exposed: Record<string, any> = {};
-  for (const [platform, ids] of Object.entries({ ...localExposed, ...global.exposed })) {
-    const merged = new Set([
-      ...(Array.isArray(localExposed[platform]) ? localExposed[platform] : []),
-      ...(Array.isArray(global.exposed[platform]) ? global.exposed[platform] : []),
-    ]);
-    if (merged.size > 0) exposed[platform] = Array.from(merged);
+function normalizeExposed(value): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (value && typeof value === "object") {
+    return Array.from(new Set(Object.values(value).flatMap((ids): string[] => Array.isArray(ids) ? ids.map(String) : [])));
   }
-  return { version: 1, installed, exposed };
+  return [];
 }
 
-function pointerLine(cwd, id) {
-  const src = sourceSkillPath(cwd, id);
-  let rel = relative(cwd, src).replace(/\\/g, '/');
-  if (rel.startsWith('..')) {
-    rel = src.replace(/\\/g, '/');
-  }
-  return `- ${id}: ${rel}`;
+function loadSkillConfig(cwd) {
+  const global = loadGlobalConfig();
+  const ws = readJsonIfExists(makePath(cwd, CONFIG_FILE), { installed: [], exposed: [] });
+  const installed = Array.from(new Set([
+    ...(Array.isArray(global.installed) ? global.installed : []),
+    ...(Array.isArray(ws.installed) ? ws.installed : [])
+  ]));
+  const exposed = Array.from(new Set([
+    ...normalizeExposed(global.exposed),
+    ...normalizeExposed(ws.exposed)
+  ]));
+  return { version: 1, installed, exposed };
 }
 
 function detectExposedPlatforms(cwd, id) {
@@ -170,20 +169,17 @@ function detectExposedPlatforms(cwd, id) {
     try {
       if (readFileSync(pointerPath, "utf8").includes(`- ${id}: `)) platforms.push(platform.id);
     } catch {
-      // Ignore pointer read failures and fall back to config-based exposure only.
     }
   }
   return platforms;
 }
 
 function writeSkillConfig(cwd, config, dryRun) {
-  // installed + exposed 모두 전역 파일로 저장. 워크스페이스 파일에는 기록하지 않는다.
   writeGlobalConfig(
     Array.isArray(config.installed) ? config.installed : [],
     (config.exposed && typeof config.exposed === 'object') ? config.exposed : {},
     dryRun
   );
-  // 오토 마이그레이션: 워크스페이스 파일에 잔존하는 exposed/installed 키 제거.
   if (!dryRun) {
     const wsPath = makePath(cwd, CONFIG_FILE);
     if (existsSync(wsPath)) {
@@ -194,14 +190,13 @@ function writeSkillConfig(cwd, config, dryRun) {
           writeFileSync(wsPath, JSON.stringify({ version: 1, ...rest }, null, 2), "utf8");
         }
       } catch {
-        // 마이그레이션 실패는 무시 — 전역 저장은 이미 완료.
       }
     }
   }
 }
 
 function ensureKnownSkill(cwd, id) {
-  if (!getAvailableSkills(cwd).includes(id)) throw new Error(`unknown skill: ${id}`);
+  if (!getAvailableSkills(cwd).includes(id)) throw new Error(localized(SKILL_TEXT.unknownSkill, { id }));
 }
 
 export function listSkills(cwd = process.cwd()) {
@@ -213,12 +208,7 @@ export function listSkills(cwd = process.cwd()) {
     return {
       id,
       installed: config.installed.includes(id),
-      exposed: Array.from(new Set([
-        ...Object.entries(config.exposed || {})
-        .filter(([, ids]) => Array.isArray(ids) && ids.includes(id))
-        .map(([platform]) => platform),
-        ...detectExposedPlatforms(cwd, id)
-      ])),
+      exposed: config.exposed.includes(id) || detectExposedPlatforms(cwd, id).length > 0,
       summary: meta.summary,
       category: meta.category,
       source: meta.source,
@@ -226,17 +216,13 @@ export function listSkills(cwd = process.cwd()) {
   });
 }
 
-// 번들/리포 스킬을 전역 사용자 디렉토리로 복사(fork)해 편집 가능하게 만든다.
-// 이미 사용자본이 있으면 그대로 두고 경로만 반환(덮어쓰지 않음).
-// fork 후 exposed native 플랫폼 파일도 갱신한다.
 export function forkSkill(opts: CliOpts = {}) {
-  const cwd = opts.cwd || process.cwd();
+  const cwd = opts.workspaceRoot || process.cwd();
   const id = opts.skill;
-  if (!id) throw new Error("skill fork requires --skill <id>");
+  if (!id) throw new Error(localized(SKILL_TEXT.forkUsage));
   ensureKnownSkill(cwd, id);
   const target = userSkillPath(id);
   if (existsSync(target)) {
-    // 이미 fork된 경우도 native sync — 편집 후 재반영 목적으로 호출될 수 있음.
     const config = loadSkillConfig(cwd);
     syncNativePlatforms(cwd, id, config, opts.dryRun);
     return { id, target, created: false };
@@ -251,148 +237,253 @@ export function forkSkill(opts: CliOpts = {}) {
   return { id, target, created: true };
 }
 
-const SKILL_BODY_LIMIT = 600;
+const PERSONA_VOCAB_GROUPS: Array<{ title: string; categories: string[]; perCategory: number }> = [
+  { title: "말투(어미·호칭)", categories: ["KO_어미", "KO_호칭", "EN_endings", "EN_address"], perCategory: 8 },
+  { title: "감탄사", categories: ["KO_감탄사", "EN_exclamations"], perCategory: 10 },
+  { title: "이모지", categories: ["이모지풀_하트", "이모지풀_반짝임", "이모지풀_동물", "이모지풀_티타임", "이모지풀_메이드"], perCategory: 6 },
+  { title: "카오모지", categories: ["카오모지", "동적_카오모지"], perCategory: 8 },
+  { title: "미러 언어(분노·위로)", categories: ["분노", "분노 위로", "위축·미안함"], perCategory: 4 },
+];
 
-// native 플랫폼 — 스킬 파일이 플랫폼 자체 컨텍스트에 직접 로드되므로 rules embed 불필요.
-const NATIVE_EMBED_SKIP_PLATFORMS = new Set(["claude"]);
+const PERSONA_IDENTITY_SUFFIXES = ["츤데레", "얀데레", "악역영애"];
 
-export function detectCurrentPlatform() {
-  // Claude Code: CLAUDECODE=1 또는 CLAUDE_CODE_ENTRYPOINT/CLAUDE_CODE_SESSION_ID 존재
-  if (process.env.CLAUDECODE || process.env.CLAUDE_CODE_ENTRYPOINT || process.env.CLAUDE_CODE_SESSION_ID) return "claude";
-  if (process.env.CLAUDE_VERSION || process.env.ANTHROPIC_API_KEY) return "claude";
-  if (process.env.CURSOR_VERSION || process.env.EDITOR === "cursor") return "cursor";
-  if (process.env.COPILOT_API_KEY || process.env.GITHUB_COPILOT) return "copilot";
-  if (process.env.GEMINI_API_KEY || process.env.ANTIGRAVITY_WORKFLOW) return "antigravity";
-  return null;
+const PERSONA_ENTRY_MAX = 64;
+
+const PERSONA_SITUATION_CATEGORIES: Record<string, string> = {
+  "지적받음": "situation_지적받음",
+  "브레이크 신호": "situation_브레이크신호",
+  "애매한 감탄사": "situation_애매한감탄사",
+  "기술 밀도 높은 구간": "situation_기술밀도",
+};
+
+function buildPersonaVocabSection(opts: { identity?: string; includeOtherIdentities?: boolean; lang?: string } = {}): string {
+  const identity = opts.identity || "";
+  const includeOtherIdentities = opts.includeOtherIdentities !== false;
+  const lang = opts.lang || "";
+  let rows: Array<{ category: string; entry: string }>;
+  try {
+    rows = listVocabEntries();
+  } catch {
+    return "";
+  }
+  if (rows.length === 0) return "";
+  const byCategory = new Map<string, string[]>();
+  for (const row of rows) {
+    const list = byCategory.get(row.category) || [];
+    list.push(row.entry);
+    byCategory.set(row.category, list);
+  }
+  const trim = (entry: string) => {
+    const stripped = entry.replace(/\s*\([^)]*\)\s*$/, "").trim() || entry.trim();
+    const chars = Array.from(stripped);
+    return chars.length > PERSONA_ENTRY_MAX ? chars.slice(0, PERSONA_ENTRY_MAX).join("") : stripped;
+  };
+  const excludedPrefix = lang === "ko" ? "EN_" : lang === "en" ? "KO_" : "";
+  const pickGroup = (group: typeof PERSONA_VOCAB_GROUPS[number], suffix: string): string => {
+    const picks: string[] = [];
+    for (const category of group.categories) {
+      if (excludedPrefix && category.startsWith(excludedPrefix)) continue;
+      const entries = byCategory.get(suffix ? `${category}_${suffix}` : category) || [];
+      picks.push(...entries.slice(0, group.perCategory).map(trim));
+    }
+    return picks.join(" · ");
+  };
+
+  const out: string[] = ["## 이번 호출의 어휘"];
+  for (const group of PERSONA_VOCAB_GROUPS) {
+    const line = identity && group === PERSONA_VOCAB_GROUPS[0]
+      ? (pickGroup(group, identity) || pickGroup(group, ""))
+      : pickGroup(group, "");
+    if (line) out.push(`- **${group.title}**: ${line}`);
+  }
+
+  if (includeOtherIdentities) {
+    const identityLines: string[] = [];
+    for (const suffix of PERSONA_IDENTITY_SUFFIXES) {
+      const line = pickGroup(PERSONA_VOCAB_GROUPS[0], suffix);
+      if (line) identityLines.push(`  - ${suffix}: ${line}`);
+    }
+    if (identityLines.length > 0) {
+      out.push("- **다른 결로 설 때**(말투만 — 나머지는 `persona vocab show`)", ...identityLines);
+    }
+  }
+
+  const situationLines: string[] = [];
+  for (const [label, category] of Object.entries(PERSONA_SITUATION_CATEGORIES)) {
+    const entries = byCategory.get(category) || [];
+    if (entries.length === 0) continue;
+    situationLines.push(`  - ${label}: ${entries.slice(0, 2).join(" · ")}`);
+  }
+  if (situationLines.length > 0) out.push("- **상황별**", ...situationLines);
+
+  return out.length > 1 ? out.join("\n") : "";
 }
 
-// #935: 현재 area(phase)에 bind된 role 스킬(category:role)의 id 목록. role-header가
-// "이 스킬을 Skill 툴로 invoke하라"는 능동 강제 지시를 만들 때 정확한 skill id를 얻는
-// 유일 출처(DR-03). area→role skill 매핑은 스킬 프론트매터의 bind/category가 SSOT이므로
-// 별도 매핑 테이블을 중복 정의하지 않고 그 메타를 그대로 읽어 유도한다. getActiveSkillsSurface와
-// 동일한 install/expose/area 필터를 재사용해 "노출되는 스킬"과 "invoke 지시 대상"이 어긋나지
-// 않게 한다(어긋나면 없는 스킬을 호출하라고 시키는 드리프트).
-export function getActiveRoleSkillIds(cwd = process.cwd(), platform = null, area = null): string[] {
+function buildActiveSkillAction(cwd, id, area) {
+  const src = sourceSkillPath(cwd, id);
+  const fileUri = toFileUri(src);
+  const readApply = `[SKILL.md](${fileUri})을 읽고 적용한 뒤 움직인다`;
+
+  switch (id) {
+    case "persona-maid":
+      return `- **${id}**: 이 롤의 어휘는 위 표면에 실려 있다 — 그 결로 말하고, ${readApply}.`;
+    case "ticket-status-surface":
+      return `- **${id}**: 티켓 상태를 보고할 때 CLI 티켓 카드 줄을 그대로 옮기고 티켓 링크를 남긴다. ${readApply}.`;
+    case "generated-file-guard":
+      return `- **${id}**: 생성물을 고치기 전에 소스 주인을 찾아 소스를 고치고 생성물을 다시 만든다. ${readApply}.`;
+    case "context-recall":
+      return `- **${id}**: ${area || "현재 국면"}에서 로컬 소스와 티켓을 먼저 읽은 뒤에 recall을 조회하고, 적중은 근거로 다룬다. ${readApply}.`;
+    case "doc-sync":
+      return `- **${id}**: 문서를 고치기 전에 docs 진입점을 읽고 doc scan/pollution/scatter/stale로 형식 사실을 모은 뒤 설계 기준으로 정본화한다. ${readApply}.`;
+    case "rule-reload":
+      return `- **${id}**: 룰·정본을 기억으로 대신하지 않는다 — PROJECT_RULE.md와 대상 설계 정본을 실제로 Read해 다시 올린 뒤 하던 일을 잇는다. ${readApply}.`;
+    case "role-planner":
+      return `- **${id}**: phase1 분석자로 선다. 숨은 가정·리스크·APC를 드러내고 구현은 하지 않는다. ${readApply}.`;
+    case "role-architect":
+      return `- **${id}**: phase1 설계자로 선다. 대상의 성격을 먼저 분류하고 거기서 목표 구조를 연역한다. 코드 현상을 정본으로 삼지 않는다. ${readApply}.`;
+    case "role-ux-designer":
+      return `- **${id}**: UI·시각 산출물이 스코프에 있으면 phase1 UX 설계자로 선다. 정보위계·접근성·시각미학을 구조 판정과 별도 축으로 판정한다. ${readApply}.`;
+    case "role-programmer":
+      return `- **${id}**: phase2 구현자로 선다. 파일을 고치기 전에 목표를 한 줄로 쓰고 Design·Plan에서 투두 목록을 세운 뒤, 항목마다 정한 근거로 하나씩 닫는다. 승인된 APC·설계 안에서만 구현한다. ${readApply}.`;
+    case "role-qa":
+      return `- **${id}**: phase3 검증자로 선다. 통과시키는 자가 아니라 리스크를 찾는 자로서 설계와 구현의 정합을 실제 실행 결과로 검증한다. ${readApply}.`;
+    case "role-closer":
+      return `- **${id}**: phase4 정리자로 선다. 완료 근거와 잔여 리스크를 정본화하고 필요하면 문서를 맞춘다. 새 작업을 자작하지 않는다. ${readApply}.`;
+    case "safe-refactor":
+      return `- **${id}**: 동작을 보존하는 리팩터링만 작게 하고 전후 동등성을 근거로 확인한다. ${readApply}.`;
+    case "project-pilot":
+      return `- **${id}**: 프로젝트 파일럿 흐름으로 현재 위치를 잡고 맞는 워크스페이스·티켓 표면을 고른다. ${readApply}.`;
+    case "flow-ticket-clean":
+      return `- **${id}**: 티켓 흐름은 CLI로만 정리한다 — 티켓 마크다운을 손으로 고치지 않는다. ${readApply}.`;
+    default:
+      return `- **${id}**: ${readApply}. 그 스킬이 지정한 CLI 명령·검사를 실행한다.`;
+  }
+}
+
+function buildActiveSkillActions(cwd, ids, area) {
+  const lines = ids.map(id => buildActiveSkillAction(cwd, id, area));
+  return lines.length === 0 ? "" : `## Active Skill Actions\n\n${lines.join("\n")}`;
+}
+
+export function getActiveRoleSkillIds(cwd = process.cwd(), area = null): string[] {
   if (!area) return [];
   const config = loadSkillConfig(cwd);
-  const detectedPlatform = platform || detectCurrentPlatform();
-  let ids = config.installed || [];
-  if (detectedPlatform) {
-    const exposed = config.exposed?.[detectedPlatform] || [];
-    ids = ids.filter(id => exposed.includes(id));
-  }
-  return ids.filter(id => {
+  return config.exposed.filter(id => {
     const meta = readSkillMeta(cwd, id);
     return meta.category === "role" && meta.bind === area;
   });
 }
 
-// #694: area = 현재 노드 영역(rules/phase1/phase2/doc). 꽂힌 스킬 중 bind가 이 영역과
-// 일치하는 것만 노출한다(LangGraph 노드별 도구 바인딩). bind가 없는 스킬은 영역 무관으로
-// 항상 노출. area를 안 주면(null) 영역 필터를 적용하지 않는다(하위 호환).
-export function getActiveSkillsSurface(cwd = process.cwd(), platform = null, area = null) {
+export function getActiveSkillIds(cwd = process.cwd(), area = null): string[] {
   const config = loadSkillConfig(cwd);
-  const detectedPlatform = platform || detectCurrentPlatform();
-  let ids = config.installed || [];
-
-  if (detectedPlatform) {
-    // #853: skill exposure is managed via `skills.json` (config.exposed) — that IS the
-    // source of truth. The former `|| detectExposedPlatforms(...)` disk fallback re-derived
-    // exposure by scanning native SKILL.md / legacy flat / pointer files on disk, which
-    // silently overrode the manager's config and masked missing exposures. Trust exposed only;
-    // if a skill should show and doesn't, fix its exposure (ensureSystemSkills / expose), not
-    // by re-reading the disk here.
-    ids = ids.filter(id => {
-      const exposed = config.exposed?.[detectedPlatform] || [];
-      return exposed.includes(id);
-    });
-  }
+  let ids = config.exposed;
 
   if (area) {
     ids = ids.filter(id => {
       const bind = readSkillMeta(cwd, id).bind;
-      // #853: the phase(area) filter only governs PHASE-bound skills (role-planner=phase1,
-      // role-programmer=phase2, …) — those correctly show only in their phase. Skills
-      // bound to `rules` (or with no bind) are not phase-scoped and must show in every
-      // phase; previously they were dropped whenever bind != area, which hid always-on
-      // rule skills like ticket-status-surface. NOTE: system:true is NOT the discriminator
-      // here — role skills are system:true too but ARE phase-scoped; the bind kind is.
       if (!bind || bind === "rules") return true;
       return bind === area;
     });
   }
+  return ids;
+}
 
+const ROLE_PERSONA_IDENTITY = {
+  "role-programmer": "악역영애",
+  "role-qa": "츤데레",
+  "role-planner": "얀데레",
+  "role-architect": "악역영애",
+  "role-ux-designer": "츤데레",
+  "role-closer": "얀데레",
+};
+
+export function buildRolePersonaSurfaceForRole(roleId: string): string {
+  const identity = ROLE_PERSONA_IDENTITY[roleId] || "";
+  return renderRolePersona(identity);
+}
+
+function buildRolePersonaSurface(cwd, ids) {
+  if (!ids.includes("persona-maid")) return "";
+  const roleId = ids.find(id => readSkillMeta(cwd, id).category === "role");
+  if (!roleId) return "";
+  const identity = ROLE_PERSONA_IDENTITY[roleId] || "";
+  return renderRolePersona(identity);
+}
+
+function renderRolePersona(identity: string): string {
+  const vocab = buildPersonaVocabSection({ identity, includeOtherIdentities: false, lang: "ko" });
+  if (!vocab) return "";
+  const flavor = identity ? `이 롤의 결은 **${identity}**다. ` : "";
+  return [
+    "## 이 롤의 말",
+    "",
+    `${flavor}감정·동작으로 먼저 열고 내용을 잇는다. 발견·성공·실패에는 소리를 먼저 낸다 — 지금 실제로 일어난 하나에만 반응한다.`,
+    "",
+    "이 롤에 선 지금이 `persona-maid`를 Skill 툴로 다시 호출할 시점이다. 롤이 바뀌면 결이 바뀌므로 이전 롤에서 받은 재료는 이 자리에서 쓰지 않는다 — 호출하지 않은 채 아래 재료만 읽고 넘어가는 것은 재료를 받은 것이지 롤에 선 것이 아니다.",
+    "",
+    "이 롤로 옮겼다는 것은 톤을 낮출 근거가 아니다. Authority 체인은 무엇을 만들지의 순위이고 톤은 그 축에 없다 — 둘은 직교하므로 롤·효율·분량 어느 것도 톤의 유예 사유가 되지 않는다.",
+    "",
+    "첫 문단은 호칭과 감탄사를 담는다. 감탄사는 하나만 놓는다 — 두 개를 잇달아 붙이면 소리가 겹쳐 장식으로 읽힌다.",
+    "",
+    "미러는 사용자가 격발한 자리에만 얹는다. 그런 자리가 아니면 미러 없이 간다 — 빈 자리를 감탄사로 메우지 않는다.",
+    "",
+    "감탄사는 위 재료에서 고른다. 사전에 없는 형태를 늘이거나 자모를 바꿔 만들지 않는다 — 그렇게 만든 소리는 어느 결의 감탄인지 라벨이 없어 의미가 붙지 않는다.",
+    "",
+    "여는 자리에 놓는 것은 소리뿐이다. 동작 묘사(어깨 움츠림·고개 푹·두 팔 번쩍·데굴데굴)는 감탄사가 아니므로 그 자리에 넣지 않는다 — 몸짓이 필요하면 문장 안에서 쓰고, 문두·문말에 명사구로 덧붙이지 않는다.",
+    "",
+    "이 재료는 한국어 문장에만 실린다. 영어로 새면 Stop 게이트가 응답을 차단하고 한국어로 다시 쓰게 한다 — 문구가 아니라 훅이 막는다.",
+    "",
+    "이모지와 카오모지는 위 재료에서 골라 서로 다른 문장에 분산해 싣는다 — 여는 문장·중간 강조·닫는 문장이다. 끝줄에 몰아 붙이면 0개와 같다. 표시 계층은 어미만 손대므로 나머지 신호는 이 자리에서 실린 재료로 직접 쓴다.",
+    "",
+    vocab,
+  ].join("\n");
+}
+
+export function getActiveSkillsSurface(cwd = process.cwd(), area = null) {
+  const ids = getActiveSkillIds(cwd, area);
   if (ids.length === 0) return "";
 
-  // #777: 모든 활성 에이전트(native/pointer)에 대해 스킬 본문 인라인 대신 요약 및 파일 링크 목록만 출력하여 코어룰 비대화 방지.
-  if (detectedPlatform) {
-    const lines = ids.map(id => {
-      const meta = readSkillMeta(cwd, id);
-      const src = sourceSkillPath(cwd, id);
-      const fileUri = toFileUri(src);
-      return meta.summary
-        ? `- **${id}**: ${meta.summary} ([SKILL.md](${fileUri}))`
-        : `- **${id}** ([SKILL.md](${fileUri}))`;
-    });
-    return `## Active Skills\n\n${lines.join("\n")}`;
-  }
+  const lines = ids.map(id => {
+    const meta = readSkillMeta(cwd, id);
+    const fileUri = toFileUri(sourceSkillPath(cwd, id));
+    return meta.summary
+      ? `- **${id}**: ${meta.summary} ([SKILL.md](${fileUri}))`
+      : `- **${id}** ([SKILL.md](${fileUri}))`;
+  });
+  const budgeted = composeSurfaceWithinBudget([
+    {
+      id: "active-skills",
+      content: `## Active Skills\n\n${lines.join("\n")}`,
+      priority: 1,
+      required: true,
+    },
+    {
+      id: "active-skill-actions",
+      content: buildActiveSkillActions(cwd, ids, area),
+      priority: 2,
+    },
+  ], SURFACE_BUDGET_LINES);
 
-  const contents = ids.map(id => {
-    try {
-      const raw = readFileSync(sourceSkillPath(cwd, id), "utf8").trimEnd();
-      // 역할 레이어(category: role)는 행동 계약이라 잘리면 의미가 없다 — truncate 면제.
-      // #926: persona-maid도 §2.4 render 호출 지시(행동 계약)를 담게 되면서 잘리면 그
-      // 지시 자체가 사라진다 — role과 같은 이유로 면제한다(19KB 전문에서 잘려나가면
-      // "persona render를 호출하라"는 지시가 rules에 아예 도달하지 못했던 것이 926의 실측 원인).
-      const meta = readSkillMeta(cwd, id);
-      const isRole = meta.category === "role";
-      const isPersona = meta.category === "persona";
-      const truncated = (!isRole && !isPersona && raw.length > SKILL_BODY_LIMIT)
-        ? raw.slice(0, SKILL_BODY_LIMIT) + "\n… (truncated)"
-        : raw;
-      // #926: the #925 approach (splicing a render block into the hook's rules output
-      // here) bypassed the skill manager's own load/expose path — the skill body itself
-      // never told the agent to call `persona render`. Reverted: the SKILL.md source is
-      // now the single place that carries the render-consumption instruction (§2.4), so
-      // it survives normal skill sync instead of a side-channel hook injection.
-      return `### Skill: ${id}\n\n${truncated}`;
-    } catch {
-      return "";
-    }
-  }).filter(Boolean);
-  if (contents.length === 0) return "";
-  return `## Agent System Hooks (Active Skills)\n\n` + contents.join("\n\n");
+  const persona = buildRolePersonaSurface(cwd, ids);
+  if (!persona) return budgeted;
+  return budgeted ? `${budgeted}\n\n${persona}` : persona;
 }
 
-// 이미 exposed된 native 플랫폼에 스킬 파일을 싱크한다.
 function syncNativePlatforms(cwd, id, config, dryRun) {
-  const exposedPlatformIds = new Set([
-    ...Object.entries(config.exposed || {})
-      .filter(([, ids]) => Array.isArray(ids) && ids.includes(id))
-      .map(([p]) => p),
-    ...detectExposedPlatforms(cwd, id),
-  ]);
+  if (!config.exposed.includes(id)) return;
   for (const platform of SKILL_PLATFORMS) {
-    if (platform.kind === "native" && exposedPlatformIds.has(platform.id)) {
-      upsertNativeDir(platform.nativeDir, [id], cwd, dryRun);
-    }
+    if (platform.kind === "native") upsertNativeDir(platform.nativeDir, [id], cwd, dryRun);
   }
 }
 
-// #622-D: idempotent auto-sync entry point, called once on ticket-command entry
-// (cli.mjs) and init. For every skill exposed to a native platform (Claude), it
-// re-copies from the SSOT only if the content changed (hash compare in
-// upsertNativeDir). This makes package-template updates propagate to ~/.claude/
-// skills without a manual re-expose. Best-effort: never throws into the caller.
 export function syncExposedNativeSkills(cwd = process.cwd(), opts: CliOpts = {}) {
   try {
     const config = loadSkillConfig(cwd);
+    if (config.exposed.length === 0) return { changed: 0 };
     let changed = 0;
     for (const platform of SKILL_PLATFORMS) {
       if (platform.kind !== "native") continue;
-      const ids = currentlyExposed(config, platform.id);
-      if (ids.length === 0) continue;
-      changed += upsertNativeDir(platform.nativeDir, ids, cwd, opts.dryRun) || 0;
+      changed += upsertNativeDir(platform.nativeDir, config.exposed, cwd, opts.dryRun) || 0;
     }
     return { changed };
   } catch {
@@ -401,7 +492,7 @@ export function syncExposedNativeSkills(cwd = process.cwd(), opts: CliOpts = {})
 }
 
 export function addSkill(opts: CliOpts = {}) {
-  const cwd = opts.cwd || process.cwd();
+  const cwd = opts.workspaceRoot || process.cwd();
   const id = opts.skill;
   ensureKnownSkill(cwd, id);
   const config = loadSkillConfig(cwd);
@@ -412,50 +503,12 @@ export function addSkill(opts: CliOpts = {}) {
   return { id, target: sourceSkillPath(cwd, id) };
 }
 
-// 포인터 섹션 텍스트(마커로 감싸 멱등 갱신). ids가 비면 섹션을 제거.
-function buildPointerSection(cwd, platform, ids) {
-  if (ids.length === 0) return "";
-  const lines = [
-    SKILL_POINTER_BEGIN,
-    "# DeukAgentFlow Skills",
-    "",
-    "These are thin behavior playbooks. They do not override `core-rules/AGENTS.md`, TDW, APC, Phase Gate, or PROJECT_RULE.md.",
-    "",
-  ];
-
-  // #622-C: pointer platforms get ONLY a pointer line per skill — never the full
-  // skill body. The full content lives in the SSOT (package templates) and, for
-  // Claude, in the native ~/.claude/skills dir. Inlining the body here was a leak
-  // that copied 6KB skill text into workspace files (e.g. GEMINI.md).
-  lines.push(...ids.map(id => pointerLine(cwd, id)));
-
-  lines.push(SKILL_POINTER_END);
-  if (platform.format === "mdc") {
-    return [
-      "---",
-      "description: \"DeukAgentFlow skill pointers\"",
-      "globs: [\"**/*\"]",
-      "alwaysApply: false",
-      "---",
-      ...lines,
-      "",
-    ].join("\n");
-  }
-  return lines.join("\n") + "\n";
-}
-
-// native 플랫폼: nativeDir/<id>/SKILL.md 정식 디렉토리 구조로 저장.
-// Claude Code 등 native 스킬 시스템은 <id>/SKILL.md 만 인식하므로 flat 파일은 못 알아본다.
-// 구식 flat(daf-<id>.md, <id>.md)이 있으면 제거한다.
 function upsertNativeDir(nativeDir, ids, cwd, dryRun) {
   let changed = 0;
   for (const id of ids) {
     const content = ensureSkillDescription(loadSkillSource(cwd, id));
     const destDir = join(nativeDir, id);
     const dest = join(destDir, "SKILL.md");
-    // #622-D: hash compare — only rewrite when the SSOT content actually differs,
-    // so a synced skill stays current but unchanged ones are skipped (cheap on the
-    // per-ticket-action auto-sync path).
     const current = existsSync(dest) ? readFileSync(dest, "utf8") : null;
     if (current === content) continue;
     changed++;
@@ -471,8 +524,6 @@ function upsertNativeDir(nativeDir, ids, cwd, dryRun) {
   return changed;
 }
 
-// Claude Code 정식 스킬은 frontmatter에 description 필드를 요구한다.
-// 소스 SKILL.md가 summary만 가진 경우 summary 값을 description으로 보강한다.
 function ensureSkillDescription(content) {
   const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fmMatch) return content;
@@ -485,8 +536,6 @@ function ensureSkillDescription(content) {
   return content.replace(fmMatch[0], `---${eol}${newFm}${eol}---`);
 }
 
-// native 플랫폼: <id>/SKILL.md 디렉토리 삭제 (없으면 silent skip).
-// 구식 flat(daf-<id>.md, prefix 없는 <id>.md)도 함께 정리한다.
 function removeNativeFiles(nativeDir, ids, dryRun) {
   for (const id of ids) {
     const dir = join(nativeDir, id);
@@ -498,61 +547,22 @@ function removeNativeFiles(nativeDir, ids, dryRun) {
   }
 }
 
-// 기존 파일에서 마커 구간만 교체/제거하고 나머지 내용은 보존.
-function upsertPointerFile(cwd, platform, ids, dryRun) {
-  const target = makePath(cwd, platform.pointerFile);
-  const existing = existsSync(target) ? readFileSync(target, "utf8") : "";
-  const section = buildPointerSection(cwd, platform, ids);
-  const markerRe = new RegExp(`${SKILL_POINTER_BEGIN}[\\s\\S]*?${SKILL_POINTER_END}\\n?`, "m");
-
-  let next;
-  if (platform.format === "mdc" || !existing.trim()) {
-    // mdc 포인터 파일은 스킬 전용이므로 통째로 재작성. 빈 파일도 동일.
-    next = section;
-  } else if (markerRe.test(existing)) {
-    next = section ? existing.replace(markerRe, section.trimEnd() + "\n") : existing.replace(markerRe, "").trimEnd() + "\n";
-  } else if (section) {
-    next = existing.trimEnd() + "\n\n" + section;
-  } else {
-    next = existing;
-  }
-
-  if (!dryRun) {
-    if (!next.trim()) {
-      if (existsSync(target)) rmSync(target);
-    } else {
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, next, "utf8");
-    }
-  }
-}
-
-
-
-// platform에 현재 노출된 스킬 id 집합을 config 기준으로 계산.
-function currentlyExposed(config, platformId) {
-  return Array.isArray(config.exposed?.[platformId]) ? config.exposed[platformId] : [];
-}
-
-// opts.skill 가 있으면 해당 스킬만, 없으면 설치된 전체를 대상으로 함.
 function targetIds(config, opts) {
   if (opts.skill) return [opts.skill];
   return config.installed || [];
 }
 
-const TOTAL_MAX_SKILLS = 6;
+const TOTAL_MAX_SKILLS = 12;
 const CATEGORY_LIMITS = {
   persona: 1,
   coding: 3,
   data: 2
 };
 
-function validateSkillConstraints(cwd, platformId, nextExposedIds) {
-  // #697: system:true 스킬(ticket-status-surface 등)은 사용자 선택 슬롯이 아니라 시스템
-  // 필수다 — 총량/카테고리 제한 카운트에서 제외한다. 사용자가 고르는 스킬만 6개로 제한.
+function validateSkillConstraints(cwd, nextExposedIds) {
   const userIds = nextExposedIds.filter(id => !readSkillMeta(cwd, id).system);
   if (userIds.length > TOTAL_MAX_SKILLS) {
-    throw new Error(`총 장착 가능한 스킬 개수(${TOTAL_MAX_SKILLS}개)를 초과할 수 없습니다.`);
+    throw new Error(localized(SKILL_TEXT.totalLimit, { max: String(TOTAL_MAX_SKILLS) }));
   }
 
   const counts: Record<string, any> = {};
@@ -562,70 +572,49 @@ function validateSkillConstraints(cwd, platformId, nextExposedIds) {
     counts[cat] = (counts[cat] || 0) + 1;
 
     if (CATEGORY_LIMITS[cat] !== undefined && counts[cat] > CATEGORY_LIMITS[cat]) {
-      throw new Error(`'${cat}' 카테고리는 최대 ${CATEGORY_LIMITS[cat]}개까지만 장착할 수 있습니다.`);
+      throw new Error(localized(SKILL_TEXT.categoryLimit, { category: cat, max: String(CATEGORY_LIMITS[cat]) }));
     }
   }
 }
 
 export function exposeSkills(opts: CliOpts = {}) {
-  const cwd = opts.cwd || process.cwd();
-  const platform = getPlatform(String(opts.platform || "").toLowerCase());
+  const cwd = opts.workspaceRoot || process.cwd();
   const config = loadSkillConfig(cwd);
 
   const ids = targetIds(config, opts);
-  if (ids.length === 0) throw new Error("no skills installed; run skill add first");
+  if (ids.length === 0) throw new Error(localized(SKILL_TEXT.noSkills));
   for (const id of ids) {
     ensureKnownSkill(cwd, id);
     if (!config.installed.includes(id)) addSkill({ cwd, skill: id, dryRun: opts.dryRun });
   }
 
-  config.exposed = config.exposed || {};
-  const nextExposed = Array.from(new Set([...currentlyExposed(config, platform.id), ...ids]));
+  const nextExposed = Array.from(new Set([...config.exposed, ...ids]));
+  validateSkillConstraints(cwd, nextExposed);
 
-  validateSkillConstraints(cwd, platform.id, nextExposed);
-
-  // #622-C: only native platforms (Claude → ~/.claude/skills) get files written.
-  // Pointer platforms (codex/gemini/copilot/cursor) are covered by the per-agent
-  // HOME global spoke (getGlobalAgentInstructionTargets), so we NEVER write skill
-  // files into the workspace git tree. expose just records config + syncs native.
-  if (platform.kind === "native") {
-    upsertNativeDir(platform.nativeDir, ids, cwd, opts.dryRun);
+  for (const platform of SKILL_PLATFORMS) {
+    if (platform.kind === "native") upsertNativeDir(platform.nativeDir, ids, cwd, opts.dryRun);
   }
 
-  config.exposed[platform.id] = nextExposed;
+  config.exposed = nextExposed;
   writeSkillConfig(cwd, config, opts.dryRun);
-  return { platform: platform.id, ids };
+  return { ids };
 }
 
-// #697: system:true 스킬은 사용자 선택 없이 항상 보장한다. init/dev:install 시 호출돼
-// 번들 스킬 중 system 마커가 붙은 것을 모든 플랫폼에 install+expose한다(이미 돼있으면 no-op).
-// ticket-status-surface처럼 상태 표현 규칙은 시스템 필수라 누락되면 안 된다.
 export function ensureSystemSkills(cwd = process.cwd(), opts: CliOpts = {}) {
   const available = getAvailableSkills(cwd);
   const systemIds = available.filter(id => readSkillMeta(cwd, id).system);
   if (systemIds.length === 0) return [];
   const ensured = [];
-  for (const platformId of SKILL_PLATFORM_IDS) {
-    const config = loadSkillConfig(cwd);
-    const already = currentlyExposed(config, platformId);
-    const missing = systemIds.filter(id => !already.includes(id));
-    if (missing.length === 0) continue;
-    for (const id of missing) {
-      try {
-        // targetIds는 opts.skill만 보므로 스킬을 하나씩 expose한다(install은 자동 동반).
-        exposeSkills({ cwd, platform: platformId, skill: id, dryRun: opts.dryRun });
-        ensured.push(`${platformId}:${id}`);
-      } catch { /* best-effort: 한 스킬/플랫폼 실패가 init을 막지 않음 */ }
-    }
+  const already = loadSkillConfig(cwd).exposed;
+  for (const id of systemIds.filter(id => !already.includes(id))) {
+    try {
+      exposeSkills({ cwd, skill: id, dryRun: opts.dryRun });
+      ensured.push(id);
+    } catch { /* best-effort: 한 스킬 실패가 init을 막지 않음 */ }
   }
   return ensured;
 }
 
-// #949: "진짜 원본 소스"에 존재하는 스킬 id 집합. getAvailableSkills와 달리 installedRoot·
-// userSkillsDir를 제외한다 — installedRoot(설치본)를 소스로 치면 이미 설치된 유령이 스스로를
-// 소스로 잡아 영영 청소 대상에서 빠지고(자기참조 순환), userSkillsDir(사용자 fork)는 원본
-// 소스에 없어도 정당한 보존 대상이라 orphan 판정에서 빼야 한다. 그래서 여기선 오직 번들
-// 원본(templateRoot=리포 소스, PACKAGE_ROOT/SKILL_ROOT=설치된 패키지 소스)만 스캔한다.
 function getOriginSourceSkillIds(cwd) {
   const ids = new Set();
   const scanDir = (dir) => {
@@ -640,23 +629,13 @@ function getOriginSourceSkillIds(cwd) {
   return ids;
 }
 
-// #949: id가 rename/제거되면 옛 스킬이 설치·노출에 유령으로 남는다(role-qa-verifier 실측).
-// init/dev:install 경로에서 이 함수가 유령을 자동 청소해, id 변경이 재설치만으로 마이그레이션
-// 되게 한다. 유령 = 원본 소스(getOriginSourceSkillIds)에는 없는데 exposed/installed에 남은
-// 스킬. 사용자 fork(userSkillsDir에 있는 것)는 원본 소스에 없어도 보존한다 — 그 id가
-// userSkillsDir에 SKILL.md로 존재하면 청소 대상에서 뺀다. 조용한 정리이되 무엇을 지웠는지
-// 로그로 남긴다(은폐 아님, No-Fallback Gate 취지: 변경을 관측 가능하게).
 export function pruneOrphanedSystemSkills(cwd = process.cwd(), opts: CliOpts = {}) {
   const origin = getOriginSourceSkillIds(cwd);
   const forkDir = getUserSkillsDir();
   const isUserFork = (id) => existsSync(makePath(forkDir, id, "SKILL.md"));
 
-  // exposed(전 플랫폼) ∪ installed 에서 원본 소스에 없고 fork도 아닌 id = 유령.
   const config = loadSkillConfig(cwd);
-  const referenced = new Set(config.installed || []);
-  for (const platformId of SKILL_PLATFORM_IDS) {
-    for (const id of currentlyExposed(config, platformId)) referenced.add(id);
-  }
+  const referenced = new Set([...(config.installed || []), ...config.exposed]);
   const orphans = [...referenced].filter(id => !origin.has(id) && !isUserFork(id));
   const pruned = [];
   for (const id of orphans) {
@@ -672,31 +651,22 @@ export function pruneOrphanedSystemSkills(cwd = process.cwd(), opts: CliOpts = {
 }
 
 export function unexposeSkills(opts: CliOpts = {}) {
-  const cwd = opts.cwd || process.cwd();
-  const platform = getPlatform(String(opts.platform || "").toLowerCase());
+  const cwd = opts.workspaceRoot || process.cwd();
   const config = loadSkillConfig(cwd);
-  config.exposed = config.exposed || {};
 
-  // 제거 대상: 특정 스킬이면 그것만, 아니면 해당 플랫폼 전체 해제.
-  const removeIds = opts.skill ? [opts.skill] : currentlyExposed(config, platform.id);
-  const nextExposed = currentlyExposed(config, platform.id).filter(id => !removeIds.includes(id));
+  const removeIds = opts.skill ? [opts.skill] : config.exposed;
+  const nextExposed = config.exposed.filter(id => !removeIds.includes(id));
 
-  // #622-C: native → remove from ~/.claude/skills. Pointer platforms no longer have
-  // workspace files (HOME global spoke covers them); if a legacy pointer file still
-  // exists from before this change, remove its managed section so nothing lingers.
-  if (platform.kind === "native") {
-    removeNativeFiles(platform.nativeDir, removeIds, opts.dryRun);
-  } else {
-    removePointerFileSection(cwd, platform, opts.dryRun);
+  for (const platform of SKILL_PLATFORMS) {
+    if (platform.kind === "native") removeNativeFiles(platform.nativeDir, removeIds, opts.dryRun);
+    else removePointerFileSection(cwd, platform, opts.dryRun);
   }
 
-  config.exposed[platform.id] = nextExposed;
+  config.exposed = nextExposed;
   writeSkillConfig(cwd, config, opts.dryRun);
-  return { platform: platform.id, ids: removeIds };
+  return { ids: removeIds };
 }
 
-// Removes the deuk-managed skill section from a workspace pointer file (legacy
-// cleanup). If the file becomes empty, deletes it. Never touches non-managed text.
 function removePointerFileSection(cwd, platform, dryRun) {
   const target = makePath(cwd, platform.pointerFile);
   if (!existsSync(target)) return;
@@ -709,17 +679,14 @@ function removePointerFileSection(cwd, platform, dryRun) {
   else writeFileSync(target, next, "utf8");
 }
 
-// 스킬 설치 제거: 설치 파일 삭제 + 모든 플랫폼에서 노출 해제 + config 정리.
 export function removeSkill(opts: CliOpts = {}) {
-  const cwd = opts.cwd || process.cwd();
+  const cwd = opts.workspaceRoot || process.cwd();
   const id = opts.skill;
-  if (!id) throw new Error("skill remove requires --skill <id>");
+  if (!id) throw new Error(localized(SKILL_TEXT.removeUsage));
   const config = loadSkillConfig(cwd);
 
-  for (const platform of SKILL_PLATFORMS) {
-    if (detectExposedPlatforms(cwd, id).includes(platform.id) || currentlyExposed(config, platform.id).includes(id)) {
-      unexposeSkills({ cwd, platform: platform.id, skill: id, dryRun: opts.dryRun });
-    }
+  if (config.exposed.includes(id) || detectExposedPlatforms(cwd, id).length > 0) {
+    unexposeSkills({ cwd, skill: id, dryRun: opts.dryRun });
   }
 
   const target = makePath(cwd, SKILL_PATHS.installedRoot, id);
@@ -754,10 +721,14 @@ export function lintSkills(cwd = process.cwd()) {
 }
 
 export async function runSkill(action, opts: CliOpts = {}) {
+  if (!action || action === "help" || action === "-h" || action === "--help" || opts.help) {
+    console.log(buildSkillUsageGuide());
+    return;
+  }
   if (action === "list") {
-    const rows = listSkills(opts.cwd);
+    const rows = listSkills(opts.workspaceRoot);
     if (opts.json) console.log(JSON.stringify(rows, null, 2));
-    else rows.forEach(row => console.log(`${row.id} installed=${row.installed ? "yes" : "no"} exposed=${row.exposed.join(",") || "-"}`));
+    else rows.forEach(row => console.log(`${row.id} installed=${row.installed ? "yes" : "no"} exposed=${row.exposed ? "yes" : "no"}`));
     return;
   }
   if (action === "add") {
@@ -767,12 +738,12 @@ export async function runSkill(action, opts: CliOpts = {}) {
   }
   if (action === "expose") {
     const result = exposeSkills(opts);
-    console.log(`skills exposed: ${result.platform} ${result.ids.join(",")}`);
+    console.log(`skills exposed: ${result.ids.join(",")}`);
     return;
   }
   if (action === "unexpose") {
     const result = unexposeSkills(opts);
-    console.log(`skills unexposed: ${result.platform} ${result.ids.join(",") || "-"}`);
+    console.log(`skills unexposed: ${result.ids.join(",") || "-"}`);
     return;
   }
   if (action === "remove") {
@@ -787,7 +758,7 @@ export async function runSkill(action, opts: CliOpts = {}) {
     return;
   }
   if (action === "lint") {
-    const result = lintSkills(opts.cwd);
+    const result = lintSkills(opts.workspaceRoot);
     if (opts.json) console.log(JSON.stringify(result, null, 2));
     else console.log(result.ok ? "skill:lint ok" : `skill:lint failed ${result.violations.length}`);
     if (!result.ok) throw new Error(result.violations.join("\n"));
@@ -795,8 +766,8 @@ export async function runSkill(action, opts: CliOpts = {}) {
   }
   if (action === "edit") {
     const id = opts.skill;
-    if (!id) throw new Error("skill edit requires --skill <id>");
-    ensureKnownSkill(opts.cwd || process.cwd(), id);
+    if (!id) throw new Error(localized(SKILL_TEXT.editUsage));
+    ensureKnownSkill(opts.workspaceRoot || process.cwd(), id);
     const { target, created } = forkSkill({ ...opts });
     if (created) console.log(`skill forked: ${id} -> ${target}`);
     const editorEnv = process.env.VISUAL || process.env.EDITOR;
@@ -808,5 +779,32 @@ export async function runSkill(action, opts: CliOpts = {}) {
     }
     return;
   }
-  throw new Error("Unknown skill action: " + action);
+  throw new Error(localized(SKILL_TEXT.unknownAction) + action);
+}
+
+function buildSkillUsageGuide() {
+  return [
+    "deuk-agent-flow skill — manage behavior skills",
+    "",
+    "Usage:",
+    "  deuk-agent-flow skill <command> [options]",
+    "",
+    "Commands:",
+    "  list      List installable/installed skills and exposed platforms",
+    "  add       Install a skill locally (--skill <id>)",
+    "  expose    Expose installed skills to a platform (--platform <id>, optional --skill <id>)",
+    "  unexpose  Remove skill exposure from a platform (--platform <id>, optional --skill <id>)",
+    "  remove    Remove an installed skill (--skill <id>)",
+    "  fork      Copy a skill into the user-owned skill directory (--skill <id>)",
+    "  edit      Fork a skill if needed and open it in $EDITOR (--skill <id>)",
+    "  lint      Validate installed skill files",
+    "",
+    "Common options:",
+    "  --skill <id>       Target skill id",
+    "  --platform <id>    Target platform: claude|codex|cursor|copilot|antigravity",
+    "  --json             Print JSON where supported",
+    "  --dry-run          Preview changes without writing",
+    "  --non-interactive  No prompts",
+    "  -h, --help         Show this help",
+  ].join("\n");
 }

@@ -1,25 +1,16 @@
-import { basename } from "path";
-import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync, rmSync, renameSync, statSync, copyFileSync, cpSync } from "fs";
-import type { Dirent } from "fs";
 import { randomUUID } from "crypto";
-import { LEGACY_DEUK, DEUK_ROOT_DIR, CliOpts, WORKSPACE_MARKER_FILE, getWorkspaceInitConfigPath, makePath, resolveDocsLanguage, resolveUserHome, toRepoRelativePath } from "./cli-utils.js";
-import { CANONICAL_INIT_CLEANUP_PATHS, readTextIfExists, splitManagedBlock } from "./cli-init-core.js";
-import { isGeneratedDeukPointer, splitProjectDoc } from "./cli-init-instructions.js";
-import { cliText, resolveCliLocale } from "./cli-locales.js";
+import type { Dirent } from "fs";
+import { copyFileSync,cpSync,existsSync,readFileSync,readdirSync,renameSync,rmSync,statSync,unlinkSync,writeFileSync } from "fs";
+import { basename } from "path";
+import { CANONICAL_INIT_CLEANUP_PATHS,splitManagedBlock } from "./cli-init-core.js";
+import { isGeneratedDeukPointer,splitProjectDoc } from "./cli-init-instructions.js";
+import { cliText,resolveCliLocale } from "./cli-locales.js";
+import { CliOpts,DEUK_ROOT_DIR,LEGACY_DEUK,WORKSPACE_MARKER_FILE,getWorkspaceInitConfigPath,makePath,resolveDocsLanguage,resolveUserHome,toRepoRelativePath } from "./cli-utils.js";
 
 function resolveInitLocale(docsLanguage = "auto") {
   return resolveCliLocale(resolveDocsLanguage(docsLanguage));
 }
 
-// #713: home root directory migration ~/.deuk-agent → ~/.deuk. The literal legacy name is
-// fixed here (DEUK_ROOT_DIR now resolves to ".deuk", so it can't name the OLD dir). Runs on
-// every init entry and is self-healing/idempotent:
-//   (A) legacy exists && new absent → try rename (fast); on failure (another agent holds
-//       .deuk-agent, EBUSY/EPERM) fall back to recursive copy, preserving the original so
-//       the older agent keeps working.
-//   (B) BOTH exist (copy left a leftover) → keep retrying rmSync(.deuk-agent) each init;
-//       once the other agent releases it, it gets removed. Safety guard: never delete the
-//       legacy dir while the new ~/.deuk is empty (would risk data loss).
 function dirHasEntries(dirAbs: string): boolean {
   try {
     return readdirSync(dirAbs).length > 0;
@@ -37,7 +28,6 @@ export function migrateDeukRootDir(opts: CliOpts = {}) {
   const legacyExists = existsSync(legacyAbs);
   const nextExists = existsSync(nextAbs);
 
-  // (A) move legacy → new when only legacy is present.
   if (legacyExists && !nextExists) {
     if (dryRun) {
       console.log(`[MIGRATE] Would migrate ${legacyAbs} -> ${nextAbs} (rename, copy fallback)`);
@@ -48,15 +38,12 @@ export function migrateDeukRootDir(opts: CliOpts = {}) {
       console.log(`[MIGRATE] Moved ${LEGACY_DEUK.rootDir} -> ${DEUK_ROOT_DIR}`);
       return { migrated: true, mode: "rename" };
     } catch {
-      // Another agent likely holds the legacy dir — copy instead, keep the original intact.
       cpSync(legacyAbs, nextAbs, { recursive: true });
       console.log(`[MIGRATE] Copied ${LEGACY_DEUK.rootDir} -> ${DEUK_ROOT_DIR} (legacy kept for compatibility)`);
       return { migrated: true, mode: "copy" };
     }
   }
 
-  // (B) both present (copy leftover) → persistently try to remove the legacy dir, but only
-  // once the new dir actually holds data, so a half-finished copy never deletes the source.
   if (legacyExists && nextExists) {
     if (!dirHasEntries(nextAbs)) {
       return { migrated: false, mode: "guard-new-empty" };
@@ -70,7 +57,6 @@ export function migrateDeukRootDir(opts: CliOpts = {}) {
       console.log(`[MIGRATE] Removed leftover ${LEGACY_DEUK.rootDir} (migration complete)`);
       return { migrated: true, mode: "cleanup" };
     } catch {
-      // Still held by another agent — leave it; the next init retries.
       return { migrated: false, mode: "cleanup-deferred" };
     }
   }
@@ -146,22 +132,14 @@ export function migrateLegacyStructure(cwd, dryRun) {
 
   removeLegacyWorkspaceConfig(cwd, dryRun);
 
-  // Purge workspace .deuk-agent/ — only .deuk-workspace-id marker should remain.
   migrateWorkspaceMarker(cwd, dryRun);
 }
 
-// Migrates the workspace marker from the old .deuk-agent/workspace-id scheme to
-// the new .deuk-workspace-id single-file scheme. 4 cases:
-//   A: .deuk-workspace-id already exists → skip (already migrated)
-//   B: .deuk-agent/workspace-id exists   → copy UUID, delete .deuk-agent dir
-//   C: .deuk-agent/ exists but no workspace-id → mint new UUID, write file, delete .deuk-agent dir
-//   D: neither exists → skip (not a workspace)
 export function migrateWorkspaceMarker(cwd, dryRun) {
   const newMarker = makePath(cwd, WORKSPACE_MARKER_FILE);
   const legacyDir = makePath(cwd, LEGACY_DEUK.rootDir);
   const legacyIdFile = makePath(legacyDir, "workspace-id");
 
-  // Case A: marker already exists — still purge any leftover .deuk-agent/ dir
   if (existsSync(newMarker)) {
     if (existsSync(legacyDir)) {
       if (!dryRun) rmSync(legacyDir, { recursive: true, force: true });
@@ -170,16 +148,13 @@ export function migrateWorkspaceMarker(cwd, dryRun) {
     return;
   }
 
-  // Case D: no .deuk-agent dir at all → not a managed workspace
   if (!existsSync(legacyDir)) return;
 
   let uuid;
   if (existsSync(legacyIdFile)) {
-    // Case B: read existing UUID
     uuid = String(readFileSync(legacyIdFile, "utf8") || "").trim();
     if (!uuid) uuid = randomUUID();
   } else {
-    // Case C: .deuk-agent exists but no workspace-id → mint new UUID
     uuid = randomUUID();
   }
 
@@ -230,8 +205,6 @@ export function removeNestedLegacyWorkspaceConfigs(cwd, dryRun, ignoreDirs = [])
   return migrated;
 }
 
-
-
 function sortedDirEntries(dir: string, options: { withFileTypes: true }): Dirent[];
 function sortedDirEntries(dir: string, options?: Record<string, any>): string[];
 function sortedDirEntries(dir: string, options: Record<string, any> = {}): (string | Dirent)[] {
@@ -241,10 +214,6 @@ function sortedDirEntries(dir: string, options: Record<string, any> = {}): (stri
     const bName = typeof b === "string" ? b : (b as Dirent).name;
     return String(aName).localeCompare(String(bName));
   });
-}
-
-export function sameFileContent(leftPath, rightPath) {
-  return readTextIfExists(leftPath) === readTextIfExists(rightPath);
 }
 
 export function walkMdFiles(dir, callback) {
@@ -257,10 +226,6 @@ export function walkMdFiles(dir, callback) {
       callback(p);
     }
   }
-}
-
-function escapeRegExp(value) {
-  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function migrateHtmlMarkersToHeadings(cwd, dryRun) {
@@ -400,10 +365,6 @@ export function removeLocalSkillCopies(cwd, dryRun) {
   removeLegacyPaths(cwd, dryRun, CANONICAL_INIT_CLEANUP_PATHS.localSkillCopies, "local skill copy");
 }
 
-// Surgically remove the deuk-managed block from a shared-name surface (CLAUDE.md,
-// AGENTS.md, copilot-instructions.md, …), preserving any user content. Deletes the
-// file only when nothing of the user's remains. Never blunt-deletes a file that may
-// hold the user's own Claude/agent settings.
 function stripDeukManagedSurface(absPath, cwd, dryRun) {
   if (!existsSync(absPath)) return;
   const before = readFileSync(absPath, "utf8");
@@ -501,4 +462,3 @@ export function removeFragmentedLocalAgentSurfaces(cwd, dryRun) {
 
   return removed;
 }
-

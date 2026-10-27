@@ -182,32 +182,3 @@ async function collectArchiveLeafDirs(archiveRoot: string): Promise<string[]> {
   }
   return result;
 }
-
-/**
- * 워크스페이스 1개의 아카이브 전체에 대한 검색 인덱스 엔트리를 반환한다.
- * 검색 트리거 시에만 호출된다. 불변 월 디렉토리는 영구 캐시, 가변 디렉토리만 재검증.
- * nowYearMonth 는 'YYYY-MM'(Date.now 회피를 위해 호출측에서 주입).
- */
-export async function loadArchiveSearchIndex(
-  archiveRoot: string,
-  nowYearMonth: string,
-  parseFrontmatter: FrontmatterParser
-): Promise<ArchiveIndexEntry[]> {
-  let rootStat: fs.Stats;
-  try {
-    rootStat = await fs.promises.stat(archiveRoot);
-  } catch {
-    return [];
-  }
-  if (!rootStat.isDirectory()) {
-    return [];
-  }
-
-  const leafDirs = await collectArchiveLeafDirs(archiveRoot);
-  const perDir = await Promise.all(
-    leafDirs.map((dir) =>
-      indexArchiveDir(dir, path.basename(dir), archiveRoot, nowYearMonth, parseFrontmatter)
-    )
-  );
-  return perDir.flat();
-}

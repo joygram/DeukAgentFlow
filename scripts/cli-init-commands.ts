@@ -1,30 +1,11 @@
-import { removeClaudePostToolUseHook, removeClaudePreToolUseHook, removeClaudeUserPromptSubmitHook, upsertClaudePostToolUseHook, upsertClaudePreToolUseHook, upsertClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
-import { CANONICAL_INIT_CLEANUP_PATHS, CLAUDE_SETTINGS_PATH, CLAUDE_USERPROMPT_SUBMIT_COMMAND, CLAUDE_USERPROMPT_SUBMIT_MATCHER, GLOBAL_POINTER_BEGIN_PREFIX, GLOBAL_POINTER_END, MANAGED_BLOCK_BEGIN, MANAGED_BLOCK_END, hashManagedContent, mergeManagedBlock, readTextIfExists, splitManagedBlock, wrapManagedBlock } from "./cli-init-core.js";
-// #638: updateSiblingWorkspaceRegistry (B / ~/.agent-flow) retired — no longer called.
-import { dirname, basename, relative, resolve } from "path";
-import { fileURLToPath } from "url";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, unlinkSync, rmSync, renameSync, chmodSync, statSync, symlinkSync } from "fs";
-import { createHash } from "crypto";
+import { existsSync } from "fs";
+import { basename } from "path";
+import { removeClaudeNormalizeEolHook,removeClaudePostToolUseHook,removeClaudePreToolUseHook,removeClaudeStopHook,removeClaudeToolGuardHook,removeClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
 
-import { ensureTicketDirAndGitignore } from "./cli-init-logic.js";
-import { normalizeTicketPaths } from "./cli-ticket-migration.js";
-import { rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.js";
-import { readTicketIndexJson, syncActiveTicketId, writeTicketIndexJson } from "./cli-ticket-index.js";
-import { ensureWorkspaceMigrated } from "./cli-ticket-home.js";
 import { syncExposedNativeSkills } from "./cli-skill-commands.js";
+import { ensureWorkspaceMigrated } from "./cli-ticket-home.js";
 
-// #623/#622-D: init-time migration of a workspace's tickets to ~/.deuk-agent/tickets/
-// and sync of native skills from the SSOT. Idempotent and best-effort — a failure
-// here must not abort workspace setup.
-// #776: 워크스페이스 마커(.deuk-agent + workspace.json) 민팅. 이건 ticket dir 해석의
-// 전제(findWorkspaceRoot가 마커를 찾아야 함)이므로 runSingleWorkspaceMaintenance의
-// writeTicketIndexJson보다 *먼저* 실행돼야 한다. 과거엔 이 호출이 maintenance 뒤에
-// 있어서, 신규 워크스페이스는 마커 부재 → detectConsumerTicketDir=null → mkdirSync(null)
-// throw → 이 함수 자체에 도달도 못 하고 영구 미등록되는 순서 결함이 있었다.
 function ensureWorkspaceMarkerOnInit(cwd, dryRun) {
-  // #645: init is the ONLY entry point allowed to mint a brand-new workspace
-  // (marker + workspace.json). allowCreate gates that — without it, reconcile
-  // self-heals an already-registered workspace but never registers a new one.
   ensureWorkspaceMigrated(cwd, { dryRun, allowCreate: true });
 }
 
@@ -35,12 +16,53 @@ function ensureTicketsMigratedOnInit(cwd, dryRun) {
     console.warn(`[INIT] skill sync skipped for ${basename(cwd)}: ${err.message}`);
   }
 }
-import { cliText, resolveCliLocale } from "./cli-locales.js";
 
-import { DEUK_ROOT_DIR, CliOpts, SPOKE_REGISTRY, TICKET_INDEX_FILENAME, TICKET_LIST_FILENAME, TICKET_SUBDIR, buildWorkspaceAliases, discoverAllWorkspaces, getWorkspaceInitConfigPath, isWorkflowExecute, loadInitConfig, makePath, normalizeRegistryPath, normalizeTicketGroup, normalizeWorkflowMode, parseFrontMatter, pruneRuleModules, resolveDocsLanguage, resolvePackageRoot, resolveUserHome, resolveWorkflowMode, stringifyFrontMatter, toPosixPath, toRepoRelativePath, writeFileLF } from "./cli-utils.js";
+import { CliOpts,discoverAllWorkspaces,loadInitConfig,makePath,resolvePackageRoot,resolveUserHome } from "./cli-utils.js";
 
-import { removeFragmentedLocalAgentSurfaces, removeLegacyWorkspaceConfig, removeLocalSkillCopies, removeNestedLegacyWorkspaceConfigs, removeRuntimeTemplateCopies } from "./cli-init-migrate.js";
-import { buildGlobalClaudeInstructions, buildGlobalCodexInstructions, canonicalizeGeneratedCommandReferences, generateSpokeContent, mergeManagedRuleContent, removeDuplicateRuleCopies, runGlobalAgentInstructionSync, runSingleWorkspaceMaintenance, syncCodexMcpEndpointFromWorkspace } from "./cli-init-instructions.js";
+import { canonicalizeGeneratedCommandReferences,removeDuplicateRuleCopies,runGlobalAgentInstructionSync,runSingleWorkspaceMaintenance,syncCodexMcpEndpointFromWorkspace } from "./cli-init-instructions.js";
+import { removeFragmentedLocalAgentSurfaces,removeLocalSkillCopies,removeNestedLegacyWorkspaceConfigs,removeRuntimeTemplateCopies } from "./cli-init-migrate.js";
+
+const GLOBAL_AGENT_INSTRUCTION_IDS = ["codex", "claude", "gemini", "cursor", "copilot", "antigravity"];
+
+function normalizeGlobalAgentInstructionIds(rawIds = []): string[] {
+  const ids = new Set<string>();
+  for (const rawId of rawIds) {
+    const id = String(rawId || "").trim().toLowerCase();
+    if (!id) continue;
+    if (id === "gemini") {
+      ids.add("gemini");
+      ids.add("antigravity");
+      continue;
+    }
+    if (id === "antigravity") {
+      ids.add("gemini");
+      ids.add("antigravity");
+      continue;
+    }
+    if (GLOBAL_AGENT_INSTRUCTION_IDS.includes(id)) ids.add(id);
+  }
+  return Array.from(ids);
+}
+
+function resolveGlobalAgentInstructionIds(homeDir, opts: CliOpts = {}): string[] {
+  const configuredIds = normalizeGlobalAgentInstructionIds([
+    opts.platform,
+    ...(Array.isArray(opts.agentTools) ? opts.agentTools : [])
+  ]);
+  if (configuredIds.length > 0) return configuredIds;
+
+  const detectedIds = normalizeGlobalAgentInstructionIds([
+    existsSync(makePath(homeDir, ".codex")) ? "codex" : "",
+    existsSync(makePath(homeDir, ".claude")) ? "claude" : "",
+    existsSync(makePath(homeDir, ".gemini")) ? "gemini" : "",
+    existsSync(makePath(homeDir, ".cursor")) ? "cursor" : "",
+    existsSync(makePath(homeDir, ".config", "Code", "User")) ? "copilot" : "",
+  ]);
+  if (detectedIds.length === 0) {
+    throw new Error("global agent rule install target not found: no init agentTools and no supported agent home directory detected");
+  }
+  return detectedIds;
+}
 
 export function runWorkspaceMaintenance(cwd = process.cwd(), dryRun = false, bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), opts: CliOpts = {}) {
   dryRun = Boolean(dryRun);
@@ -60,20 +82,14 @@ export function runWorkspaceMaintenance(cwd = process.cwd(), dryRun = false, bun
   const homeDir = resolveUserHome(opts);
   const saved = loadInitConfig(cwd, { ...opts, homeDir }) || {};
   const maintenanceOptions = { ...saved, ...opts };
-  runGlobalAgentInstructionSync(dryRun, bundleRoot, homeDir);
+  runGlobalAgentInstructionSync(dryRun, bundleRoot, homeDir, resolveGlobalAgentInstructionIds(homeDir, maintenanceOptions));
   const codexMcpResult = syncCodexMcpEndpointFromWorkspace(cwd, { dryRun, homeDir });
-  const claudeSettingsResult = upsertClaudeUserPromptSubmitHook({ dryRun, homeDir });
-  // #883: also install the PreToolUse (Edit|Write) hook so the design-first / anti-drift
-  // rules are re-surfaced right before a file mutation — the moment drift happens.
-  upsertClaudePreToolUseHook({ dryRun, homeDir });
-  // #904: also install the PostToolUse (Bash) hook so the ticket status card survives
-  // into agent context after every ticket move/use/create/close, even when the agent's
-  // own response summary omits it — a code-level guarantee on top of the prompt-level
-  // ticket-status-surface skill (prompt compliance alone was proven insufficient).
-  upsertClaudePostToolUseHook({ dryRun, homeDir });
-  // #638: the ~/.agent-flow sibling registry (B) is retired. Workspace candidates now
-  // come solely from ~/.deuk-agent/tickets/{uuid}/workspace.json (written by reconcile),
-  // so we no longer write B here — it only went stale and spawned ambiguous ghosts.
+  const claudeSettingsResult = removeClaudeUserPromptSubmitHook({ dryRun, homeDir });
+  removeClaudePreToolUseHook({ dryRun, homeDir });
+  removeClaudePostToolUseHook({ dryRun, homeDir });
+  removeClaudeStopHook({ dryRun, homeDir });
+  removeClaudeToolGuardHook({ dryRun, homeDir });
+  removeClaudeNormalizeEolHook({ dryRun, homeDir });
   removeNestedLegacyWorkspaceConfigs(cwd, dryRun, ignoreDirs);
   removeRuntimeTemplateCopies(cwd, dryRun);
   removeLocalSkillCopies(cwd, dryRun);
@@ -87,16 +103,10 @@ export function runWorkspaceMaintenance(cwd = process.cwd(), dryRun = false, bun
   const failures = [];
   for (const subCwd of submodules) {
     try {
-      // #776: 마커/registry 민팅을 *먼저*. ticket dir 작업(writeTicketIndexJson)이
-      // 마커 존재를 전제하므로, 신규 워크스페이스는 이 단계가 선행돼야 한다.
       ensureWorkspaceMarkerOnInit(subCwd, dryRun);
       runSingleWorkspaceMaintenance(subCwd, dryRun, bundleRoot, maintenanceOptions);
-      // #623: init is one of the two migration entry points (the other is ticket
-      // command entry). Move this workspace's tickets to home as part of setup.
       ensureTicketsMigratedOnInit(subCwd, dryRun);
     } catch (err) {
-      // #776: 치명적 실패를 catch가 삼키고 EXIT0+[DONE]로 위장하던 것을 막는다.
-      // 실패를 집계해 호출부(cli.ts)가 [DONE] 출력을 억제하고 종료코드를 세우게 한다.
       console.error(`[ERROR] Failed to initialize workspace ${basename(subCwd)}: ${(err as Error).message}`);
       failures.push({ workspace: basename(subCwd), message: (err as Error).message });
     }
@@ -117,4 +127,3 @@ export function formatInitCompletionMessage(cwd, dryRun = false) {
   const label = dryRun ? "Dry-run complete" : "Init complete";
   return `[DONE] ${label} for ${basename(cwd)}. Rules and pointers are ready. \`이슈분석 티켓\`이라고 해보세요.`;
 }
-

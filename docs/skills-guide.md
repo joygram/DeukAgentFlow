@@ -8,7 +8,7 @@ How to use the v5.0 skill system and the VS Code Flow UI. Skills layer modular b
 
 ---
 
-## 1. What a skill is
+## What a skill is
 
 A skill is a behavior module defined by a single file, `templates/skills/<id>/SKILL.md`. Its frontmatter drives the behavior.
 
@@ -21,26 +21,45 @@ A skill is a behavior module defined by a single file, `templates/skills/<id>/SK
 
 **The SSOT is the package `templates/skills/`.** Users fork to edit, but when the source is updated it wins over the fork so package updates propagate.
 
-### Install vs Expose — two-step structure
+### Deployment has three layers and the registry is the source
 
-Skills have separate **install** and **expose** steps. Installing alone has no effect; you must expose the skill to each platform individually.
+A skill passes through three layers before it reaches an agent. Each layer holds something different, and only one of them is the source.
+
+| Layer | Location | What it holds |
+|---|---|---|
+| **Origin** | `templates/skills/<id>/SKILL.md` | The canonical material deployment is built from |
+| **Registry** | `~/.deuk/skills.json` | The **source** of what is installed and exposed |
+| **Platform** | `~/.claude/skills/` and friends | Derivatives the registry produced |
 
 ```
-install  →  save the skill file locally
-expose   →  mount the skill on a specific agent platform
+origin       ->  registry          ->  platform directory
+(material)       (source: entries)     (derivative: deployed copy)
 ```
 
 | Step | Meaning | Flow UI |
 |---|---|---|
-| **Install** | Download the skill locally | `[✓]` checkmark |
-| **Expose ON** | Mount skill on the agent | `[ON]` toggle |
-| **Expose OFF** | Unmount (does not delete) | `[OFF]` toggle |
+| **Install** | Record an install entry in the registry | `[✓]` checkmark |
+| **Expose ON** | Record an expose entry and deploy to the platform | `[ON]` toggle |
+| **Expose OFF** | Drop the entry and reclaim the deployed copy | `[OFF]` toggle |
 
 Platforms (`claude / codex / copilot / antigravity`) are registered **individually**, so you can apply a skill to only specific agents for fine-grained control.
 
+**Files in a platform directory are derivatives.** While the entry remains in the registry, deleting those files only means they are deployed again from the origin at the next expose. A skill that keeps coming back is a sign that what you deleted was a derivative.
+
+**Removal starts from the entry.** Run `skill unexpose` to drop the expose entry, then `skill remove` to drop the install entry. These two commands are the canonical path; deleting files by hand reaches only the derivative.
+
 ---
 
-## 2. Skill usage flow (CLI)
+### The two rule directories serve different readers
+
+`templates/` holds two rule-related locations whose names look alike. They are read by different consumers.
+
+- `templates/rules.d/` — input the rule compiler reads and merges into workspace rules.
+- `templates/rule-details.md` — the canon for the detail items `coding step` places under a rule title. The rule titles themselves are canon in `docs/PROJECT_RULE.md`.
+
+---
+
+## Skill usage flow
 
 ```bash
 # List installable skills
@@ -52,7 +71,7 @@ deuk-agent-flow skill add --skill <id>
 # Expose to platforms (native platforms like Claude sync to ~/.claude/skills)
 deuk-agent-flow skill expose --skill <id>
 
-# Unexpose / remove
+# Unexpose / remove — drop the entries in this order
 deuk-agent-flow skill unexpose --skill <id>
 deuk-agent-flow skill remove --skill <id>
 
@@ -64,10 +83,11 @@ deuk-agent-flow skill edit --skill <id>   # fork then open in $EDITOR
 **Key behavior:**
 - After editing a skill source, `dev:install` alone does **not** propagate to native (`~/.claude/skills`); the **next ticket command** triggers the auto-sync at the ticket-command entry point. It hash-compares, so unchanged content is skipped.
 - A `bind: rules` skill is surfaced together with the rules-node output.
+- To drop a skill, run the two commands above so the entries come down. Deleting only the platform-directory files means the skill is deployed again at the next expose.
 
 ---
 
-## 3. Using the persona — `persona-maid`
+## Using the persona — `persona-maid`
 
 `persona-maid` switches the reply tone to a "subculture maid" persona. It is **disabled by default (opt-in)** in the official release, so you install it explicitly.
 
@@ -106,7 +126,7 @@ deuk-agent-flow skill remove --skill persona-maid     # remove completely
 
 ---
 
-## 4. VS Code Flow UI (AgentFlow Panel)
+## VS Code Flow UI
 
 > **New in v5.0 (first release)** — control the ticket and skill workflow from the sidebar. No terminal switching.
 
@@ -184,6 +204,9 @@ The panel has **Workspace** and **Skill** tabs at the top.
 ├─────────────────────────────────────────────┤
 │ ▼ documentation                             │
 │  doc-sync           [✓] [ON] [ON] [OFF][ON] │
+├─────────────────────────────────────────────┤
+│ ▼ governance                                │
+│  rule-reload        [✓] [ON] [ON] [OFF][ON] │
 └─────────────────────────────────────────────┘
 ```
 
@@ -208,7 +231,7 @@ The panel has **Workspace** and **Skill** tabs at the top.
 
 ---
 
-## 5. See also
+## See also
 
 - Skill architecture & precedence: [architecture.md](architecture.md)
 - Full usage guide: [usage-guide.ko.md](usage-guide.ko.md)

@@ -1,16 +1,22 @@
-import { dirname, basename } from "path";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, unlinkSync, renameSync, readdirSync } from "fs";
-import { fileURLToPath } from "url";
-import { DEFAULT_IGNORE_DIRS, DEUK_ROOT_DIR, CliOpts, SPOKE_REGISTRY, makePath, resolvePackageRoot, resolveUserHome, toFileUri, toPosixPath, toRepoRelativePath } from "./cli-utils.js";
-import { CANONICAL_INIT_CLEANUP_PATHS, GLOBAL_POINTER_BEGIN_PREFIX, GLOBAL_POINTER_END, MANAGED_BLOCK_BEGIN, MANAGED_BLOCK_END, hashManagedContent, mergeManagedBlock, readTextIfExists, splitManagedBlock, wrapManagedBlock } from "./cli-init-core.js";
-import { upsertClaudeUserPromptSubmitHook } from "./cli-init-claude.js";
+import { parseHeading,stripLeadingHashes,stripLeadingSectionNumber } from "./markdown-headings.js";
+import { copyFileSync,existsSync,mkdirSync,readFileSync,readdirSync,unlinkSync,writeFileSync } from "fs";
+import { basename,dirname } from "path";
+import { CANONICAL_INIT_CLEANUP_PATHS,GLOBAL_POINTER_BEGIN_PREFIX,GLOBAL_POINTER_END,hashManagedContent,readTextIfExists,splitManagedBlock } from "./cli-init-core.js";
 import { ensureTicketDirAndGitignore } from "./cli-init-logic.js";
+import { cleanupGeneratedAgentPointerSurface,cleanupNestedGeneratedAgentPointers,migrateDeukRootDir,migrateHtmlMarkersToHeadings,migrateLegacyStructure,removeLegacyPaths,removeLocalAgentSurfaces,removeLocalSkillCopies,removeRuntimeTemplateCopies } from "./cli-init-migrate.js";
+import { ensureSystemSkills,pruneOrphanedSystemSkills } from "./cli-skill-commands.js";
 import { resolveHomeTicketDirForWorkspace } from "./cli-ticket-home.js";
+import { syncActiveTicketId,writeTicketIndexJson } from "./cli-ticket-index.js";
 import { normalizeTicketPaths } from "./cli-ticket-migration.js";
 import { rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.js";
-import { syncActiveTicketId, writeTicketIndexJson } from "./cli-ticket-index.js";
-import { cleanupGeneratedAgentPointerSurface, cleanupNestedGeneratedAgentPointers, ensureWritableDirectory, migrateDeukRootDir, migrateHtmlMarkersToHeadings, migrateLegacyStructure, removeLegacyPaths, removeLocalAgentSurfaces, removeLocalSkillCopies, removeRuntimeTemplateCopies, sameFileContent } from "./cli-init-migrate.js";
-import { ensureSystemSkills, pruneOrphanedSystemSkills } from "./cli-skill-commands.js";
+import { CliOpts,DEFAULT_IGNORE_DIRS,DEUK_ROOT_DIR,localized,makePath,resolvePackageRoot,resolveUserHome,toFileUri,toRepoRelativePath } from "./cli-utils.js";
+
+const INIT_TEXT = {
+  surfaceDocNotFound: { ko: "CLI 표면 문서를 찾을 수 없다: {path}", en: "CLI surface document not found: {path}" },
+  pointerTargetRequired: { ko: "global pointer 는 구체적인 target id 가 필요하다", en: "global pointer requires a concrete target id" },
+  pointerSyncRequired: { ko: "global pointer sync 는 감지된 target id 가 최소 하나 필요하다", en: "global pointer sync requires at least one detected target id" },
+  spokeIdRequired: { ko: "spoke surface 는 구체적인 agent id 가 필요하다", en: "spoke surface requires a concrete agent id" },
+} as const;
 
 function readWorkspaceDeukContextMcpUrl(cwd) {
   const mcpPath = makePath(cwd, ".mcp.json");
@@ -81,24 +87,6 @@ function canonicalizeLegacyDeukAgentText(content, bundleRoot) {
     .replace(/(?:[a-zA-Z]:[\\/]|(?:\/|\\\\)[^\n\\/]+)[^\n)\s>\]"'`]+\/deuk-agent-flow\/core-rules\/AGENTS\.md/g, coreRulesPath);
 }
 
-function normalizeExistingSpokeContent(existingContent, managedContent, bundleRoot) {
-  const current = String(existingContent || "");
-  if (!current.trim()) return current;
-  if (isGeneratedDeukPointer(current)) return "";
-
-  const normalizedManaged = String(managedContent || "").trim();
-  const canonicalize = (value) => canonicalizeLegacyDeukAgentText(value, bundleRoot).trim();
-
-  if (canonicalize(current) === normalizedManaged) return "";
-
-  const currentBlock = splitManagedBlock(current);
-  if (!currentBlock) return current;
-
-  const before = canonicalize(currentBlock.before) === normalizedManaged ? "" : currentBlock.before;
-  const after = canonicalize(currentBlock.after) === normalizedManaged ? "" : currentBlock.after;
-  return [before, wrapManagedBlock(managedContent), after].filter(Boolean).join("\n\n").trimEnd() + "\n";
-}
-
 export function canonicalizeTextFile(absPath, cwd, bundleRoot, dryRun, label) {
   if (!existsSync(absPath)) return false;
   const before = readFileSync(absPath, "utf8");
@@ -124,7 +112,6 @@ export function isGeneratedDeukPointer(content) {
   const hasHeader = /Managed by DeukAgent(?:Rules|Flow)/.test(src) || /# Deuk Agent Rules\b|# Deuk Agent Flow\b|# DeukAgentFlow\b/.test(src);
   const hasCoreRulesRef = /Core rules (?:are at|path is resolved by|are printed by):/i.test(src) || /deuk-agent-flow rules/i.test(src);
   if (!hasHeader || !hasCoreRulesRef) return false;
-  // Old format required "thin bootstrap" line; new format omits it — both are valid generated pointers
   return true;
 }
 
@@ -144,33 +131,20 @@ export function canonicalizeGeneratedCommandReferences(cwd, bundleRoot, dryRun) 
   }
 }
 
-
-export function buildGlobalCodexInstructions() {
-  return buildGlobalAgentPointer();
-}
-
-export function buildGlobalClaudeInstructions() {
-  return buildGlobalAgentPointer();
-}
-
 function extractMarkdownHeadingSection(content = "", heading = "") {
-  const normalizeHeading = value => String(value || "")
-    .trim()
-    .replace(/^#+\s*/, "")
-    .replace(/^\d+[\).\s-]+/, "")
-    .toLowerCase();
+  const normalizeHeading = value => stripLeadingSectionNumber(stripLeadingHashes(String(value || "").trim())).toLowerCase();
   const target = normalizeHeading(heading);
   if (!target) return "";
   const lines = String(content || "").split(/\r?\n/);
   let start = -1;
   let level = 0;
   for (const [index, line] of lines.entries()) {
-    const match = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+    const match = parseHeading(line);
     if (!match) continue;
     if (start === -1) {
-      if (normalizeHeading(match[2]) === target) {
+      if (normalizeHeading(match.text) === target) {
         start = index;
-        level = match[1].length;
+        level = match.depth;
       }
       continue;
     }
@@ -188,9 +162,9 @@ function readCoreRulesSection(bundleRoot, heading) {
 }
 
 function readCliSurfaceDocument(bundleRoot, name) {
-  const surfacePath = makePath(bundleRoot, "docs", "cli-surfaces", `${name}.md`);
+  const surfacePath = makePath(bundleRoot, "core-rules", "cli-surfaces", `${name}.md`);
   if (!existsSync(surfacePath)) {
-    throw new Error(`CLI surface document not found: ${surfacePath}`);
+    throw new Error(localized(INIT_TEXT.surfaceDocNotFound, { path: surfacePath }));
   }
   return readFileSync(surfacePath, "utf8");
 }
@@ -204,13 +178,9 @@ function renderCliSurfaceDocument(bundleRoot, name, replacements = {}) {
   return content.trimEnd();
 }
 
-function buildGlobalAgentPointer(bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), format = "markdown", agentId = "default") {
-  let body = "";
-  try {
-    body = renderCliSurfaceDocument(bundleRoot, `global-pointer-${agentId}`);
-  } catch(e) {
-    body = renderCliSurfaceDocument(bundleRoot, "global-pointer");
-  }
+function buildGlobalAgentPointer(bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), format = "markdown", targetId = "default") {
+  if (!targetId) throw new Error(localized(INIT_TEXT.pointerTargetRequired));
+  const body = renderCliSurfaceDocument(bundleRoot, `global-pointer-${targetId}`);
 
   if (format === "mdc") {
     return `---
@@ -255,22 +225,18 @@ function wrapGlobalPointerBlock(content) {
 
 function stripGlobalPointerBlocks(content) {
   let text = String(content || "");
-  // Strip <!-- deuk-agent-managed --> wrapped blocks (legacy)
   let currentBlock = splitManagedBlock(text);
   while (currentBlock) {
     text = [currentBlock.before, currentBlock.after].filter(Boolean).join("\n\n").trim();
     currentBlock = splitManagedBlock(text);
   }
-  // Strip --- DEUK_AGENT_FLOW_BEGIN/END blocks
   text = text.replace(/--- DEUK_AGENT_FLOW_BEGIN :[^\n]*\n[\s\S]*?--- DEUK_AGENT_FLOW_END\n?/g, "");
   text = text.replace(/DEUK_AGENT_GLOBAL_POINTER_BEGIN[\s\S]*?DEUK_AGENT_GLOBAL_POINTER_END\n?/g, "");
   text = text.replace(/^---\ndescription: "DeukAgentFlow global pointer"\nglobs: \["\*\*\/\*"\]\nalwaysApply: true\n---\n# DeukAgentFlow Global Pointer\n\nManaged by DeukAgentFlow\.\n\nRead this file first:\n[^\n]+\n\nKeep personal notes in the sibling `\.user` file, not in this managed pointer\.\n?/gm, "");
   text = text.replace(/^# DeukAgentFlow Global Pointer\n\nManaged by DeukAgentFlow\.\n\nRead this file first:\n[^\n]+\n\nKeep personal notes in the sibling `\.user` file, not in this managed pointer\.\n?/gm, "");
   text = text.replace(/^---\ndescription: "DeukAgentFlow global pointer"\nglobs: \["\*\*\/\*"\]\nalwaysApply: true\n---\n?/gm, "");
-  // Strip plain (tag-free) pointer blocks left by previous init versions
   text = text.replace(/^# DeukAgentFlow Global Pointer\n[\s\S]*$/m, "");
 
-  // #777: 잘려있던 한국어 페르소나 지침 잔재(좀비 블록) 자동 클린업
   text = text.replace(/요청하신 페르소나 지침을 더 자연스럽고 생동감 있게 다듬었습니다[\s\S]*?---/g, "");
   text = text.replace(/요청하신 페르소나 지침을 더 자연스럽고 생동감 있게 다듬었습니다[\s\S]*$/g, "");
 
@@ -284,7 +250,11 @@ function mergeGlobalAgentPointer(existingContent, managedContent) {
   return remainder ? `${nextBlock}\n\n${remainder}\n` : `${nextBlock}\n`;
 }
 
-function getGlobalAgentInstructionTargets(homeDir = resolveUserHome(), bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url })) {
+function getGlobalAgentInstructionTargets(homeDir = resolveUserHome(), bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), targetIds = []) {
+  const selectedIds = new Set(targetIds.map((id) => String(id || "").trim()).filter(Boolean));
+  if (selectedIds.size === 0) {
+    throw new Error(localized(INIT_TEXT.pointerSyncRequired));
+  }
   return [
     {
       id: "codex",
@@ -313,14 +283,14 @@ function getGlobalAgentInstructionTargets(homeDir = resolveUserHome(), bundleRoo
     },
     {
       id: "antigravity",
-      target: makePath(homeDir, ".config", "Antigravity", "User", "AGENTS.md"),
+      target: makePath(homeDir, ".gemini", "config", "AGENTS.md"),
       content: buildGlobalAgentPointer(bundleRoot, "markdown", "antigravity")
     },
-  ];
+  ].filter((entry) => selectedIds.has(entry.id));
 }
 
-function syncGlobalAgentInstructions(dryRun, bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), homeDir = resolveUserHome()) {
-  for (const entry of getGlobalAgentInstructionTargets(homeDir, bundleRoot)) {
+function syncGlobalAgentInstructions(dryRun, bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), homeDir = resolveUserHome(), targetIds = []) {
+  for (const entry of getGlobalAgentInstructionTargets(homeDir, bundleRoot, targetIds)) {
     if (dryRun) continue;
     const nextContent = entry.content;
     const existingContent = existsSync(entry.target) ? readTextIfExists(entry.target) : "";
@@ -330,21 +300,15 @@ function syncGlobalAgentInstructions(dryRun, bundleRoot = resolvePackageRoot({ f
     mkdirSync(dirname(entry.target), { recursive: true });
     writeFileSync(entry.target, mergedContent, "utf8");
   }
-  // Claude settings.json 훅도 rules 실행 시마다 최신 커맨드로 자동 동기화.
-  upsertClaudeUserPromptSubmitHook({ dryRun, homeDir });
 }
 
-export function runGlobalAgentInstructionSync(dryRun = false, bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), homeDir = resolveUserHome()) {
-  syncGlobalAgentInstructions(dryRun, bundleRoot, homeDir);
+export function runGlobalAgentInstructionSync(dryRun = false, bundleRoot = resolvePackageRoot({ fromUrl: import.meta.url }), homeDir = resolveUserHome(), targetIds = []) {
+  syncGlobalAgentInstructions(dryRun, bundleRoot, homeDir, targetIds);
 }
 
 export function generateSpokeContent(spoke, bundleRoot) {
-  let content = "";
-  try {
-    content = renderCliSurfaceDocument(bundleRoot, `spoke-pointer-${spoke.id}`);
-  } catch (err) {
-    content = renderCliSurfaceDocument(bundleRoot, "spoke-pointer");
-  }
+  if (!spoke?.id) throw new Error(localized(INIT_TEXT.spokeIdRequired));
+  const content = renderCliSurfaceDocument(bundleRoot, `spoke-pointer-${spoke.id}`);
 
   if (spoke.format === "mdc") {
     return `---
@@ -357,70 +321,25 @@ ${content}`;
   return `---\n\n## DeukAgentFlow\n\n> Managed by DeukAgentFlow. Remove this section if not installed.\n\n${content}\n`;
 }
 
-export function mergeManagedRuleContent(existingContent, managedContent) {
-  return mergeManagedBlock(existingContent, managedContent);
-}
-
-function deploySpokePointers(cwd, bundleRoot, dryRun) {
-  for (const spoke of SPOKE_REGISTRY) {
-    const legacyPath = spoke.legacy ? makePath(cwd, spoke.legacy) : null;
-    const legacyExisted = Boolean(legacyPath && existsSync(legacyPath));
-
-    // Legacy root files are replaced by canonical spoke targets.
-    if (legacyPath) {
-      if (legacyExisted) {
-        if (!dryRun) unlinkSync(legacyPath);
-        console.log(`[CLEANUP] removed legacy: ${spoke.legacy}`);
-      }
-    }
-
-    const shouldInstallDefaultHub = spoke.id === "antigravity" && existsSync(makePath(cwd, DEUK_ROOT_DIR));
-    if (!spoke.detect(cwd) && !legacyExisted && !shouldInstallDefaultHub) continue;
-
-    const targetPath = makePath(cwd, spoke.target);
-    const targetDir = dirname(targetPath);
-    const managedContent = generateSpokeContent(spoke, bundleRoot);
-    const existingContent = existsSync(targetPath) ? readTextIfExists(targetPath) : "";
-    const normalizedContent = normalizeExistingSpokeContent(existingContent, managedContent, bundleRoot);
-    const nextContent = mergeManagedBlock(normalizedContent, managedContent);
-    if (existingContent === nextContent) {
-      console.log(`spoke synced: ${spoke.target} (${spoke.id})`);
-      continue;
-    }
-    
-    if (!dryRun) {
-      ensureWritableDirectory(targetDir, cwd, dryRun, `spoke target conflict resolved for ${spoke.id}`);
-      mkdirSync(targetDir, { recursive: true });
-      writeFileSync(targetPath, nextContent, "utf8");
-    }
-    console.log(`spoke synced: ${spoke.target} (${spoke.id})`);
-  }
-}
-
 export function removeDuplicateRuleCopies(cwd, dryRun) {
-  // Note: AGENTS.md is now the Antigravity spoke target — do NOT delete it here.
-  // CLAUDE.md/GEMINI.md legacy cleanup is handled by deploySpokePointers (spoke.legacy field).
-  // .gemini is the Antigravity platform directory — preserve it.
   removeLegacyPaths(cwd, dryRun, CANONICAL_INIT_CLEANUP_PATHS.duplicateRuleCopies, "legacy/duplicate");
 }
 
 function migrateProjectRuleToAgentRoot(cwd, dryRun, opts: CliOpts = {}) {
-  // #950: 정본은 워크스페이스의 docs/PROJECT_RULE.md다(과거 워크스페이스 루트 #824에서
-  // docs/ 하위로 재이동). 워크스페이스 루트에 남아있는 구 정본이 있으면 1회 이동하고,
-  // 없으면 티켓홈 레거시 사본에서 1회 복원한다. docs/PROJECT_RULE.md가 이미 있으면
-  // 손대지 않는다(파괴적 이동·삭제 금지).
   const docsPath = makePath(cwd, "docs", "PROJECT_RULE.md");
-  if (existsSync(docsPath)) return false; // 정본 존재 → 그대로 둠
-
   const legacyRootPath = makePath(cwd, "PROJECT_RULE.md");
+
   if (existsSync(legacyRootPath)) {
     if (!dryRun) {
       mkdirSync(dirname(docsPath), { recursive: true });
-      copyFileSync(legacyRootPath, docsPath);
+      copyFileSync(legacyRootPath, docsPath); // 루트가 정본 — docs를 덮어쓴다.
+      unlinkSync(legacyRootPath);
     }
     console.log(`[MIGRATE] ${dryRun ? "Would move" : "Moved"} PROJECT_RULE.md from workspace root -> ${toRepoRelativePath(cwd, docsPath)}`);
     return true;
   }
+
+  if (existsSync(docsPath)) return false;
 
   const homeDir = resolveHomeTicketDirForWorkspace(cwd, opts);
   const legacyHomePath = makePath(homeDir, "PROJECT_RULE.md");
@@ -434,9 +353,6 @@ function migrateProjectRuleToAgentRoot(cwd, dryRun, opts: CliOpts = {}) {
   return true;
 }
 
-// #950: 과거 hasLocalProjectBoundary의 package.json 오판으로 모노레포 서브패키지마다
-// 찍혀나간 PROJECT_RULE.md 사본을 찾아 삭제한다. 워크스페이스 정본(docs/PROJECT_RULE.md)과
-// 신규 생성용 템플릿(templates/PROJECT_RULE.md — DeukAgentFlow 번들 자신의 소스)은 대상에서 제외한다.
 function removeStrayProjectRuleCopies(cwd, dryRun) {
   const canonicalPath = makePath(cwd, "docs", "PROJECT_RULE.md");
   const removed = [];
@@ -469,8 +385,32 @@ function removeStrayProjectRuleCopies(cwd, dryRun) {
   return removed;
 }
 
+function purgeDeadArchitectureDocsField(cwd, dryRun) {
+  const rulePath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  if (!existsSync(rulePath)) return false;
+
+  const original = readFileSync(rulePath, "utf8");
+  let next = original;
+
+  const fmMatch = next.match(/^---\n([\s\S]*?)\n---\n/);
+  if (fmMatch) {
+    const body = fmMatch[1].replace(/^architecture_docs:.*(?:\n[ \t]+-.*)*\n?/m, "");
+    const rebuiltFm = body.trim() ? `---\n${body.replace(/\n+$/, "")}\n---\n` : "";
+    next = rebuiltFm + next.slice(fmMatch[0].length);
+  }
+
+  next = next.replace(/(?:^>.*\n)*^>.*architecture_docs.*\n(?:^>.*\n)*/m, "");
+
+  next = next.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "");
+
+  if (next === original) return false;
+
+  if (!dryRun) writeFileSync(rulePath, next);
+  console.log(`[CLEANUP] ${dryRun ? "Would purge" : "Purged"} dead architecture_docs field/notice from ${toRepoRelativePath(cwd, rulePath)}`);
+  return true;
+}
+
 function ensureProjectRule(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
-  // #950: 정본은 워크스페이스 docs/ 하위. 템플릿으로 초기 생성도 docs/에 한다.
   const projectRulePath = makePath(cwd, "docs", "PROJECT_RULE.md");
   if (existsSync(projectRulePath)) return false;
 
@@ -485,12 +425,48 @@ function ensureProjectRule(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
   return true;
 }
 
-// #804: ensureProjectMemory 죽은함수 제거 — 호출부는 #685서 제거됨(호출 0).
+const PROJECT_RULE_ID_LINE_RE = /^-\s*\[([A-Z0-9-]+)\]\s.*$/;
+
+function parseProjectRuleIdLines(content) {
+  const map = new Map();
+  for (const line of content.split("\n")) {
+    const m = line.match(PROJECT_RULE_ID_LINE_RE);
+    if (m) map.set(m[1], line);
+  }
+  return map;
+}
+
+export function syncProjectRuleIdLines(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
+  const projectRulePath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  if (!existsSync(projectRulePath)) return false;
+
+  const templatePath = makePath(bundleRoot, "templates", "PROJECT_RULE.md");
+  if (!existsSync(templatePath)) return false;
+
+  const original = readFileSync(projectRulePath, "utf8");
+  const templateLines = parseProjectRuleIdLines(readFileSync(templatePath, "utf8"));
+
+  let next = original;
+  let changed = false;
+  for (const line of original.split("\n")) {
+    const m = line.match(PROJECT_RULE_ID_LINE_RE);
+    if (!m) continue;
+    const templateLine = templateLines.get(m[1]);
+    if (templateLine && templateLine !== line) {
+      next = next.replace(line, templateLine);
+      changed = true;
+      console.log(`[SYNC] ${dryRun ? "Would update" : "Updated"} PROJECT_RULE.md rule [${m[1]}] from template`);
+    }
+  }
+
+  if (!changed) return false;
+  if (!dryRun) writeFileSync(projectRulePath, next);
+  return true;
+}
 
 export function runSingleWorkspaceMaintenance(cwd, dryRun, bundleRoot, opts: CliOpts = {}) {
   console.log(`\nInitializing ${basename(cwd)}...`);
 
-  // #713: self-healing home root migration (~/.deuk-agent → ~/.deuk). Idempotent, runs every init.
   migrateDeukRootDir({ ...opts, dryRun });
   migrateLegacyStructure(cwd, dryRun);
   migrateHtmlMarkersToHeadings(cwd, dryRun);
@@ -508,17 +484,13 @@ export function runSingleWorkspaceMaintenance(cwd, dryRun, bundleRoot, opts: Cli
   migrateProjectRuleToAgentRoot(cwd, dryRun, opts);
   ensureProjectRule(cwd, bundleRoot, dryRun, opts);
   removeStrayProjectRuleCopies(cwd, dryRun);
-  // #685: project-memory.md 자동 생성 제거 — 무의미한 진행-상태 레이어(언니 지시).
+  purgeDeadArchitectureDocsField(cwd, dryRun);
 
   removeRuntimeTemplateCopies(cwd, dryRun);
   removeLocalSkillCopies(cwd, dryRun);
-  // #697: 시스템 필수 스킬(ticket-status-surface 등 system:true)을 항상 보장.
   try { ensureSystemSkills(cwd, { dryRun }); } catch { /* best-effort */ }
-  // #949: id가 rename/제거된 옛 스킬(원본 소스 소멸분)을 자동 청소 — 재설치만으로
-  // id 변경이 마이그레이션되게 한다. ensure(새 id 설치) 뒤에 prune(옛 id 제거)이 온다.
   try { pruneOrphanedSystemSkills(cwd, { dryRun }); } catch { /* best-effort */ }
   removeLocalAgentSurfaces(cwd, dryRun);
   canonicalizeGeneratedCommandReferences(cwd, bundleRoot, dryRun);
   cleanupNestedGeneratedAgentPointers(cwd, dryRun);
 }
-

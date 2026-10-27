@@ -2,7 +2,9 @@
 
 DeukAgentFlow v3.0 introduced the **Hub-Spoke Architecture** and **Global Execution Proxy**. v4.5.x adds the **Home-based Ticket Store** (`~/.deuk-agent/tickets/{uuid}/`) for multi-workspace co-existence and session takeover, and the **doc-sync skill** for documentation canonicalization.
 
-## 1. Zero-Copy Hub-Spoke Architecture
+> **Where this document sits in the three-axis identity.** DeukAgentFlow's identity is three axes serving one goal — agent↔human collaboration efficiency (see [principles.md](../principles/principles.md) 서두). This document is the technical canon of the **flow-control axis** (tickets, phase gates, storage, pipeline). The persona axis is canonized in [persona-design.md](persona-design.md); the skill axis lives in the skill system.
+
+## Zero-Copy Hub-Spoke Architecture
 
 In the v3 model, **`AGENTS.md`** acts as the global **Hub** (the single source of truth), while **`PROJECT_RULE.md`** serves as the **Local Hub** for project-specific overrides. IDE-specific rule files (e.g., `.cursor/rules/*.mdc`) act as **Spokes** (thin entry points) that use absolute path pointers instead of duplicating rules (Zero-Copy).
 
@@ -15,7 +17,7 @@ In the v3 model, **`AGENTS.md`** acts as the global **Hub** (the single source o
 - **Online RAG Only**: DeukAgentContext is used as an online advisory memory layer, not as a local cache or alternate source of truth.
 - **Archive Preservation**: Completed work should move into archive/knowledge so the active context stays small and current.
 
-## 2. Global CLI Proxy (Kind: Src)
+## Global CLI Proxy
 
 To solve the "Stale Tarball" problem common with `npx`, v3.0 implements a **Global Proxy**.
 
@@ -25,14 +27,14 @@ To solve the "Stale Tarball" problem common with `npx`, v3.0 implements a **Glob
 3. If found, it **transparently routes** all commands to the local source.
 4. This ensures that agents always use the latest, uncommitted local rules instead of a cached version from the registry.
 
-## 3. Initialization Lifecycle
+## Initialization Lifecycle
 
 1. **`migrateLegacyStructure`**: Renames or cleans up old directory patterns.
 2. **`cleanSubmoduleStubs`**: Identifies and removes empty submodule stubs and orphans in `.gitmodules`.
 3. **`deploySpokePointers`**: Generates the thin Spoke files pointing to the Hub.
 4. **`Smart Backup`**: Analyzes legacy `.cursorrules` and creates `.bak` only if custom user rules are detected.
 
-## 4. Ticket Workflow Runtime
+## Ticket Workflow Runtime
 
 Ticket workflow is modeled as a CLI-owned workflow state table:
 
@@ -93,7 +95,7 @@ output_status: transition_blocked
 
 Frontmatter is for indexing, list/status filtering, and human scanning. The bottom `## DocMeta` block is the source of truth for validation contracts, slots, source maps, policy metadata, output status, and adapter eligibility. CLI commands update the bottom DocMeta first, then mirror only summary fields to frontmatter. Full `docmeta` objects must not be stored in frontmatter, and `## DocMeta` should remain the last section of the ticket.
 
-## 5. DocMeta-Centered Flow Pipeline
+## DocMeta-Centered Flow Pipeline
 
 DeukAgentFlow treats ticket workflow constraints as document metadata, not as long user-facing instructions. This follows the DocuMeta model used by the document pipeline: define slots, evidence, validation policy, and output status first; then let adapters read that metadata and produce the next artifact.
 
@@ -147,7 +149,7 @@ This keeps the workflow deterministic: templates remain state-bound execution ma
 
 See [Ticket Lifecycle Separation Plan](ticket-lifecycle-separation-plan.md) for the refactoring plan that separates document writing, DocMeta validation, evidence checks, lifecycle services, and compact surface rendering.
 
-## 6. Storage Layout
+## Storage Layout
 
 DeukAgentFlow uses a strict two-location storage model. No other locations are used.
 
@@ -170,7 +172,9 @@ All durable state lives under the user home directory. This is shared across all
   skills.json                 # skill registry
 ```
 
-`PROJECT_RULE.md` and `project-memory.md` live inside the ticket directory (e.g. `~/.deuk-agent/tickets/{uuid}/PROJECT_RULE.md`), not in the workspace.
+`skills.json` is the source of what is installed and exposed, and files in a platform directory are its derivatives — [skills-guide.md](../guides/skills-guide.md) is canon for the three layers and the removal order.
+
+`PROJECT_RULE.md` and `project-memory.md` live inside the ticket directory (e.g. `~/.deuk-agent/tickets/{uuid}/PROJECT_RULE.md`), not in the workspace.
 
 ### Workspace Marker (`.deuk-workspace-id`)
 

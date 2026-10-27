@@ -1,22 +1,19 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync,readdirSync,readFileSync } from "fs";
 import { basename } from "path";
+import { appendTicketDocMetaSection,splitTicketDocMetaSection } from "./cli-ticket-docmeta.js";
 import {
-  DEUK_ROOT_DIR,
-  computeTicketPath,
-  detectConsumerTicketDir,
-  normalizeTicketGroup,
-  parseFrontMatter,
-  stringifyFrontMatter,
-  writeFileLF,
-  makePath
- , CliOpts } from "./cli-utils.js";
-import { appendTicketDocMetaSection, splitTicketDocMetaSection } from "./cli-ticket-docmeta.js";
+computeTicketPath,
+detectConsumerTicketDir,
+DEUK_ROOT_DIR,
+makePath,
+normalizeTicketGroup,
+parseFrontMatter,
+stringifyFrontMatter,
+writeFileLF
+} from "./cli-utils.js";
 import { normalizeMarkdownContent } from "./lint-md.js";
 
 export function resolveTicketPath(cwd, relPath) {
-  // #080: stale entries (old INDEX/claim/frontmatter) may still carry the legacy
-  // `.deuk-agent/tickets/` prefix from in-workspace storage. The base passed here is
-  // the ticket root itself post-#622, so strip the prefix instead of nesting.
   let rel = String(relPath || "");
   const legacyPrefix = `${DEUK_ROOT_DIR}/tickets/`;
   if (rel.startsWith(legacyPrefix)) rel = rel.slice(legacyPrefix.length);

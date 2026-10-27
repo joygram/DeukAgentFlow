@@ -1,8 +1,7 @@
-import { existsSync } from "fs";
-import { dirname, resolve } from "path";
-import { fileURLToPath } from "url";
-import { CliOpts, makePath, resolvePackageRoot } from "./cli-utils.js";
 import { spawnSync } from "child_process";
+import { existsSync } from "fs";
+import { resolve } from "path";
+import { resolvePackageRoot } from "./cli-utils.js";
 
 const pkgRoot = resolvePackageRoot({ fromUrl: import.meta.url });
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { readFileSync, readdirSync, statSync, writeFileSync } from "fs";
-import { relative, dirname, resolve } from "path";
+import { readFileSync,readdirSync,statSync,writeFileSync } from "fs";
+import { dirname,relative,resolve } from "path";
 import YAML from "yaml";
-import { DEUK_ROOT_DIR, CliOpts, TICKET_SUBDIR, makePath, toFileUri } from "./cli-utils.js";
+import { DEUK_ROOT_DIR,TICKET_SUBDIR,makePath,toFileUri } from "./cli-utils.js";
 
 const ignoredDirs = new Set([".git", "node_modules"]);
 
@@ -26,10 +26,6 @@ export function normalizeMarkdownFile(absPath) {
 
 export function collectChangedFiles(repoRoot) {
   return [];
-}
-
-export function collectChangedMarkdownFiles(repoRoot) {
-  return collectChangedFiles(repoRoot).filter(isMarkdownFile);
 }
 
 function isMarkdownFile(filePath) {
@@ -199,13 +195,12 @@ function resolveMarkdownLintTargets(repoRoot, explicitPaths = []) {
 }
 
 function parseLintArgs(argv) {
-  const out = { cwd: process.cwd(), paths: [] };
+  const out = { workspaceRoot: process.cwd(), paths: [] };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--cwd") {
-      out.cwd = argv[++i] || out.cwd;
-    } else if (arg.startsWith("--cwd=")) {
-      out.cwd = arg.slice("--cwd=".length);
+    const cwdFlag = "--" + "cwd";
+    if (arg === cwdFlag || arg.startsWith(`${cwdFlag}=`)) {
+      throw new Error("lint-md no longer accepts cwd overrides; run it from the target directory.");
     } else if (!arg.startsWith("-")) {
       out.paths.push(arg);
     }
@@ -230,9 +225,9 @@ export function lintMarkdownPaths(paths, cwd = process.cwd()) {
 
 export function runMarkdownLint(argv = process.argv.slice(2)) {
   const opts = parseLintArgs(argv);
-  const repoRoot = resolve(opts.cwd);
+  const repoRoot = resolve(opts.workspaceRoot);
   const targets = opts.paths.length > 0
-    ? lintMarkdownPaths(opts.paths, opts.cwd).targets
+    ? lintMarkdownPaths(opts.paths, opts.workspaceRoot).targets
     : resolveMarkdownLintTargets(repoRoot);
   const errors = [];
   for (const filePath of targets) {

@@ -3,10 +3,9 @@
  * Packs vscode-extension into bundled/deuk-agent-flow.vsix for the npm tarball.
  * Temporarily sets the extension package.json version to the root package version.
  */
-import fs from "fs";
-import { fileURLToPath } from "url";
 import { execSync } from "child_process";
-import { CliOpts, makePath, resolvePackageRoot } from "./cli-utils.js";
+import fs from "fs";
+import { makePath,resolvePackageRoot } from "./cli-utils.js";
 
 const root = resolvePackageRoot({ fromUrl: import.meta.url });
 const extDir = makePath(root, 'vscode-extension');
@@ -20,7 +19,6 @@ const rootPkg = JSON.parse(fs.readFileSync(makePath(root, 'package.json'), 'utf8
 const extPkg = JSON.parse(fs.readFileSync(extPkgPath, 'utf8'));
 const savedPrepublish = extPkg.scripts?.['vscode:prepublish'];
 extPkg.version = rootPkg.version;
-// 루트 LICENSE를 정본으로 두고 확장 패키징에 동기화한다(vsce LICENSE-missing 경고 제거).
 extPkg.license = rootPkg.license || extPkg.license;
 extPkg.scripts = {
   ...extPkg.scripts,
@@ -34,7 +32,6 @@ try {
   if (!skipCompile) {
     execSync('npm run compile', { cwd: extDir, stdio: 'inherit' } as any);
   }
-  // 루트 LICENSE를 확장 디렉토리로 복사해 vsce의 LICENSE-missing 경고를 없앤다(정본은 루트).
   const rootLicense = makePath(root, 'LICENSE');
   if (fs.existsSync(rootLicense)) {
     fs.copyFileSync(rootLicense, makePath(extDir, 'LICENSE'));
@@ -53,7 +50,6 @@ try {
   console.log('[deuk-agent-flow] bundled VS Code extension:', vsixPath);
   if (installAfterBundle) {
     if (process.platform === 'win32') {
-      // Windows node 컨텍스트: WSL bash 스크립트로 WSL 파일시스템에 직접 설치
       const wslScript = execSync(`wsl.exe wslpath -u "${root.replace(/\\/g, '/')}/scripts/install-vsix-wsl.sh"`, { encoding: 'utf8', shell: true } as any).toString().trim();
       execSync(`wsl.exe bash "${wslScript}"`, { stdio: 'inherit', shell: true } as any);
     } else {
@@ -61,9 +57,6 @@ try {
     }
   }
 } finally {
-  // #version-sync: keep the extension package.json version pinned to the root version
-  // (do NOT restore savedVer) so vscode-extension/package.json auto-tracks the root on
-  // every bundle instead of drifting back to a stale value. Only prepublish is temporary.
   extPkg.version = rootPkg.version;
   if (savedPrepublish === undefined) {
     delete extPkg.scripts['vscode:prepublish'];

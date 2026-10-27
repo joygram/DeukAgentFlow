@@ -4,7 +4,7 @@
 
 ---
 
-## 1. 워크스페이스 적용 모델 (Deployment)
+## 워크스페이스 적용 모델
 
 DeukAgentFlow의 초기화 단위는 단순히 "현재 폴더 하나"가 아닙니다. 실제 운영은 보통 **workspace 루트 + 여러 프로젝트 루트 + 필요 시 중첩 프로젝트** 구조로 잡습니다.
 
@@ -90,13 +90,13 @@ npx deuk-agent-flow context setup-ide
 | 중첩 프로젝트 | 독립 배포/서버/앱처럼 별도 lifecycle이 있는 하위 프로젝트 | 필요 시 |
 | generated/output 폴더 | 빌드 산출물 | 금지 |
 
-### 1단계: 글로벌 설치
+### 글로벌 설치
 `npx` 캐시 문제를 피하고 어디서든 명령어를 사용할 수 있도록 글로벌 설치를 권장합니다.
 ```bash
 npm install -g deuk-agent-flow
 ```
 
-### 2단계: 프로젝트 루트 초기화
+### 프로젝트 루트 초기화
 작업을 관리할 각 프로젝트 루트에서 초기화 명령을 실행합니다.
 
 ```bash
@@ -121,11 +121,11 @@ cd ~/workspace/i/i_server && deuk-agent-flow init
 
 ---
 
-## 2. 에이전트와 협업하기 (Daily Workflow)
+## 에이전트와 협업하기
 
 에이전트에게 작업을 시킬 때는 **짧게 말하면 됩니다**. 티켓 생성과 Phase 전환은 에이전트가 내부적으로 처리하고, 사용자는 방향과 승인 여부에 집중합니다.
 
-### 1단계: 티켓 생성 (Phase 1: Ticket + Plan)
+### 티켓 생성
 에이전트에게 짧게 말해 작업을 시작합니다.
 > "티켓 잡고 진행"
 
@@ -133,7 +133,7 @@ cd ~/workspace/i/i_server && deuk-agent-flow init
 
 기존 작업을 이어받으려는데 `ticket next`가 진행 가능한 티켓을 찾지 못하면, 에이전트는 새 티켓을 즉시 만들지 않고 최근 git history를 먼저 분석해 실제 후속 작업 후보를 복원합니다. 새 티켓은 그 분석 근거를 메인 티켓의 compact plan에 기록한 뒤 생성합니다.
 
-### 2단계: APC(Agent Permission Contract) 기록
+### APC 기록
 생성된 티켓은 기본적으로 **Phase 1 (Ticket + Plan)** 상태입니다. 에이전트는 코드를 수정하기 전에 티켓 내의 APC 블록(`[BOUNDARY]`, `[CONTRACT]`, `[PATCH PLAN]`)을 채워야 합니다.
 
 티켓은 스코프, 제약, APC 계약, 라이프사이클 체크, 검증 결과를 맡습니다. 실행 로그, 명령 transcript, 완료 요약, 검증 결과를 계획 문구와 섞지 않습니다.
@@ -143,16 +143,16 @@ cd ~/workspace/i/i_server && deuk-agent-flow init
 
 이슈/회귀/정책 위반을 제기한 경우에는 티켓 생성 직후 바로 실행하지 않습니다. 에이전트는 Phase 1에 원인 가설, 범위, APC, 패치 계획을 채운 뒤 멈추고 사용자의 검토 승인을 기다립니다. 원래 요청에 "수정", "해결"이 포함되어 있어도 티켓 계획을 본 뒤의 승인으로 보지 않습니다.
 
-### 3단계: 작업 실행 (Phase 2: Execute)
+### 작업 실행
 티켓이 **Phase 2 (Execute)** 로 승급되면, 에이전트는 제한된 경계 내에서 코드를 수정하고 단위 테스트 등 검증 작업을 수행합니다.
 
-### 4단계: 작업 완료 및 아카이빙
+### 작업 완료와 아카이빙
 작업이 끝나면 정리만 짧게 요청하세요.
 > "검증 기록하고 정리"
 
 이때 아카이브 작업 중 **Zero-Token 지식 증류(Knowledge Distillation)**가 동작하여 불필요한 컨텍스트 토큰 소모를 줄이도록 핵심 정보만 압축되어 저장됩니다.
 
-### 5단계: 티켓 파일 깃 관리
+### 티켓 파일 깃 관리
 티켓 파일도 깃 기록의 일부이지만, 소스 코드처럼 무심코 다루면 active/archive 상태가 쉽게 꼬입니다.
 
 - `ticket create`, `ticket move`, `ticket close`, `ticket archive`로 바뀐 `.deuk-agent/tickets/INDEX*.json`은 함께 커밋합니다. 티켓 본문만 커밋하고 index를 빼면 다음 작업에서 상태가 맞지 않을 수 있습니다.
@@ -174,7 +174,7 @@ git diff -- .deuk-agent/tickets/INDEX.archive.*.json
 
 ---
 
-## 3. 에이전트 프롬프트 가이드 (Agent Prompting)
+## 에이전트 프롬프트 가이드
 
 에이전트가 DeukAgentFlow 프로토콜을 엄격히 준수하도록 하려면 프로젝트 시작 시 짧은 지침이면 충분합니다.
 
@@ -244,8 +244,8 @@ deuk-agent-flow skill expose --platform cursor
 
 ---
 
-## 4. 팁 및 모범 사례
+## 팁과 모범 사례
 
-- **No Ticket, No Code**: 티켓 없이 코드를 수정하는 것은 금지됩니다. 사용자는 짧게 말하고, 에이전트가 티켓 기록을 남깁니다.
+- **No Ticket, No Code**: 코드를 수정하기 전에 티켓을 먼저 세웁니다. 사용자는 짧게 말하고, 에이전트가 티켓 기록을 남깁니다.
 - **RAG 활용**: `mcp_deukcontext_search_*` 도구를 사용하여 과거 티켓이나 구현 사례를 검색하면 환각을 줄일 수 있습니다.
 - **주기적 동기화**: 프로젝트 규칙이 변경되었다면 `deuk-agent-flow init`을 다시 실행하여 모든 에이전트 포인터를 갱신하세요.

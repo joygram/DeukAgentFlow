@@ -1,10 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, renameSync, statSync } from "fs";
-import { basename, dirname, resolve } from "path";
-import {
-  DEUK_ROOT_DIR, TICKET_SUBDIR, TICKET_INDEX_FILENAME,
-  requireNonEmptySlug, findFileRecursively, toRepoRelativePath, detectConsumerTicketDir, computeTicketPath, normalizeTicketGroup, writeFileLF, makePath, resolveWorkspaceContext
- , CliOpts } from "./cli-utils.js";
+import { existsSync,mkdirSync,readFileSync,readdirSync,renameSync,unlinkSync } from "fs";
+import { basename } from "path";
 import { collectTicketEntriesFromTopicFiles } from "./cli-ticket-scan.js";
+import {
+CliOpts,
+TICKET_INDEX_FILENAME,
+computeTicketPath,
+detectConsumerTicketDir,
+makePath,
+normalizeTicketGroup,
+requireNonEmptySlug,
+writeFileLF
+} from "./cli-utils.js";
 
 const ARCHIVE_INDEX_MONTH_RE = /^INDEX\.archive\.(\d{4}-\d{2})\.json$/;
 const ARCHIVE_INDEX_LEGACY_RE = /^INDEX\.archive\.json$/;
@@ -44,9 +50,6 @@ function writeJsonFileAtomically(absPath, data) {
   try {
     renameSync(tmpPath, absPath);
   } catch (err) {
-    // POSIX rename(2)은 대상을 원자적으로 덮어쓰지만, Windows renameSync는 대상이
-    // 이미 있으면 EEXIST/EPERM으로 throw한다. 그 경우 대상을 먼저 지우고 재시도하고,
-    // 그래도 실패하면 직접 덮어쓰기로 폴백한다. 어느 경로든 tmp는 남기지 않는다.
     try {
       if (existsSync(absPath)) {
         unlinkSync(absPath);
@@ -83,7 +86,7 @@ function listArchiveIndexFiles(dir) {
 
 function parseIndexFile(absPath) {
   if (!existsSync(absPath)) {
-    return { version: 1, updatedAt: null, nextTicketSequence: 1, entries: [] };
+    return { version: 1, updatedAt: null, activeTicketId: "", nextTicketSequence: 1, entries: [] };
   }
   try {
     const j = JSON.parse(readFileSync(absPath, "utf8"));
@@ -92,65 +95,31 @@ function parseIndexFile(absPath) {
       entry.path = computeTicketPath(entry);
       return entry;
     }) : [];
-    // activeTicketId/activeTickets are no longer read from INDEX.json — focus is
-    // owned solely by the marker file. Any legacy fields on disk are ignored.
     return {
       version: j.version || 1,
       updatedAt: j.updatedAt ?? null,
+      activeTicketId: String(j.activeTicketId || ""),
       nextTicketSequence: parseNextTicketSequence(j.nextTicketSequence),
       entries
     };
   } catch (err) {
     console.error(`[ERROR] Failed to parse ${basename(absPath)} at ${absPath}:`, err.message);
-    return { version: 1, updatedAt: null, nextTicketSequence: 1, entries: [], _corrupt: true };
+    return { version: 1, updatedAt: null, activeTicketId: "", nextTicketSequence: 1, entries: [], _corrupt: true };
   }
 }
 
-function getWorkspaceKey(cwd) {
-  return resolveWorkspaceContext(cwd).breadcrumb;
-}
-
-function getWorkspaceSlug(cwd) {
-  const key = getWorkspaceKey(cwd);
-  return key.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'default';
-}
-
-function splitEntriesForStorage(entries = []) {
-  const activeEntries = [];
-  const archiveEntries = [];
-  for (const entry of entries) {
-    const status = String(entry?.status || "open").toLowerCase();
-    const phase = Number(entry?.phase || 1);
-    if ((status === "open" || status === "active") && phase < 4 && !entry?.archiveYearMonth) {
-      activeEntries.push(entry);
-    } else {
-      archiveEntries.push(entry);
-    }
-  }
-  return { activeEntries, archiveEntries };
-}
-
-
-export function readTicketIndexJson(cwd) {
+export function readTicketIndexJson(cwd, opts: { activeOnly?: boolean } = {}) {
   const dir = detectConsumerTicketDir(cwd);
   if (!dir) return { version: 1, updatedAt: null, entries: [] };
   const mainPath = makePath(dir, TICKET_INDEX_FILENAME);
   const main = parseIndexFile(mainPath);
 
-  // The pointer file no longer stores entries — the ticket list is derived from
-  // the .md files (single source of truth). Scan them here so every consumer of
-  // readTicketIndexJson still sees a populated entry list.
-  const entries = collectTicketEntriesFromTopicFiles(cwd).map(entry => {
+  const entries = collectTicketEntriesFromTopicFiles(cwd, { activeOnly: Boolean(opts.activeOnly) }).map(entry => {
     const next: Record<string, any> = { ...entry, status: entry.status || "open", group: normalizeTicketGroup(entry.group, "sub") };
     next.path = computeTicketPath(next);
     return next;
   });
 
-  // #685: LangGraph 모델 — state(현재 노드)는 .md 프론트매터(phase/status)가 유일 SSOT.
-  // sessionId/쿠키/claim 폴백 레이어는 전면 제거됨. 현재 노드(activeTicketId)는 디스크의
-  // .md 스캔 결과에서 결정적으로 도출한다: live = (open/active) AND phase<4.
-  // 여러 개 live면 가장 진행된 노드(phase 높은 것, 동률이면 최신 createdAt)가 현재 노드.
-  // 값이 없으면 폴백이 아니라 "현재 노드 없음(null) = START 진입점"이다.
   const liveEntries = entries.filter(e => {
     const status = String(e.status || "open").toLowerCase();
     return (status === "open" || status === "active") && Number(e.phase || 1) < 4 && !e.archiveYearMonth;
@@ -160,7 +129,9 @@ export function readTicketIndexJson(cwd) {
     if (phaseDiff !== 0) return phaseDiff;
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   });
-  const activeTicketId = sortedLive.length > 0 ? sortedLive[0].id : null;
+  const storedActiveId = String(main.activeTicketId || "").trim();
+  const storedIsLive = storedActiveId && sortedLive.some(e => e.id === storedActiveId);
+  const activeTicketId = storedIsLive ? storedActiveId : null;
 
   return {
     version: main.version || 1,
@@ -179,10 +150,6 @@ export function writeTicketIndexJson(cwd, indexJson, opts: CliOpts = {}) {
     return;
   }
   const dir = detectConsumerTicketDir(cwd, { createIfMissing: true });
-  // #776: dir이 null이면(워크스페이스 마커 미존재 등) 조용히 mkdirSync(null)로 throw하던
-  // 것을 막는다. 정상 흐름에선 init이 마커를 먼저 민팅하므로 여기 도달 시 dir은 non-null.
-  // 그래도 도달하면 ticket index는 .md에서 재도출 가능한 얇은 포인터일 뿐이라, 명확히
-  // 알리고 skip한다(치명적 throw로 상위 init 전체를 위장 실패시키지 않는다).
   if (!dir) {
     console.warn(`[TICKET-INDEX] skipped: no ticket dir resolved for ${cwd} (workspace marker missing?)`);
     return;
@@ -191,17 +158,10 @@ export function writeTicketIndexJson(cwd, indexJson, opts: CliOpts = {}) {
   if (opts.dryRun) return;
   mkdirSync(dir, { recursive: true });
   
-  // The pointer file is a THIN focus-state file. The ticket list itself is
-  // derived from .md files (the single source of truth), so we never persist
-  // entries or per-month archive index files. We keep only the two facts that
-  // cannot be re-derived from .md alone: the focus pointer (activeTicketId) and
-  // the monotonically increasing next ticket number (nextTicketSequence).
   const entries = Array.isArray(indexJson.entries) ? indexJson.entries : [];
 
   const currentDiskState = parseIndexFile(p);
 
-  // nextTicketSequence must never go backwards: max of the stored pointer and
-  // (highest known ticket number across ALL entries, active or archived) + 1.
   const callerNextSequence = normalizeNextTicketSequence(indexJson.nextTicketSequence, entries);
   const diskNextSequence = normalizeNextTicketSequence(currentDiskState.nextTicketSequence, entries);
   const nextTicketSequence = Math.max(callerNextSequence, diskNextSequence);
@@ -209,33 +169,15 @@ export function writeTicketIndexJson(cwd, indexJson, opts: CliOpts = {}) {
   const out = {
     version: indexJson.version || 1,
     updatedAt: indexJson.updatedAt || new Date().toISOString(),
-    // activeTickets is deliberately omitted to prevent centralized contention
+    activeTicketId: String(indexJson.activeTicketId ?? currentDiskState.activeTicketId ?? ""),
     nextTicketSequence
   };
   writeJsonFileAtomically(p, out);
 
-  // Remove any legacy per-month archive index files — entries are no longer
-  // persisted, so these stale duplicates must not linger.
   for (const filePath of listArchiveIndexFiles(dir)) {
     unlinkSync(filePath);
   }
 }
-
-// #675: Claims ticketId for the current session using cookie touch file.
-// Pass ticketId=null to release.
-export function setActiveTicketMarker(cwd, ticketId, opts: CliOpts = {}) {
-  // #685: LangGraph 모델 — 현재 노드는 .md phase가 SSOT다. 노드 위치를 쿠키/마커에
-  // 별도 저장하지 않는다(폴백 레이어 전면 제거). 이 함수는 하위 호환을 위한 no-op이며,
-  // 노드 이동은 ticket move가 .md phase를 갱신하는 것으로만 일어난다.
-  return;
-}
-
-// #685: getHostnameSlug 제거 — 티켓 ID에서 hostname suffix를 뺐으므로 불필요(언니 지시).
-
-// #685: claim/actor/세션 마커 레이어 전면 제거 — LangGraph 모델에서 현재 노드는 .md
-// phase가 SSOT이고 단일 사용자 환경이라 "누가 티켓을 잡았나" 추적이 불필요하다.
-// resolveActor/readClaim/writeClaim/releaseClaim/isClaimStale/migrateLegacyActiveMarkers
-// (전부 sessionId 쿠키 폴백 의존)와 CLAIM_STALE_MS를 삭제했다.
 
 export function computeNextTicketNumber(indexState) {
   const maybeEntries = Array.isArray(indexState) ? indexState : indexState?.entries;
@@ -244,8 +186,6 @@ export function computeNextTicketNumber(indexState) {
 }
 
 export function generateTicketId(titleSlug, indexState) {
-  // #685: 티켓 ID의 hostname suffix(-joy-deep 등) 제거 — 단일 환경이라 호스트 구분이
-  // 무의미하다(언니 지시). ID는 {num}-{slug}로만 구성한다.
   const slug = requireNonEmptySlug(titleSlug, "ticket title");
   const match = slug.match(/^(\d{3,4})-(.*)/);
   const idSlug = match ? requireNonEmptySlug(match[2], "ticket title") : slug;
@@ -259,8 +199,6 @@ export function generateTicketId(titleSlug, indexState) {
 }
 
 export function syncActiveTicketId(cwd, opts: CliOpts = {}) {
-  // #685: LangGraph 모델 — 현재 노드는 .md phase가 SSOT라 마커 동기화가 불필요하다.
-  // 이 함수는 이제 레거시 포인터 파일(LATEST.md/ACTIVE_TICKET.*) 정리만 담당한다.
   const ticketDir = detectConsumerTicketDir(cwd);
   if (!ticketDir) return;
   if (opts.dryRun) return;
@@ -274,6 +212,17 @@ export function syncActiveTicketId(cwd, opts: CliOpts = {}) {
       unlinkSync(p);
     }
   }
+
+  const indexPath = makePath(ticketDir, TICKET_INDEX_FILENAME);
+  const disk = parseIndexFile(indexPath);
+  const storedActiveId = String(disk.activeTicketId || "").trim();
+  if (!storedActiveId) return;
+
+  const resolved = readTicketIndexJson(cwd);
+  const nextActiveId = String(resolved.activeTicketId || "");
+  if (nextActiveId === storedActiveId) return;
+
+  writeTicketIndexJson(cwd, { ...disk, entries: resolved.entries, activeTicketId: nextActiveId }, opts);
 }
 
 export async function syncToPipeline(url, data) {

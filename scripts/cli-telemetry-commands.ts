@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
-import { CliOpts, SPOKE_REGISTRY, loadInitConfig, makePath, toSlug } from "./cli-utils.js";
+import { appendFileSync,existsSync,mkdirSync,readFileSync,writeFileSync } from "fs";
 import { resolveHomeTicketDirForWorkspace } from "./cli-ticket-home.js";
+import { SPOKE_REGISTRY,loadInitConfig,makePath,toSlug } from "./cli-utils.js";
 const RAG_RESULTS = new Set(["hit", "weak-hit", "miss", "stale"]);
 const KNOWLEDGE_ACTIONS = new Set(["none", "add_knowledge", "refresh_document"]);
 const TOKEN_QUALITIES = new Set(["useful", "waste", "rework", "saved"]);
@@ -69,7 +69,6 @@ export function buildTelemetrySummary(cwd) {
   const totalSavedTokens = workLogs.reduce((sum, l) => sum + Number(l.savedTokens || 0), 0);
   const byModel = accumulateTotals(workLogs, l => normalizeModelLabel(l.model));
   const byClient = accumulateTotals(workLogs, l => normalizeClientLabel(l.client));
-  const byAgent = accumulateTotals(workLogs, l => normalizeDimensionValue(l.agentId) || normalizeClientLabel(l.client));
   const tdwEntryCount = workLogs.filter(l => Number(l.tdw || 0) > 0).length;
   const tdwAverageTokensPerEntry = tdwEntryCount > 0 ? totalTdwTokens / tdwEntryCount : 0;
   const byRagResult = countBy(workLogs, "ragResult");
@@ -98,7 +97,6 @@ export function buildTelemetrySummary(cwd) {
     eventCoverageRate,
     byModel,
     byClient,
-    byAgent,
     tdwEntryCount,
     tdwCoverageRate: rate(tdwEntryCount, workLogs.length),
     tdwTokenShare: rate(totalTdwTokens, totalTokens),
@@ -127,7 +125,6 @@ export function getTelemetryCompactSummary(cwd) {
 }
 
 export async function runTelemetry(opts) {
-  const argv = process.argv.slice(3); // skip 'telemetry' and 'log/sync/summary'
   const action = process.argv[3];
 
   if (action === "log") {
@@ -153,7 +150,7 @@ async function logAction(opts) {
     else if (lowerModel.includes("copilot")) resolvedClient = "Copilot";
     else if (lowerModel.includes("claude")) resolvedClient = "ClaudeCode";
     else {
-      const config = loadInitConfig(opts.cwd);
+      const config = loadInitConfig(opts.workspaceRoot);
       const tools = config?.agentTools || [];
       if (tools.includes("codex")) resolvedClient = "Codex";
       else if (tools.includes("copilot")) resolvedClient = "Copilot";
@@ -161,7 +158,7 @@ async function logAction(opts) {
       else if (tools.includes("claude")) resolvedClient = "ClaudeCode";
       else {
         for (const spoke of SPOKE_REGISTRY) {
-          if (spoke.id !== "antigravity" && spoke.detect(opts.cwd, tools)) {
+          if (spoke.id !== "antigravity" && spoke.detect(opts.workspaceRoot, tools)) {
             if (spoke.id === "copilot") { resolvedClient = "Copilot"; break; }
             if (spoke.id === "codex") { resolvedClient = "Codex"; break; }
             if (spoke.id === "cursor") { resolvedClient = "Cursor"; break; }
@@ -175,7 +172,7 @@ async function logAction(opts) {
     if (!resolvedClient) resolvedClient = "Antigravity";
   }
 
-  const entry = appendTelemetryRecord(opts.cwd, {
+  const entry = appendTelemetryRecord(opts.workspaceRoot, {
     source: opts.source || "manual",
     kind: opts.kind || "work",
     event: opts.event || "",
@@ -183,7 +180,6 @@ async function logAction(opts) {
     tdw: Number(opts.tdw || 0),
     model: opts.model || "UNKNOWN",
     client: resolvedClient,
-    agentId: opts.agentId || "",
     ticket: opts.ticket || "",
     action: opts.action || "work",
     file: opts.file || "",
@@ -206,13 +202,13 @@ async function logAction(opts) {
 }
 
 async function syncAction(opts) {
-  const absPath = resolveTelemetryPath(opts.cwd);
+  const absPath = resolveTelemetryPath(opts.workspaceRoot);
   if (!existsSync(absPath)) {
     console.log("[TELEMETRY] No local logs to sync.");
     return;
   }
 
-  const config = loadInitConfig(opts.cwd);
+  const config = loadInitConfig(opts.workspaceRoot);
   const pipelineUrl = opts.remote || config?.pipelineUrl || "http://localhost:8001/api/telemetry/ingest";
 
   const lines = readFileSync(absPath, "utf8").split("\n").filter(l => l.trim());
@@ -227,9 +223,6 @@ async function syncAction(opts) {
   console.log(`[TELEMETRY] Syncing ${unsynced.length} entries to ${pipelineUrl}...`);
 
   try {
-    // In a real environment, we'd use fetch or a pipeline sync tool.
-    // For now, we simulate the sync success and mark them as synced.
-    // We try to use the built-in fetch if available.
     if (typeof fetch === "function") {
        const res = await fetch(pipelineUrl, {
          method: "POST",
@@ -255,7 +248,7 @@ async function syncAction(opts) {
 }
 
 async function summaryAction(opts) {
-  const summary = buildTelemetrySummary(opts.cwd);
+  const summary = buildTelemetrySummary(opts.workspaceRoot);
   if (!summary) {
     console.log("[TELEMETRY] No logs found.");
     return;
@@ -266,7 +259,7 @@ async function summaryAction(opts) {
     return;
   }
 
-  console.log(`\n--- Local Telemetry Summary (${opts.cwd}) ---`);
+  console.log(`\n--- Local Telemetry Summary (${opts.workspaceRoot}) ---`);
   console.log(`Total Tokens: ${summary.totalTokens}`);
   console.log(`TDW Tokens: ${summary.totalTdwTokens}`);
   console.log(`Saved Tokens: ${summary.totalSavedTokens}`);
@@ -280,7 +273,6 @@ async function summaryAction(opts) {
     console.log(`  - ${m}: ${t}`);
   });
   printCounts("By Client", summary.byClient);
-  printCounts("By Agent", summary.byAgent);
   console.log(`TDW:`);
   console.log(`  - Entries: ${summary.tdwEntryCount}`);
   console.log(`  - Coverage Rate: ${formatRate(summary.tdwEntryCount, summary.logEntries)}`);
@@ -311,7 +303,7 @@ async function summaryAction(opts) {
 }
 
 async function migrateAction(opts) {
-  const absPath = resolveTelemetryPath(opts.cwd);
+  const absPath = resolveTelemetryPath(opts.workspaceRoot);
   if (!existsSync(absPath)) {
     console.log("[TELEMETRY] No logs found.");
     return;
@@ -341,9 +333,6 @@ export function appendTelemetryRecord(cwd, entry: Record<string, any> = {}) {
     ts: Math.floor(new Date(occurredAt).getTime() / 1000) || Math.floor(Date.now() / 1000),
     occurredAt,
     source: entry.source || "manual",
-    // #837: source is overwritten to "internal" for workflow events, so it can't record
-    // who triggered a discard/rollback. originSource preserves the caller-declared origin
-    // (e.g. "human" | "agent" | "auto-clean") for actor auditing.
     originSource: entry.originSource || "",
     kind: entry.kind || "work",
     event,
@@ -351,7 +340,6 @@ export function appendTelemetryRecord(cwd, entry: Record<string, any> = {}) {
     tdw: Number(entry.tdw || 0),
     model: entry.model || "UNKNOWN",
     client: entry.client || "",
-    agentId: entry.agentId || "",
     ticket: entry.ticket || "",
     action: entry.action || "work",
     file: entry.file || "",

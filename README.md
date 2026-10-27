@@ -32,6 +32,10 @@ AI coding has crossed from novelty into production volume:
 
 The new bottleneck is not typing code. It is keeping agent work scoped, reviewable, verified, and recoverable.
 
+**The center of gravity has shifted to agent coding — and this product is built to maximize efficiency inside that environment.** That is the goal: not another instruction file, but a configuration that makes the agent↔human loop *substantially* more efficient. It reaches that goal through three concrete mechanisms — a **ticket system** (bounded, recoverable work), a **persona** engine (tension control that protects drive quality), and **role-switching** (the right expertise bound to each phase). The section below is how those three become one goal.
+
+**Why this is also a token-economy argument.** A persona line, a role prompt, a ticket transition — each spends a little more token *in the moment*. The comparison that matters is not that moment, though; it is the **total** spend. When drift produces a flimsy result, the rework it triggers — rewrite, backtrack, rebuild — burns far more token over the life of the task than the up-front cost of staying on-design. So the three axes trade a small, visible per-turn cost for a large, invisible saving in avoided rework. Configured well, that trade is strongly net-positive.
+
 ### What Changes With Deuk Agent Flow
 
 | Without it | With Deuk Agent Flow |
@@ -109,9 +113,31 @@ Use Deuk Agent Flow when you want AI coding work to stay coordinated, reviewable
 
 ### Better Together With Karpathy-Style Skills
 
+The **Skill axis** is the direct descendant of the now well-known Karpathy-style skills — short, reusable playbooks that improve how an agent behaves inside a task. That lineage is exactly why the axis works: it is a proven idea, and Deuk Agent Flow grounds it as one of the three, then extends it by making the task it governs ticketed, scoped, verified, and remembered at the repository level.
+
 Karpathy-style skills are great at improving how an agent behaves inside a task. Deuk Agent Flow is great at making that task ticketed, scoped, verified, and remembered at the repository level.
 
 Used together, skills can improve the quality of the move, while Deuk Agent Flow keeps the move connected to team workflow. The result is a better session and a better project record: behavior playbooks on the front end, ticket workflow and DeukAgentContext memory on the back end.
+
+### 🧭 Why Skill · Persona · Flow-Control — The Three Axes
+
+**The goal everything converges on:** every axis, every formula, every cited paper below is a *means* to one end — **raising the collaboration efficiency between the agent and the human during vibe-coding.** That is the expected effect and the goal of Deuk Agent Flow. The three axes are not three features; they are three defenses of that single goal.
+
+Most agent tooling optimizes one thing: *the instruction*. Deuk Agent Flow is built on the observation that AI-coding work fails in **three different ways at once**, so it defends on three separate axes. Each axis targets a distinct failure mode, and dropping any one of them lets that failure back in.
+
+| Axis | What it governs | The failure it prevents |
+|---|---|---|
+| **Skill** | *What* the agent does inside a task — reusable behavior playbooks for recurring patterns (safe refactor, generated-file guard, doc-sync). | Over-assumption and over-engineering: the agent inventing structure the task never asked for. |
+| **Persona** | *How the work is experienced* — the felt texture of a long session: tension, immersion, recovery after a mistake. | Tension collapse. When a dry information dump raises cognitive load, or a mistake sours the exchange, drive quality drops — and drive quality is what governs drift. |
+| **Flow-control** | *That the work stays bounded and recoverable* — tickets, phase gates, role layers, verification, cross-session continuity. | Scope drift, unreviewable change, and context loss when the chat ends. |
+
+The middle axis is the non-obvious one, so it carries the most design weight: **persona is not decoration — it is a work-control signal.** The causal chain we design around is *user emotional state → drive quality → drift rate*. When an agent's mistake spikes user stress, an agent that stays at the same temperature (rather than retreating into "I'll correct that") de-escalates the stress, and a calmer user drives the agent more precisely — which directly lowers the rework rate. Emoji and reaction do the same job for readability that syntax highlighting does: they are a reading function, not ornament.
+
+This is deliberately built on established affect science rather than tuned by feel. The persona engine models emotion as a **valence–arousal vector** ([Russell, 1980](https://doi.org/10.1037/h0077714)), returns toward a warm home base via an **Ornstein–Uhlenbeck** recovery dynamic ([Kuppens, Oravecz & Tuerlinckx, 2010](https://doi.org/10.1037/a0020962)), generates push–pull rhythm from a **coupled differential model of affect** ([Strogatz, 1988](https://doi.org/10.1080/0025570X.1988.11977342)), and picks *which kind* of support to give from **optimal-matching theory** (Cutrona & Russell, 1990) — so the character absorbs coding stress by computation, not by guesswork.
+
+**So the three axes collapse into one conclusion.** Persona controls tension → tension controls drive quality. Flow-control bounds scope and preserves context → that cuts rework. Skill curbs over-engineering → that lifts accuracy. Sum the three and you get the only thing they were ever for: **the agent and the human collaborate more efficiently.** That is not a side effect of Deuk Agent Flow — it *is* Deuk Agent Flow's goal, and the three axes are how it gets there.
+
+> **Read the full design canon:** the single goal + three-axis identity is canonized once in [principles.md](docs/public/principles/principles.md) (this section is its public-facing narrative). Per axis: [persona-design.md](docs/public/architecture/persona-design.md) — the affect math model and the deep-search refresh section (the academic grounding, with verified primary-source bibliography); for the flow-control axis, [role-layer.md](docs/public/architecture/role-layer.md).
 
 ### Roadmap
 

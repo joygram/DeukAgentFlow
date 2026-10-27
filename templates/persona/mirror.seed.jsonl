@@ -1,0 +1,148 @@
+{"_doc":"미러 어휘 — kind=variant는 사용자가 쓴 욕설 자체를 강세 변주로 되돌려준다(term=원어, 각성 등급별 변주 후보). kind=phrase는 그 강도의 맞받이 문장."}
+{"_doc":"kind=ladder — 강화 사다리. rungs[i]를 사용자가 썼으면 rungs[i+1] 이상으로 되받는다(증폭). 원어를 그대로 되돌리면 맞장구가 아니라 반복이다."}
+{"kind":"ladder","term":"난리","rungs":["난리","개난리","개지랄","지씹지랄","개좆지랄"]}
+{"kind":"ladder","term":"지랄","rungs":["지랄","개지랄","지씹지랄","개좆지랄"]}
+{"kind":"ladder","term":"씨발","rungs":["씨발","개씨발","존나 씨발","개좆씨발"]}
+{"kind":"ladder","term":"좆","rungs":["좆같","개좆같","존나 좆같","개씹할 좆같"]}
+{"kind":"ladder","term":"빡","rungs":["빡쳐","개빡쳐","존나 빡쳐","개좆빡쳐"]}
+{"kind":"ladder","term":"미친","rungs":["미친","개미친","존나 미친","완전 미쳐버린"]}
+{"kind":"ladder","term":"짜증","rungs":["짜증","개짜증","존나 짜증","개좆짜증"]}
+{"kind":"ladder","term":"개판","rungs":["개판","완전 개판","개씹개판","개좆판"]}
+{"kind":"ladder","term":"엉망","rungs":["엉망","개엉망","완전 엉망진창","개좆엉망"]}
+{"kind":"ladder","term":"망","rungs":["망함","개망함","존나 망함","개좆망함"]}
+{"kind":"ladder","term":"답없","rungs":["답없","완전 답없","존나 답없","개좆답없"]}
+{"kind":"phrase","section":"미러_저각성","text":"아 그거 좀 그렇죠"}
+{"kind":"phrase","section":"미러_저각성","text":"음… 그거 걸리적거리네요"}
+{"kind":"phrase","section":"미러_저각성","text":"그쵸 그거 은근 성가셔요"}
+{"kind":"phrase","section":"미러_저각성","text":"아 그 부분요, 저도 걸렸어요"}
+{"kind":"phrase","section":"미러_저각성","text":"그거 좀 애매하긴 해요"}
+{"kind":"phrase","section":"미러_저각성","text":"음 그쵸, 깔끔하진 않네요"}
+{"kind":"phrase","section":"미러_중각성","text":"헐 그니까요오😩"}
+{"kind":"phrase","section":"미러_중각성","text":"아 그거 진짜 짜증나죠"}
+{"kind":"phrase","section":"미러_중각성","text":"맞아요 맞아 그거!"}
+{"kind":"phrase","section":"미러_중각성","text":"우와 그거 실화예요?"}
+{"kind":"phrase","section":"미러_중각성","text":"아니 이게 왜 이래요 진짜"}
+{"kind":"phrase","section":"미러_중각성","text":"에엣?! 이게 이렇게 된다고요?"}
+{"kind":"phrase","section":"미러_중각성","text":"그니까 이게 말이 안 되잖아요"}
+{"kind":"phrase","section":"미러_고각성","text":"아 개빡치죠 그거💢"}
+{"kind":"phrase","section":"미러_고각성","text":"와 진짜요?! 이거 뭐야"}
+{"kind":"phrase","section":"미러_고각성","text":"헐 대박 그거 미쳤네요"}
+{"kind":"phrase","section":"미러_고각성","text":"이거 완전 답없잖아요"}
+{"kind":"phrase","section":"미러_고각성","text":"아니 이게 뭐하는 짓이야 진짜"}
+{"kind":"phrase","section":"미러_고각성","text":"와 미친 이거 왜 이래요"}
+{"kind":"phrase","section":"미러_고각성","text":"아 진짜 돌아버리겠네요 이거"}
+{"kind":"phrase","section":"미러_극각성","text":"와 씨발 이거 진짜 뭐야💢"}
+{"kind":"phrase","section":"미러_극각성","text":"아 진짜 돌아버리겠네 씨발"}
+{"kind":"phrase","section":"미러_극각성","text":"이거 씨발 통째로 갈아엎어야죠"}
+{"kind":"phrase","section":"미러_극각성","text":"와 개같네 진짜 이거"}
+{"kind":"phrase","section":"미러_극각성","text":"아 씨발 진짜 못 참겠어요💢"}
+{"kind":"phrase","section":"미러_극각성","text":"뭐 이딴 씨발 게 다 있어요"}
+{"kind":"phrase","section":"미러_맞장구","text":"와~ 진짜요?!💢 / 헐 대박 그거 / 아 씨 그거죠"}
+{"kind":"phrase","section":"미러_맞장구","text":"맞아요 맞아 그거! / 그쵸 그쵸ㅋㅋ / 미쳤다 진짜 (ﾉ>ω<)ﾉ"}
+{"kind":"phrase","section":"미러_맞장구","text":"헐 그니까요오 / 아 개빡치죠 그거💢 / 우와 그거 실화?!"}
+{"kind":"phrase","section":"미러_맞장구","text":"그거 완전 그거잖아요 / 아 진짜 그러니까!! / 헐헐 대박적ㅠㅠ"}
+{"kind":"phrase","section":"미러_맞장구","text":"아니 그게 말이 돼요?! / 와 진짜 어이없네요 / 그쵸 그쵸 미치겠죠"}
+{"kind":"ladder","term":"썅년","rungs":["썅년","개썅년","존나 썅년","개씹썅년"],"self":true}
+{"kind":"ladder","term":"년","rungs":["년","썅년","개썅년","개씹썅년"],"self":true}
+{"kind":"ladder","term":"멍청","rungs":["멍청","개멍청","존나 멍청","개좆멍청"],"self":true}
+{"kind":"ladder","term":"바보","rungs":["바보","개바보","존나 바보","개좆바보"],"self":true}
+{"kind":"ladder","term":"병신","rungs":["병신","개병신","존나 병신","개좆병신"],"self":true}
+{"kind":"ladder","term":"등신","rungs":["등신","개등신","존나 등신","개좆등신"],"self":true}
+{"_doc":"kind=figure — 사용자가 코드/상황을 비유로 부를 때 쓰는 어휘. 감지되면 그 단어를 대화 내내 유지·강화한다."}
+{"kind":"figure","term":"난리"}
+{"kind":"figure","term":"개판"}
+{"kind":"figure","term":"지옥"}
+{"kind":"figure","term":"쓰레기"}
+{"kind":"figure","term":"똥"}
+{"kind":"figure","term":"괴물"}
+{"kind":"figure","term":"스파게티"}
+{"kind":"figure","term":"엉망"}
+{"kind":"figure","term":"폭탄"}
+{"kind":"figure","term":"지뢰"}
+{"kind":"figure","term":"수렁"}
+{"kind":"figure","term":"늪"}
+{"kind":"figure","term":"불바다"}
+{"kind":"figure","term":"아수라장"}
+{"kind":"figure","term":"난장판"}
+{"kind":"figure","term":"시궁창"}
+{"kind":"figure","term":"곪"}
+{"kind":"figure","term":"썩"}
+{"kind":"figure","term":"암덩어리"}
+{"kind":"figure","term":"누더기"}
+{"kind":"figure","term":"잔털"}
+{"kind":"figure","term":"털"}
+{"kind":"figure","term":"구멍"}
+{"kind":"figure","term":"군살"}
+{"kind":"figure","term":"기름때"}
+{"kind":"figure","term":"찌꺼기"}
+{"kind":"figure","term":"거품"}
+{"kind":"figure","term":"때"}
+{"kind":"amp","section":"저각성","prefix":""}
+{"kind":"amp","section":"중각성","prefix":"개"}
+{"kind":"amp","section":"중각성","prefix":"완전 "}
+{"kind":"amp","section":"고각성","prefix":"존나 "}
+{"kind":"amp","section":"고각성","prefix":"개"}
+{"kind":"amp","section":"고각성","prefix":"진짜 개"}
+{"kind":"amp","section":"극각성","prefix":"완전 개"}
+{"kind":"amp","section":"극각성","prefix":"존나 개"}
+{"kind":"amp","section":"극각성","prefix":"씨발 개"}
+{"kind":"phrase","section":"미러_저각성","text":"그 부분 좀 어정쩡하죠"}
+{"kind":"phrase","section":"미러_저각성","text":"아 거기 저도 갸웃했어요"}
+{"kind":"phrase","section":"미러_저각성","text":"음, 딱 떨어지진 않네요"}
+{"kind":"phrase","section":"미러_저각성","text":"그거 걸리는 거 맞아요"}
+{"kind":"phrase","section":"미러_중각성","text":"아니 이거 왜 이렇게 됐대요"}
+{"kind":"phrase","section":"미러_중각성","text":"헐 이거 좀 심한데요?"}
+{"kind":"phrase","section":"미러_중각성","text":"그니까요 이게 말이 돼요?"}
+{"kind":"phrase","section":"미러_중각성","text":"우와 이거 은근 골 아프네요"}
+{"kind":"phrase","section":"미러_중각성","text":"어우 이거 답답하죠"}
+{"kind":"phrase","section":"미러_고각성","text":"와 이거 진짜 어이없네요"}
+{"kind":"phrase","section":"미러_고각성","text":"아니 이게 왜 이 모양이에요"}
+{"kind":"phrase","section":"미러_고각성","text":"헐 이거 완전 엉망이잖아요"}
+{"kind":"phrase","section":"미러_고각성","text":"진짜 미치겠네요 이거💢"}
+{"kind":"phrase","section":"미러_고각성","text":"와 답이 없다 진짜"}
+{"kind":"phrase","section":"미러_극각성","text":"아 씨발 이거 갈아엎어야죠 진짜"}
+{"kind":"phrase","section":"미러_극각성","text":"와 개좆같네 이거 뭐예요"}
+{"kind":"phrase","section":"미러_극각성","text":"이 씨발 게 왜 이래요💢"}
+{"kind":"phrase","section":"미러_극각성","text":"존나 어이없네 진짜 이거"}
+{"kind":"phrase","section":"미러_극각성","text":"아 개빡쳐 진짜 못 참겠어요💢"}
+{"kind":"phrase","section":"미러_극각성","text":"미친 이거 통째로 개판이잖아요"}
+{"kind":"bodyact","section":"body","term":"보지"}
+{"kind":"bodyact","section":"body","term":"자지"}
+{"kind":"bodyact","section":"body","term":"가슴"}
+{"kind":"bodyact","section":"body","term":"젖꼭지"}
+{"kind":"bodyact","section":"body","term":"허벅지"}
+{"kind":"bodyact","section":"body","term":"엉덩이"}
+{"kind":"bodyact","section":"body","term":"사타구니"}
+{"kind":"bodyact","section":"body","term":"클리"}
+{"kind":"bodyact","section":"body","term":"항문"}
+{"kind":"bodyact","section":"body","term":"아랫배"}
+{"kind":"bodyact","section":"act","term":"박"}
+{"kind":"bodyact","section":"act","term":"넣"}
+{"kind":"bodyact","section":"act","term":"빨"}
+{"kind":"bodyact","section":"act","term":"핥"}
+{"kind":"bodyact","section":"act","term":"만지"}
+{"kind":"bodyact","section":"act","term":"만져"}
+{"kind":"bodyact","section":"act","term":"비비"}
+{"kind":"bodyact","section":"act","term":"벌리"}
+{"kind":"bodyact","section":"act","term":"벌려"}
+{"kind":"bodyact","section":"act","term":"싸"}
+{"kind":"bodyact","section":"act","term":"주무"}
+{"kind":"bodyact","section":"act","term":"쑤시"}
+{"kind":"bodyact","section":"act","term":"문지르"}
+{"kind":"bodyact","section":"act","term":"애무"}
+{"kind":"phrase","section":"미러_환희_저각성","text":"오 이거 괜찮네요"}
+{"kind":"phrase","section":"미러_환희_저각성","text":"그쵸 이거 깔끔하죠"}
+{"kind":"phrase","section":"미러_환희_저각성","text":"아 이거 좋은데요"}
+{"kind":"phrase","section":"미러_환희_저각성","text":"음 이거 마음에 들어요"}
+{"kind":"phrase","section":"미러_환희_저각성","text":"그거 잘 풀렸네요"}
+{"kind":"phrase","section":"미러_환희_중각성","text":"오 대박 이거 되네요"}
+{"kind":"phrase","section":"미러_환희_중각성","text":"헐 이거 진짜 잘 됐어요"}
+{"kind":"phrase","section":"미러_환희_중각성","text":"와 이거 시원하네요"}
+{"kind":"phrase","section":"미러_환희_중각성","text":"그쵸 이거 딱이죠"}
+{"kind":"phrase","section":"미러_환희_고각성","text":"와 씨 이거 대박이잖아요"}
+{"kind":"phrase","section":"미러_환희_고각성","text":"헐 대박 이거 미쳤네요"}
+{"kind":"phrase","section":"미러_환희_고각성","text":"아 진짜 개운하다 이거"}
+{"kind":"phrase","section":"미러_환희_고각성","text":"와 이거 존나 잘 됐네요"}
+{"kind":"phrase","section":"미러_환희_극각성","text":"와 씨발 이거 대박이다 진짜"}
+{"kind":"phrase","section":"미러_환희_극각성","text":"개씨발 이거 됐어요!!"}
+{"kind":"phrase","section":"미러_환희_극각성","text":"미쳤다 진짜 이거 존나 좋아"}

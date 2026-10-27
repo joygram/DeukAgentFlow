@@ -1,21 +1,13 @@
-import { existsSync, readFileSync } from "fs";
-import { dirname, resolve, relative } from "path";
-import { fileURLToPath } from "url";
-import { CliOpts, DEUK_ROOT_DIR, makePath, resolveConsumerTicketRoot, resolvePackageRoot, toFileUri, toPosixPath } from "./cli-utils.js";
-// #691: 전이/guard 검증은 XState 머신(ticket-machine.mjs)이 담당. ESM 순환 import이지만
-// machineTransition은 호출 시점에만 TICKET_WORKFLOW를 읽으므로 안전하다.
-import { machineTransition } from "./ticket-machine.js";
-// #875: 전이 실패 메시지에 "이 증거를 채우는 플래그"를 붙여 에이전트가 무엇이 빠졌는지
-// 즉시 알게 한다(예: executionEvidence는 --reproduction … --docs-reflected 를 요구).
+import { existsSync,readFileSync } from "fs";
+import { resolve } from "path";
 import { evidenceFlagsForEvidenceKey } from "./cli-ticket-evidence.js";
+import { CliOpts,DEUK_ROOT_DIR,makePath,resolvePackageRoot,toPosixPath } from "./cli-utils.js";
+import { machineTransition } from "./ticket-machine.js";
 
 const PACKAGE_ROOT = resolvePackageRoot({ fromUrl: import.meta.url });
 
 const TERMINAL_TICKET_STATUSES = new Set(["closed", "completed", "cancelled", "wontfix", "deprecated", "archived"]);
 
-// "active" is no longer a status value — a ticket's focus is expressed solely by
-// activeTicketId. status carries lifecycle only: open / archived / closed.
-// Kept "active" here for backward-compat reads of legacy ticket files; new writes use "open".
 export const OPEN_TICKET_STATUSES = new Set(["open", "active"]);
 export const AUTO_ARCHIVE_DONE_STATUSES = new Set(["closed", "completed", "cancelled", "wontfix"]);
 
@@ -32,13 +24,6 @@ export const FLOW_SURFACE_STATUS = {
   end: "🎉 종료"
 };
 
-// #908: phase → 현재 롤 라벨(SSOT). role-layer.md §3 "phase↔롤 결속" 표를 코드로 옮긴
-// 단일 정본이다 — 한 줄 상태 카드가 "지금 무슨 모드로 일하는지"를 표면화할 때 이 맵을
-// 다시 읽어 쓴다(role-layer.md §3.0: 각자 다시 정의하지 않고 designer 산출을 재-참조; DR-03).
-// phase1은 planner→designer→ux-designer 롤이 (대상 성격에 따라) 서므로 카드엔 대표 라벨로 묶는다.
-// #914: phase2는 승인 후 "구현" 단일 state — 계획(설계 조정)과 구현이 같은 state 안에서
-// 왕복 없이 함께 이뤄지므로 라벨도 두 롤을 함께 밝힌다(설계자가 재승인 없이 구현자와
-// 같은 state에 머문다는 것을 카드에서부터 드러낸다).
 export const PHASE_ROLE_LABEL: Record<number, string> = {
   1: "planner/designer/ux-designer",
   2: "planner/designer+implementer",
@@ -50,19 +35,30 @@ export function roleLabelForPhase(phase): string {
   return PHASE_ROLE_LABEL[normalizeTicketPhaseNumber(phase)] || "";
 }
 
+export const POLICY_ROLE_SKILLS: Record<string, string[]> = {
+  analysis: ["role-planner", "role-architect"],
+  coding: ["role-programmer", "rule-reload"],
+  debugging: ["role-qa"],
+  completion: ["role-closer", "doc-sync"]
+};
+
+export function skillsForStateName(stateName: string): string[] {
+  const node = TICKET_WORKFLOW.states[stateName] as Record<string, any> | undefined;
+  if (!node) return [];
+  if (node.skills) return node.skills;
+  return POLICY_ROLE_SKILLS[node.policyRole] || [];
+}
+
 export const TICKET_WORKFLOW = {
   name: "ticket_workflow",
-  promptRoot: makePath("docs", "cli-surfaces", "state"),
-  templateRoot: makePath("docs", "cli-surfaces", "state-template"),
+  promptRoot: makePath("templates", "cli-surfaces", "state"),
+  templateRoot: makePath("templates", "cli-surfaces", "state-template"),
   policyRoot: makePath(DEUK_ROOT_DIR, "project-guardrails"),
   states: {
-    // #690: entry 노드 — rules가 진입 시 라우팅하는 그래프의 시작점들. 프롬프트는
-    // docs/cli-surfaces/state/entry-*.md(SSOT). 티켓 phase 노드(phase1~4)와 함께
-    // 단일 노드 그래프를 이룬다. router가 cwd/.md 상태로 이 중 하나를 고른다.
     "entry-no-workspace": { prompt: "entry-no-workspace", entry: true, transitions: [], actions: [] },
     "entry-free": { prompt: "entry-free", entry: true, transitions: [], actions: [] },
-    "entry-no-active": { prompt: "entry-no-active", entry: true, transitions: ["phase1"], actions: ["create"] },
-    "entry-in-progress": { prompt: "entry-in-progress", entry: true, transitions: [], actions: ["use", "move"] },
+    "entry-no-active": { prompt: "entry-no-active", entry: true, transitions: ["phase1"], actions: ["create"], skills: ["project-pilot"] },
+    "entry-in-progress": { prompt: "entry-in-progress", entry: true, transitions: [], actions: ["use", "move"], skills: ["context-recall"] },
     start: { prompt: "start", policyRole: "analysis", template: "start", phase: 1, status: "open", transitions: ["phase1", "end"], actions: ["create"] },
     phase1: {
       prompt: "phase1",
@@ -73,18 +69,10 @@ export const TICKET_WORKFLOW = {
       transitions: ["phase2", "end"],
       actions: ["status", "use", "guard", "move", "discard"],
       requiredEvidence: {
-        phase2: ["phase1Plan", "userApproval"],
+        phase2: ["phase1Plan"],
         end: ["phase1Plan"]
       }
     },
-    // #914: phase1(기획/설계)과 구 phase2(구현)를 병합한 "구현" 단일 state. 승인(userApproval)
-    // 후 검증(phase3)까지 머무는 동안, 스펙 재확인/조정은 phase 전이가 아니라 `edit` 액션으로
-    // 본문(Scope/Plan/Analysis/Direction)을 그 자리에서 고쳐 쓰는 것으로 흡수한다 — 재승인
-    // ceremony도, reopenDecision 증거도 요구하지 않는다(design-driven-flow.md:331 "설계 개정
-    // 이력이 티켓 본문에 누적되어 수렴"을 FSM 구조로 반영). phase2→phase1 롤백 전이는
-    // 제거했다: 진짜 "스코프 자체가 틀렸다"(전제 자체가 잘못됨) 케이스는 여전히 discard가
-    // 담당하고, 되돌아가 재승인받는 왕복은 더 이상 없다. phase3→phase2 롤백(debuggingDecision)
-    // 은 그대로 유지 — 이번 스코프 밖.
     phase2: {
       prompt: "phase2",
       policyRole: "coding",
@@ -161,6 +149,62 @@ export const TICKET_WORKFLOW_EVIDENCE = {
   }
 };
 
+const SURFACE_TEXT = {
+  none: { ko: "없음", en: "none" },
+  terminal: { ko: "종결", en: "terminal" },
+  unknown: { ko: "미상", en: "unknown" },
+  blocked: { ko: "[티켓 워크플로 차단]", en: "[TICKET WORKFLOW BLOCKED]" },
+  currentState: { ko: "현재 상태", en: "Current state" },
+  allowedActions: { ko: "허용 동작", en: "Allowed actions" },
+  validTransitions: { ko: "가능한 전이", en: "Valid transitions" },
+  discardHint: {
+    ko: "\n이 티켓을 폐기하려면: ticket discard --id <id> --workspace <ws> --non-interactive",
+    en: "\nTo abandon this ticket: ticket discard --id <id> --workspace <ws> --non-interactive",
+  },
+  requiredEvidenceFlags: { ko: "필요한 근거 플래그:", en: "Required evidence flags:" },
+  fillVia: { ko: "다음 플래그로 채우세요:", en: "fill via" },
+  validTransitionsFrom: { ko: "{from} 에서 가능한 전이", en: "Valid transitions from {from}" },
+  runtimeHeading: { ko: "## 티켓 워크플로 런타임 컨텍스트", en: "## Ticket Workflow Runtime Context" },
+  state: { ko: "상태", en: "State" },
+  ticket: { ko: "티켓", en: "Ticket" },
+  hostWorkspace: { ko: "호스트 워크스페이스", en: "Host Workspace" },
+  workspace: { ko: "워크스페이스", en: "Workspace" },
+  path: { ko: "경로", en: "Path" },
+  phaseStatus: { ko: "페이즈/상태", en: "Phase/Status" },
+  workflowStatus: { ko: "워크플로 상태", en: "Workflow Status" },
+  summary: { ko: "요약", en: "Summary" },
+  connectionState: { ko: "연결 상태", en: "Connection State" },
+  allowedTransitions: { ko: "허용 전이", en: "Allowed transitions" },
+  requiredEvidence: { ko: "필요 근거", en: "Required evidence" },
+  currentBlockers: { ko: "현재 차단 사유", en: "Current blockers" },
+  nextAction: { ko: "다음 행동", en: "Next action" },
+  approvalTerminal: {
+    ko: "- 승인 게이트: 종결 상태 — 게이트를 걸 전이가 없다.",
+    en: "- Approval gate: terminal state — no transition to gate.",
+  },
+  approvalRequired: {
+    ko: "- 승인 게이트: 허용된 전이에 사용자 승인이 필요하다 — 사용자가 승인/approved/yes 를 명시적으로 입력할 때까지 기다려라. 스스로 승인하지 마라.",
+    en: "- Approval gate: user approval REQUIRED for the allowed transition(s) — wait for the user to explicitly type 승인/approved/yes before moving; do NOT self-approve.",
+  },
+  approvalNotRequired: {
+    ko: "- 승인 게이트: 허용된 전이에 승인이 필요하지 않다 — 통상 이동이다. 근거를 채우고 자율적으로 진행하라. 사용자에게 허락을 묻지 마라(VOI=0, Escalation Gate).",
+    en: "- Approval gate: NOT required for the allowed transition(s) — this is a routine move. Fill evidence and proceed AUTONOMOUSLY; do NOT ask the user for permission (VOI=0, Escalation Gate).",
+  },
+} as const;
+
+function surfaceText(key: keyof typeof SURFACE_TEXT, language = "ko") {
+  const entry = SURFACE_TEXT[key];
+  return language === "en" ? entry.en : entry.ko;
+}
+
+function surfaceLanguageFromOpts(opts: CliOpts = {}) {
+  return resolveGuideLanguage(
+    opts.docsLanguage,
+    opts.resolveLanguage || ((value) => value),
+    opts.normalizeDocsLanguage || ((value) => value)
+  );
+}
+
 function resolveGuideLanguage(docsLanguage = "ko", resolveLanguage = (value) => value, normalizeDocsLanguage = (value) => value) {
   const normalizedDocsLanguage = normalizeDocsLanguage(docsLanguage);
   return normalizedDocsLanguage === "auto" ? "ko" : resolveLanguage(normalizedDocsLanguage);
@@ -192,7 +236,6 @@ function statusForTicketWorkflowState(targetStateName, currentStatus = "open") {
   if (targetState.status) return targetState.status;
   if (targetPhase >= 4) return "closed";
   if (targetPhase >= 2) {
-    // Execution phases keep status "open"; focus is tracked via activeTicketId.
     const normalizedCurrentStatus = String(currentStatus || "open").toLowerCase();
     return normalizedCurrentStatus === "active" ? "open" : normalizedCurrentStatus;
   }
@@ -209,8 +252,6 @@ export function resolveTicketWorkflowTransition(meta: Record<string, any> = {}, 
     throw new Error(`ticket workflow transition target is required from ${currentState}`);
   }
   const targetWorkflowState = resolveTicketWorkflowState(targetState);
-  // #691: 전이 허용 검증은 XState 머신이 담당한다(미정의 전이 차단). 증거 guard는
-  // getTicketWorkflowTransitionReasons에서 evidence와 함께 별도로 검증한다.
   const verdict = machineTransition(currentState, targetState);
   if (verdict.reason === "transition_not_declared") {
     throw new Error(`ticket workflow transition blocked: ${currentState} -> ${targetState}`);
@@ -255,53 +296,52 @@ export function assertTicketWorkflowAction(meta: Record<string, any> = {}, opts:
   const reasons = getTicketWorkflowActionReasons(meta, opts);
   if (reasons.length === 0) return;
   const { name, state } = resolveTicketWorkflowRuntimeState(meta, opts.fallbackStatus);
-  const allowedActions = (state.actions || []).join(", ") || "none";
-  const allowedTransitions = (state.transitions || []).join(", ") || "none";
+  const lang = surfaceLanguageFromOpts(opts);
+  const t = (key: keyof typeof SURFACE_TEXT) => surfaceText(key, lang);
+  const allowedActions = (state.actions || []).join(", ") || t("none");
+  const allowedTransitions = (state.transitions || []).join(", ") || t("none");
   const canDiscard = (state.actions || []).includes("discard");
-  const discardHint = canDiscard
-    ? `\nTo abandon this ticket: ticket discard --id <id> --workspace <ws> --non-interactive`
-    : "";
+  const discardHint = canDiscard ? t("discardHint") : "";
   throw new Error(
-    `[TICKET WORKFLOW BLOCKED] ${reasons.join(", ")}\n` +
-    `Current state: ${name} | Allowed actions: ${allowedActions} | Valid transitions: ${allowedTransitions}${discardHint}`
+    `${t("blocked")} ${reasons.join(", ")}\n` +
+    `${t("currentState")}: ${name} | ${t("allowedActions")}: ${allowedActions} | ${t("validTransitions")}: ${allowedTransitions}${discardHint}`
   );
 }
 
 export function getTicketWorkflowTransitionReasons(meta: Record<string, any> = {}, opts: CliOpts = {}) {
   const transition = resolveTicketWorkflowTransition(meta, opts);
   const evidence = opts.evidence || {};
-  // #691: 증거 guard는 XState 머신이 검증한다. machineTransition이 guard 미충족 시
-  // missingEvidence를 산출하므로, 흩어진 검증 대신 머신을 단일 진실로 쓴다.
   const verdict = machineTransition(transition.from, transition.to, evidence);
   return {
     transition,
-    reasons: verdict.missingEvidence || []
+    reasons: verdict.missingEvidence || [],
+    skills: verdict.skills || []
   };
 }
 
 export function assertTicketWorkflowTransition(meta: Record<string, any> = {}, opts: CliOpts = {}) {
   const result = getTicketWorkflowTransitionReasons(meta, opts);
   if (result.reasons.length > 0) {
+    const lang = surfaceLanguageFromOpts(opts);
+    const t = (key: keyof typeof SURFACE_TEXT) => surfaceText(key, lang);
     const fromState = TICKET_WORKFLOW.states[result.transition.from];
-    const validTransitions = (fromState?.transitions || []).join(", ") || "none";
-    // #875: 요구 증거를 채우는 플래그를 명시한다 — executionEvidence는 실행 슬롯과 함께
-    // --docs-reflected 를 요구하므로, 이 힌트가 없으면 에이전트가 문서반영 플래그를 모른 채
-    // 실행 슬롯만 채우며 삽질한다.
+    const validTransitions = (fromState?.transitions || []).join(", ") || t("none");
     const evidenceKeys = getTicketWorkflowTransitionEvidenceKeys(result.transition.from, result.transition.to);
     const flagHint = evidenceKeys
       .map(key => {
         const flags = evidenceFlagsForEvidenceKey(key);
-        return flags.length ? `  ${key}: fill via ${flags.join(" ")}` : "";
+        return flags.length ? `  ${key}: ${t("fillVia")} ${flags.join(" ")}` : "";
       })
       .filter(Boolean)
       .join("\n");
     throw new Error(
-      `[TICKET WORKFLOW BLOCKED] ${result.transition.from} -> ${result.transition.to}: ${result.reasons.join(", ")}\n` +
-      (flagHint ? `Required evidence flags:\n${flagHint}\n` : "") +
-      `Valid transitions from ${result.transition.from}: ${validTransitions}`
+      `${t("blocked")} ${result.transition.from} -> ${result.transition.to}\n` +
+      result.reasons.map(reason => `  - ${reason}`).join("\n") + "\n" +
+      (flagHint ? `${t("requiredEvidenceFlags")}\n${flagHint}\n` : "") +
+      `${t("validTransitionsFrom").replace("{from}", result.transition.from)}: ${validTransitions}`
     );
   }
-  return result.transition;
+  return { ...result.transition, skills: result.skills };
 }
 
 function readProjectPolicyText(cwd, policyRole, language, replacements: Record<string, any> = {}) {
@@ -312,7 +352,6 @@ function readProjectPolicyText(cwd, policyRole, language, replacements: Record<s
     : makePath(cwd, DEUK_ROOT_DIR, "project-guardrails", `${policyRole}.md`);
   if (!existsSync(policyPath)) return "";
   let content = readFileSync(policyPath, "utf8");
-  // #824: 정본은 워크스페이스 루트 PROJECT_RULE.md (치환 토큰 표시용 경로도 루트로 통일).
   const projectRulePath = makePath(cwd, "PROJECT_RULE.md");
   const allReplacements = {
     PROJECT_RULE_PATH: projectRulePath,
@@ -328,8 +367,8 @@ function readProjectPolicyText(cwd, policyRole, language, replacements: Record<s
 
 function readLocalizedPackagePrompt(rootName, promptName, language, replacements: Record<string, any> = {}, missingLabel = "ticket workflow recipe") {
   if (!promptName) return "";
-  const localizedPath = makePath(PACKAGE_ROOT, "docs", "cli-surfaces", rootName, `${promptName}.${language}.md`);
-  const fallbackPath = makePath(PACKAGE_ROOT, "docs", "cli-surfaces", rootName, `${promptName}.en.md`);
+  const localizedPath = makePath(PACKAGE_ROOT, "templates", "cli-surfaces", rootName, `${promptName}.${language}.md`);
+  const fallbackPath = makePath(PACKAGE_ROOT, "templates", "cli-surfaces", rootName, `${promptName}.en.md`);
   const promptPath = existsSync(localizedPath) ? localizedPath : fallbackPath;
   if (!existsSync(promptPath)) {
     throw new Error(`${missingLabel} not found: ${promptPath}`);
@@ -351,7 +390,7 @@ function buildTicketStateRecipe(kind, language, replacements: Record<string, any
     "ticket workflow state recipe"
   );
   const projectPolicy = readProjectPolicyText(
-    context.cwd,
+    context.workspaceRoot,
     context.policyRole || workflowState.policyRole,
     language,
     replacements
@@ -363,7 +402,7 @@ function buildTicketStateRecipe(kind, language, replacements: Record<string, any
     replacements,
     "ticket workflow state template"
   );
-  const runtimeContext = renderTicketWorkflowRuntimeContext(kind, workflowState, context.runtimeContext);
+  const runtimeContext = renderTicketWorkflowRuntimeContext(kind, workflowState, context.runtimeContext, language);
   return {
     state_prompt: statePrompt,
     state_template: stateTemplate,
@@ -374,28 +413,46 @@ function buildTicketStateRecipe(kind, language, replacements: Record<string, any
   };
 }
 
-function renderTicketWorkflowRuntimeContext(kind, workflowState, runtimeContext = null) {
+function renderApprovalGateLine(workflowState, runtimeContext = null, language = "ko") {
   if (!runtimeContext || Object.keys(runtimeContext).length === 0) return "";
+  const transitions = workflowState.transitions || [];
+  const requiredEvidence = workflowState.requiredEvidence || {};
+  const approvalRequired = Object.values(requiredEvidence).some(
+    (evidence) => (evidence as string[]).includes("userApproval")
+  );
+  if (transitions.length === 0) {
+    return surfaceText("approvalTerminal", language);
+  }
+  return approvalRequired
+    ? surfaceText("approvalRequired", language)
+    : surfaceText("approvalNotRequired", language);
+}
+
+function renderTicketWorkflowRuntimeContext(kind, workflowState, runtimeContext = null, language = "ko") {
+  if (!runtimeContext || Object.keys(runtimeContext).length === 0) return "";
+  const t = (key: keyof typeof SURFACE_TEXT) => surfaceText(key, language);
   const transitions = workflowState.transitions || [];
   const actions = workflowState.actions || [];
   const requiredEvidence = workflowState.requiredEvidence || {};
+  const approvalGateLine = renderApprovalGateLine(workflowState, runtimeContext, language);
   const runtimeLines = [
-    "## Ticket Workflow Runtime Context",
-    `- State: ${kind}`,
-    `- Ticket: ${runtimeContext.ticketId || ""}`,
-    `- Host Workspace: ${runtimeContext.hostWorkspaceLabel || runtimeContext.workspaceLabel || ""}`,
-    `- Workspace: ${runtimeContext.workspaceLabel || ""}`,
-    `- Path: ${runtimeContext.path || ""}`,
-    `- Phase/Status: ${runtimeContext.phase || ""}/${runtimeContext.status || ""}`,
-    `- Workflow Status: ${runtimeContext.status || ""}`,
-    `- Summary: ${runtimeContext.summary || ""}`,
-    `- Connection State: ${runtimeContext.connectionState || "unknown"}`,
-    `- Allowed actions: ${actions.length ? actions.join(", ") : "none"}`,
-    `- Allowed transitions: ${transitions.length ? transitions.join(", ") : "terminal"}`,
-    `- Required evidence: ${Object.entries(requiredEvidence).map(([target, evidence]) => `${target}=[${(evidence as string[]).join(", ")}]`).join("; ") || "none"}`,
-    `- Current blockers: ${(runtimeContext.reasons || []).length ? runtimeContext.reasons.join(", ") : "none"}`
+    t("runtimeHeading"),
+    `- ${t("state")}: ${kind}`,
+    `- ${t("ticket")}: ${runtimeContext.ticketId || ""}`,
+    `- ${t("hostWorkspace")}: ${runtimeContext.hostWorkspaceLabel || runtimeContext.workspaceLabel || ""}`,
+    `- ${t("workspace")}: ${runtimeContext.workspaceLabel || ""}`,
+    `- ${t("path")}: ${runtimeContext.path || ""}`,
+    `- ${t("phaseStatus")}: ${runtimeContext.phase || ""}/${runtimeContext.status || ""}`,
+    `- ${t("workflowStatus")}: ${runtimeContext.status || ""}`,
+    `- ${t("summary")}: ${runtimeContext.summary || ""}`,
+    `- ${t("connectionState")}: ${runtimeContext.connectionState || t("unknown")}`,
+    `- ${t("allowedActions")}: ${actions.length ? actions.join(", ") : t("none")}`,
+    `- ${t("allowedTransitions")}: ${transitions.length ? transitions.join(", ") : t("terminal")}`,
+    `- ${t("requiredEvidence")}: ${Object.entries(requiredEvidence).map(([target, evidence]) => `${target}=[${(evidence as string[]).join(", ")}]`).join("; ") || t("none")}`,
+    `- ${t("currentBlockers")}: ${(runtimeContext.reasons || []).length ? runtimeContext.reasons.join(", ") : t("none")}`,
+    approvalGateLine
   ];
-  if (runtimeContext.nextAction) runtimeLines.push(`- Next action: ${runtimeContext.nextAction}`);
+  if (runtimeContext.nextAction) runtimeLines.push(`- ${t("nextAction")}: ${runtimeContext.nextAction}`);
   return runtimeLines.join("\n");
 }
 
@@ -413,7 +470,7 @@ export function buildTicketDocMetaSurface(kind, opts: CliOpts = {}) {
   );
   const replacements = normalizeTicketWorkflowReplacements(opts.replacements);
   const context = {
-    cwd: opts.cwd,
+    cwd: opts.workspaceRoot,
     policyRole: opts.policyRole,
     template: opts.template,
     runtimeContext: opts.runtimeContext,
@@ -425,8 +482,6 @@ export function buildTicketDocMetaSurface(kind, opts: CliOpts = {}) {
   const runtimeContext = opts.runtimeContext || {};
   const currentPhase = runtimeContext.phase || workflowState.phase || "";
   const currentStatus = runtimeContext.status || workflowState.status || "";
-  // Dedupe: a slot (e.g. phase1Plan) can be required by more than one outgoing
-  // transition (phase2 and end), and flattening would list it twice.
   const requiredSlots = [...new Set(Object.values(requiredEvidence).flat())];
   const outputStatus = requiredSlots.length ? "action_requires_evidence" : "action_available";
   return {
@@ -496,13 +551,10 @@ export function renderTicketDocMetaSurface(kind, opts: CliOpts = {}) {
 
 export function buildTicketFlowSurface(kind, opts: CliOpts = {}) {
   const docmeta = buildTicketDocMetaSurface(kind, opts);
-  // #908: pass the phase so the card can surface the phase + current role badge.
-  // Prefer the flow's explicit phase, else the runtime context, else the state's phase.
   const cardPhase = opts.flow?.phase ?? opts.runtimeContext?.phase ?? docmeta.state.phase;
   const flowLine = opts.flow
-    ? formatTicketFlowLine(opts.flow.workspaceLabel, opts.flow.statusLabel, opts.flow.ticketId, opts.flow.absPath, opts.flow.invocationCwd || opts.cwd || "", cardPhase)
+    ? formatTicketFlowLine(opts.flow.workspaceLabel, opts.flow.statusLabel, opts.flow.ticketId, opts.flow.absPath, opts.flow.invocationCwd || opts.workspaceRoot || "", cardPhase)
     : "";
-  const surfaceText = renderTicketDocMetaSurface(kind, opts);
   return {
     ...docmeta,
     flowLine,
@@ -515,8 +567,12 @@ export function renderTicketFlowSurface(kind, opts: CliOpts = {}) {
 }
 
 export function normalizeTicketPhaseNumber(phase) {
+  if (phase === undefined || phase === null || phase === "") return 1;
   const parsed = Number(phase);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`ticket phase malformed: expected a positive number, got ${JSON.stringify(phase)}`);
+  }
+  return Math.floor(parsed);
 }
 
 export function sanitizeTicketWorkspaceLabel(workspaceLabel) {
@@ -536,47 +592,21 @@ export function formatTicketFlowLine(workspaceLabel, statusLabel, ticketId, absP
     throw new Error("ticket flow surface requires a concrete status label");
   }
   const absResolved = resolve(absPath);
-  // #646: tickets now live in the home store (~/.deuk-agent/tickets/{uuid}/),
-  // a different drive/root than the workspace cwd — relative(cwd, abs) leaks an
-  // unopenable path. Always emit a makePath-normalized absolute path so the
-  // review link opens from anywhere.
-  // #647: emit a POSIX absolute path WITHOUT the Windows drive letter
-  // ("C:/Users/..." → "/Users/..."). The Claude Code chat-panel click handler
-  // breaks on the drive-letter colon (anthropics/claude-code#53919), so a
-  // drive-prefixed link never opens. Stripping "C:" yields a slash-rooted path
-  // the chat UI opens, while the VS Code webview's vscode.open resolves it too.
   const linkPath = toPosixPath(makePath(absResolved)).replace(/^[a-zA-Z]:/, "");
-  // Parse ticketId: "028-some-title-joy-deep" → num="028", slug="some-title-joy-deep"
   const idMatch = String(ticketId).match(/^(\d+)-(.+)$/);
   const num = idMatch ? idMatch[1] : "";
   const rawSlug = idMatch ? idMatch[2] : ticketId;
   const slug = rawSlug.length > 40 ? rawSlug.slice(0, 40) : rawSlug;
   const label = num ? `${num} ${slug}` : slug;
-  // #908: surface the current phase + role on the card so "무슨 단계·무슨 롤로 일하는지"가
-  // 항상 보인다(role-layer.md §3 phase↔롤 결속). phase가 없으면(생성/조정 등) 배지를 생략해
-  // 기존 3요소 카드로 남는다. 롤 라벨은 PHASE_ROLE_LABEL SSOT에서 파생한다.
   const phaseBadge = buildPhaseRoleBadge(phase);
   return `📦 ${resolvedWorkspaceLabel} · ${resolvedStatusLabel}${phaseBadge} · [${label}](${linkPath})`;
 }
 
-// #908: "· ⚙️ phase2 · implementer" 형태의 배지를 만든다. phase가 없거나 유효하지
-// 않으면 빈 문자열(배지 생략). 롤 라벨은 PHASE_ROLE_LABEL(role-layer.md §3 SSOT)에서 온다.
 function buildPhaseRoleBadge(phase): string {
   if (phase === null || phase === undefined || phase === "") return "";
   const phaseNum = normalizeTicketPhaseNumber(phase);
   const role = roleLabelForPhase(phaseNum);
   return role ? ` · phase${phaseNum} · ${role}` : ` · phase${phaseNum}`;
-}
-
-export function getTicketGuide(kind, docsLanguage = "ko", resolveLanguage = (value) => value, normalizeDocsLanguage = (value) => value, context: Record<string, any> = {}) {
-  return renderTicketDocMetaSurface(kind, {
-    docsLanguage,
-    resolveLanguage,
-    normalizeDocsLanguage,
-    cwd: context.cwd,
-    policyRole: context.policyRole,
-    template: context.template
-  });
 }
 
 export function deriveTicketWorkflowStatus(meta: Record<string, any> = {}, fallbackStatus = "open") {
@@ -586,8 +616,6 @@ export function deriveTicketWorkflowStatus(meta: Record<string, any> = {}, fallb
     return rawStatus;
   }
   if (phase >= 4) return "closed";
-  // phase>=2 no longer implies "active": status stays "open" through execution.
-  // Focus is tracked by activeTicketId, not by deriving active from phase.
   if (phase >= 2) return rawStatus === "active" ? "open" : rawStatus;
   return rawStatus || "open";
 }

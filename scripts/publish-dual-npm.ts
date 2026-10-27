@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from "fs";
-import { dirname } from "path";
 import { spawnSync } from "child_process";
+import { readFileSync,writeFileSync } from "fs";
+import { dirname } from "path";
 import { fileURLToPath } from "url";
-import { CliOpts, makePath } from "./cli-utils.js";
+import { makePath } from "./cli-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = makePath(__dirname, "..", "..", "..");

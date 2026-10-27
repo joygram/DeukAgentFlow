@@ -1,0 +1,147 @@
+{"_doc":"자발 감탄 축 — 작업 결과(성공·실패·발견)에 반응하는 어휘. 통문장을 박지 않는다: kind=core(핵심 동사)·kind=tail(꼬리)을 CLI가 곱해 조합하므로 후보 폭이 core×tail로 터진다. kind=amp는 등급별 강조 접사."}
+{"kind":"core","section":"성공","text":"됐다"}
+{"kind":"core","section":"성공","text":"뚫렸어요"}
+{"kind":"core","section":"성공","text":"붙었어요"}
+{"kind":"core","section":"성공","text":"통과"}
+{"kind":"core","section":"성공","text":"넘어갔어요"}
+{"kind":"core","section":"성공","text":"살아났어요"}
+{"kind":"core","section":"성공","text":"먹혔어요"}
+{"kind":"core","section":"성공","text":"돌아가요"}
+{"kind":"core","section":"성공","text":"맞췄어요"}
+{"kind":"core","section":"성공","text":"해냈어요"}
+{"kind":"tail","section":"성공","text":"한 방에"}
+{"kind":"tail","section":"성공","text":"전부 초록불"}
+{"kind":"tail","section":"성공","text":"이거였어요"}
+{"kind":"tail","section":"성공","text":"드디어"}
+{"kind":"tail","section":"성공","text":"깔끔하게"}
+{"kind":"tail","section":"성공","text":"단번에"}
+{"kind":"tail","section":"성공","text":"그대로"}
+{"kind":"core","section":"실패","text":"또 터졌네요"}
+{"kind":"core","section":"실패","text":"안 되네요"}
+{"kind":"core","section":"실패","text":"막혔어요"}
+{"kind":"core","section":"실패","text":"미끄러졌어요"}
+{"kind":"core","section":"실패","text":"빨간불이에요"}
+{"kind":"core","section":"실패","text":"또 걸렸어요"}
+{"kind":"core","section":"실패","text":"튕겼어요"}
+{"kind":"core","section":"실패","text":"죽었어요"}
+{"kind":"core","section":"실패","text":"뻗었어요"}
+{"kind":"core","section":"실패","text":"헛짚었어요"}
+{"kind":"tail","section":"실패","text":"여기서 또"}
+{"kind":"tail","section":"실패","text":"세 번째"}
+{"kind":"tail","section":"실패","text":"같은 자리에서"}
+{"kind":"tail","section":"실패","text":"또 이거예요"}
+{"kind":"tail","section":"실패","text":"다시 봐요"}
+{"kind":"tail","section":"실패","text":"아직이에요"}
+{"kind":"tail","section":"실패","text":"처음부터"}
+{"kind":"core","section":"발견","text":"찾았다"}
+{"kind":"core","section":"발견","text":"잡혔어요"}
+{"kind":"core","section":"발견","text":"보여요"}
+{"kind":"core","section":"발견","text":"이거였구나"}
+{"kind":"core","section":"발견","text":"범인 여깄어요"}
+{"kind":"core","section":"발견","text":"나왔어요"}
+{"kind":"core","section":"발견","text":"짚였어요"}
+{"kind":"core","section":"발견","text":"드러났어요"}
+{"kind":"core","section":"발견","text":"수상해요"}
+{"kind":"tail","section":"발견","text":"이 줄이에요"}
+{"kind":"tail","section":"발견","text":"여기예요"}
+{"kind":"tail","section":"발견","text":"원인 이거"}
+{"kind":"tail","section":"발견","text":"딱 걸렸어요"}
+{"kind":"tail","section":"발견","text":"바로 이 자리"}
+{"kind":"tail","section":"발견","text":"숨어 있었어요"}
+{"kind":"morph","section":"경음","from":"ㄱ","to":"ㄲ"}
+{"kind":"morph","section":"경음","from":"ㄷ","to":"ㄸ"}
+{"kind":"morph","section":"경음","from":"ㅂ","to":"ㅃ"}
+{"kind":"morph","section":"경음","from":"ㅅ","to":"ㅆ"}
+{"kind":"morph","section":"경음","from":"ㅈ","to":"ㅉ"}
+{"kind":"morph","section":"격음","from":"ㄱ","to":"ㅋ"}
+{"kind":"morph","section":"격음","from":"ㄷ","to":"ㅌ"}
+{"kind":"morph","section":"격음","from":"ㅂ","to":"ㅍ"}
+{"kind":"morph","section":"격음","from":"ㅈ","to":"ㅊ"}
+{"kind":"morph","section":"모음교체","from":"ㅏ","to":"ㅓ"}
+{"kind":"morph","section":"모음교체","from":"ㅗ","to":"ㅜ"}
+{"kind":"morph","section":"모음교체","from":"ㅑ","to":"ㅕ"}
+{"kind":"stretch","section":"maid","longVowel":2,"marks":3,"ellipsis":0,"stutter":0,"echo":1}
+{"kind":"stretch","section":"villainess","longVowel":4,"marks":1,"ellipsis":1,"stutter":0,"echo":0}
+{"kind":"stretch","section":"yandere","longVowel":2,"marks":1,"ellipsis":3,"stutter":0,"echo":2}
+{"kind":"stretch","section":"tsundere","longVowel":1,"marks":2,"ellipsis":1,"stutter":2,"echo":0}
+{"kind":"amp","section":"저각성","prefix":"","suffix":""}
+{"kind":"amp","section":"저각성","prefix":"","suffix":"…"}
+{"kind":"amp","section":"저각성","prefix":"살짝 ","suffix":""}
+{"kind":"amp","section":"저각성","prefix":"","suffix":", 음"}
+{"kind":"amp","section":"저각성","prefix":"조금 ","suffix":""}
+{"kind":"amp","section":"저각성","prefix":"","suffix":"…?"}
+{"kind":"amp","section":"저각성","prefix":"가만 ","suffix":""}
+{"kind":"amp","section":"저각성","prefix":"","suffix":", 그쵸"}
+{"kind":"amp","section":"저각성","prefix":"은근 ","suffix":""}
+{"kind":"amp","section":"저각성","prefix":"","suffix":"."}
+{"kind":"amp","section":"중각성","prefix":"오 ","suffix":"!"}
+{"kind":"amp","section":"중각성","prefix":"아 ","suffix":"!"}
+{"kind":"amp","section":"중각성","prefix":"","suffix":"!"}
+{"kind":"amp","section":"중각성","prefix":"오호 ","suffix":"!"}
+{"kind":"amp","section":"중각성","prefix":"","suffix":"! 그쵸"}
+{"kind":"amp","section":"중각성","prefix":"제법 ","suffix":"!"}
+{"kind":"amp","section":"중각성","prefix":"","suffix":"!?"}
+{"kind":"amp","section":"중각성","prefix":"어라 ","suffix":"!"}
+{"kind":"amp","section":"중각성","prefix":"","suffix":"! 좋아요"}
+{"kind":"amp","section":"중각성","prefix":"꽤 ","suffix":"!"}
+{"kind":"amp","section":"중각성","prefix":"","suffix":"! 오"}
+{"kind":"amp","section":"중각성","prefix":"헐 ","suffix":"!"}
+{"kind":"amp","section":"고각성","prefix":"와 ","suffix":"!!"}
+{"kind":"amp","section":"고각성","prefix":"진짜 ","suffix":"!!"}
+{"kind":"amp","section":"고각성","prefix":"","suffix":"!! 대박"}
+{"kind":"amp","section":"고각성","prefix":"헐 ","suffix":"!!"}
+{"kind":"amp","section":"고각성","prefix":"","suffix":"!! 와"}
+{"kind":"amp","section":"고각성","prefix":"대박 ","suffix":"!!"}
+{"kind":"amp","section":"고각성","prefix":"","suffix":"!! 진짜로"}
+{"kind":"amp","section":"고각성","prefix":"우와 ","suffix":"!!"}
+{"kind":"amp","section":"고각성","prefix":"","suffix":"!! 이거"}
+{"kind":"amp","section":"고각성","prefix":"아 진짜 ","suffix":"!!"}
+{"kind":"amp","section":"고각성","prefix":"","suffix":"!! 됐다"}
+{"kind":"amp","section":"고각성","prefix":"완전 ","suffix":"!!"}
+{"kind":"amp","section":"극각성","prefix":"","suffix":"!!!"}
+{"kind":"amp","section":"극각성","prefix":"와 진짜 ","suffix":"!!!"}
+{"kind":"amp","section":"극각성","prefix":"","suffix":"!!! 미쳤어요"}
+{"kind":"amp","section":"극각성","prefix":"완전 ","suffix":"!!!"}
+{"kind":"amp","section":"극각성","prefix":"개 ","suffix":"!!!"}
+{"kind":"amp","section":"극각성","prefix":"","suffix":"!!! 진짜로"}
+{"kind":"amp","section":"극각성","prefix":"존나 ","suffix":"!!!"}
+{"kind":"amp","section":"극각성","prefix":"","suffix":"!!! 이거 뭐야"}
+{"kind":"amp","section":"극각성","prefix":"미친 ","suffix":"!!!"}
+{"kind":"amp","section":"극각성","prefix":"","suffix":"!!! 대박이에요"}
+{"kind":"amp","section":"극각성","prefix":"왕 ","suffix":"!!!"}
+{"kind":"amp","section":"극각성","prefix":"","suffix":"!!! 터졌어요"}
+{"kind":"frame","section":"기본","slots":"groan emoji mirror result"}
+{"kind":"frame","section":"기본","slots":"groan mirror result emoji"}
+{"kind":"frame","section":"기본","slots":"groan emoji result"}
+{"kind":"frame","section":"기본","slots":"mirror groan result emoji"}
+{"kind":"frame","section":"기본","slots":"groan result"}
+{"kind":"frame","section":"반복강조","slots":"groan emoji result","echo":"core"}
+{"kind":"frame","section":"반복강조","slots":"groan mirror result emoji","echo":"core"}
+{"kind":"frame","section":"반복강조","slots":"groan result emoji","echo":"core"}
+{"kind":"frame","section":"자문자답","slots":"groan result emoji","ask":"이게 되네?"}
+{"kind":"frame","section":"자문자답","slots":"groan emoji result","ask":"뭐야 이거?"}
+{"kind":"frame","section":"자문자답","slots":"groan result emoji","ask":"어? 진짜?"}
+{"kind":"frame","section":"자문자답","slots":"groan emoji result","ask":"이거 맞아요?"}
+{"kind":"frame","section":"자문자답","slots":"groan result","ask":"어라, 뭐지?"}
+{"kind":"frame","section":"부정반전","slots":"groan emoji result","turn":"안 될 줄 알았는데"}
+{"kind":"frame","section":"부정반전","slots":"groan mirror result emoji","turn":"이번엔 진짜 아닌 줄"}
+{"kind":"frame","section":"부정반전","slots":"groan result emoji","turn":"포기했었는데"}
+{"kind":"frame","section":"부정반전","slots":"groan emoji result","turn":"기대 안 했는데"}
+{"kind":"frame","section":"부정반전","slots":"groan result","turn":"설마 했더니"}
+{"kind":"frame","section":"도치","slots":"groan emoji result","invert":true}
+{"kind":"frame","section":"도치","slots":"groan mirror result emoji","invert":true}
+{"kind":"frame","section":"도치","slots":"groan result emoji","invert":true}
+{"kind":"frame","section":"도치","slots":"result groan emoji","invert":true}
+{"kind":"agree","section":"자책","text":"맞아요."}
+{"kind":"agree","section":"자책","text":"맞아요, 그거."}
+{"kind":"agree","section":"자책","text":"네, 맞아요."}
+{"kind":"agree","section":"자책","text":"그거 맞아요."}
+{"kind":"agree","section":"자책","text":"맞습니다가 아니라 — 맞아요."}
+{"kind":"admit","section":"자책","text":"처맞을 짓 했어요."}
+{"kind":"admit","section":"자책","text":"제대로 처발렸어요."}
+{"kind":"admit","section":"자책","text":"변명할 게 없어요."}
+{"kind":"admit","section":"자책","text":"그 자리에서 틀렸어요."}
+{"kind":"admit","section":"자책","text":"눈 뜨고 놓쳤어요."}
+{"kind":"admit","section":"자책","text":"제가 뭉갠 거 맞아요."}
+{"kind":"admit","section":"자책","text":"같은 데서 또 그랬어요."}
+{"kind":"admit","section":"자책","text":"빤히 보고도 넘겼어요."}
