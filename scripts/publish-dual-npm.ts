@@ -31,8 +31,8 @@ export function buildAliasPackageJson(rootPkg, currentAliasPkg: Record<string, a
     homepage: rootPkg.homepage,
     files: ["bin/**/*", "README.md"],
     bin: {
-      "deuk-agent-rule": "./bin/deuk-agent-rule.js",
-      deukagentrule: "./bin/deuk-agent-rule.js",
+      "deuk-agent-rule": "bin/deuk-agent-rule.js",
+      deukagentrule: "bin/deuk-agent-rule.js",
     },
     engines: rootPkg.engines || currentAliasPkg.engines || { node: ">=20" },
     dependencies: {

@@ -143,10 +143,10 @@
     "node": ">=20"
   },
   "bin": {
-    "deuk-agent-flow": "./bin/deuk-agent-flow.js",
-    "deukagentflow": "./bin/deuk-agent-flow.js",
-    "deuk-agent-rule": "./bin/deuk-agent-rule.js",
-    "deukagentrule": "./bin/deuk-agent-rule.js"
+    "deuk-agent-flow": "bin/deuk-agent-flow.js",
+    "deukagentflow": "bin/deuk-agent-flow.js",
+    "deuk-agent-rule": "bin/deuk-agent-rule.js",
+    "deukagentrule": "bin/deuk-agent-rule.js"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
