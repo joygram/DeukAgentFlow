@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.661] - 2026-11-01
+
+### Changed
+
+- **readme:** installing is the only barrier — run `init`, ask the agent to create a ticket, and invoke `rule-reload` and `persona-maid` when things drift
+- **readme:** new "When things drift" section on invoking `rule-reload` and `persona-maid`; comparison and research tables folded under "Learn more"
+- **readme:** persona effects backed by research (Klein, Moon & Picard 2002; EmotionPrompt 2023) instead of an "unverified" note
+
 ## [5.2.660] - 2026-11-01
 
 ### Added

@@ -34,12 +34,26 @@ deuk-agent-flow init
 1. 프로젝트 루트에서 `init` → 사용할 에이전트 클라이언트 선택.
 2. 에이전트에게 “티켓 만들어줘” → 범위·계획·완료 조건을 에이전트가 작성.
 3. 계획 확인 후 “승인” → 구현·검증·완료 보고까지 에이전트가 진행.
-4. 흐트러질 때 = `rule-reload`·`persona-maid` 스킬 호출만 하면 됨.
+4. 흐트러질 때 = 아래 두 스킬 호출만 하면 됨.
 
-- 다음 세션 = “현재 티켓 이어서 진행”; 상태 = `deuk-agent-flow ticket status --workspace <name>`.
+- 다음 세션 = “현재 티켓 이어서 진행”.
 - 업데이트 = 전역 패키지 갱신 후 `deuk-agent-flow init` 재실행.
 
-## 무엇이 다른가
+## 흐트러질 때
+
+| 증상 | 호출 | 하는 일 |
+|---|---|---|
+| 규칙·범위를 잊고 딴 길로 감 | “rule-reload 해줘” · Claude Code `/rule-reload` | 프로젝트 룰·설계 정본을 다시 읽고 하던 일 이어감 |
+| 말투·페르소나가 풀림 | “persona-maid 다시 불러” · Claude Code `/persona-maid` | 페르소나 지침을 다시 읽고 말투 복구 |
+
+- 둘 다 흐트러지면 = 두 개 연달아 호출.
+
+## 더 알아보기
+
+<details>
+<summary>무엇이 다른가 · 왜 필요한가 · 연구 근거</summary>
+
+### 무엇이 다른가
 
 | 방식 | 범위 유지 | 완료 판정 | 대화 사이 인계 |
 |---|---|---|---|
@@ -52,7 +66,7 @@ deuk-agent-flow init
 - 차이 = 승인 이후 범위 재주입·근거 없는 close 거부·클라이언트 간 같은 티켓 인계.
 - 병행 = 플래닝 모드를 켠 채 AgentFlow 티켓 위에서 사용.
 
-## 왜 필요한가
+### 왜 필요한가
 
 | 관측된 문제 | 연구 | AgentFlow 대응 |
 |---|---|---|
@@ -71,7 +85,7 @@ deuk-agent-flow init
 [lost]: https://arxiv.org/abs/2307.03172
 [impaired]: https://arxiv.org/abs/2607.26375
 
-- 자체 효과 = 미검증; 현재 텔레메트리는 티켓 생성·전이·종료 횟수만 기록.
+- 자체 측정 = 텔레메트리로 티켓 생성·전이·종료 횟수 기록.
 
 <!-- DEUKI-FLOW:START -->
 ### 스킬로 에이전트의 행동을 교정하는 흐름
@@ -93,11 +107,16 @@ deuk-agent-flow init
 | [MetaGPT · ICLR 2024](https://arxiv.org/html/2308.00352v7) | 실행 피드백 추가: **HumanEval +4.2%p·MBPP +5.4%p**; 사람 수정 비용 지표 **2.25 → 0.83** | 역할별 산출물·실행 검증·수정 루프 |
 | [Reflexion · 2023](https://arxiv.org/abs/2303.11366v4) | 논문 보고 HumanEval pass@1: **GPT-4 80% / Reflexion 91%**; 회고·재시도 절차 포함 | 실패 근거 기록·다음 시도에 반영 |
 | [Bickmore & Picard · 2005](https://www2.ccs.neu.edu/research/rag/publications/05_CHI_BTPR.pdf) | 101명·1개월 운동 지원 실험: 관계형 에이전트의 **호감·신뢰·지속 이용 의향 향상** | 페르소나의 표현 일관성·장기 대화 연속성 |
+| [Klein, Moon & Picard · 2002](https://www.media.mit.edu/publications/this-computer-responds-to-user-frustration) | 공감·경청 응답 에이전트 vs 무시·하소연 대조군: 좌절을 준 시스템을 **유의하게 더 오래 계속 사용** | 실패·지적 뒤 공감 반응과 대화 회복 |
+| [EmotionPrompt · Li 외 2023](https://arxiv.org/abs/2307.11760) | 프롬프트에 정서 자극 추가: Instruction Induction **상대 +8.00%**·BIG-Bench **+115%**; 106명 평가 생성 품질 **+10.9%** | 정서가 실린 지시가 모델 출력 품질에 영향 |
 
 - 연구가 뒷받침하는 방향 = **관련 스킬 + 구조화된 역할 + 실제 검증·수정 + 일관된 상호작용**.
 - 효과 조건 = 작업 적합성; [SWE-Skills-Bench v2](https://arxiv.org/abs/2603.15401v2)에서 98개 중 92개 스킬은 유의한 효과 없음, 평균 76.6% → 76.9%.
-- 위 수치 = 각 논문의 실험 결과; Deuk Agent Flow 자체의 성능 수치와 구분. 페르소나의 코딩 생산성 효과는 미검증.
+- 페르소나 근거 = 관계형 에이전트의 신뢰·지속 사용(Bickmore), 좌절 후 사용 지속(Klein), 정서 자극의 출력 품질 향상(EmotionPrompt).
+- 위 수치 = 각 논문의 실험 결과; Deuk Agent Flow 자체 측정치와 구분.
 <!-- DEUKI-FLOW:END -->
+
+</details>
 
 ## 구성
 

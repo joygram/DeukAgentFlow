@@ -34,12 +34,26 @@ deuk-agent-flow init
 1. Run `init` from the project root → choose your agent clients.
 2. Tell your agent “Create a ticket” → the agent writes scope, plan and completion criteria.
 3. Review the plan, reply “approved” → the agent implements, verifies and reports.
-4. When things drift = just invoke the `rule-reload` and `persona-maid` skills.
+4. When things drift = just invoke the two skills below.
 
-- Next session = “Continue the current ticket”; status = `deuk-agent-flow ticket status --workspace <name>`.
+- Next session = “Continue the current ticket”.
 - Update = upgrade the global package, then rerun `deuk-agent-flow init`.
 
-## What is different
+## When things drift
+
+| Symptom | Invoke | What it does |
+|---|---|---|
+| Forgets rules or scope, wanders off | “Run rule-reload” · Claude Code `/rule-reload` | Rereads project rules and design docs, then resumes the task |
+| Tone or persona slips | “Call persona-maid again” · Claude Code `/persona-maid` | Rereads persona guidance and restores the tone |
+
+- Both drifting = invoke both in a row.
+
+## Learn more
+
+<details>
+<summary>What is different · Why · Research</summary>
+
+### What is different
 
 | Approach | Scope retention | Completion judgment | Handoff between sessions |
 |---|---|---|---|
@@ -52,7 +66,7 @@ deuk-agent-flow init
 - Difference = scope re-injected after approval, close refused without evidence, same ticket across clients.
 - Combined use = keep the planning mode on while working on an AgentFlow ticket.
 
-## Why
+### Why
 
 | Observed problem | Study | AgentFlow response |
 |---|---|---|
@@ -71,7 +85,7 @@ deuk-agent-flow init
 [lost]: https://arxiv.org/abs/2307.03172
 [impaired]: https://arxiv.org/abs/2607.26375
 
-- Own effect = unverified; current telemetry records ticket create/move/close counts only.
+- Own measurement = telemetry records ticket create/move/close counts.
 
 <!-- DEUKI-FLOW:START -->
 ### How skills steer agent behavior
@@ -93,11 +107,16 @@ deuk-agent-flow init
 | [MetaGPT · ICLR 2024](https://arxiv.org/html/2308.00352v7) | Adding executable feedback: **HumanEval +4.2 pp; MBPP +5.4 pp**; human revision cost metric **2.25 → 0.83** | Role-specific artifacts; execute, verify and correct |
 | [Reflexion · 2023](https://arxiv.org/abs/2303.11366v4) | Reported HumanEval pass@1: **GPT-4 80% / Reflexion 91%**; reflection and retry procedure included | Record failure feedback and use it in subsequent attempts |
 | [Bickmore & Picard · 2005](https://www2.ccs.neu.edu/research/rag/publications/05_CHI_BTPR.pdf) | 101 users, one-month exercise-support study: **greater liking, trust and desire to continue** with the relational agent | Consistent persona expression and conversational continuity |
+| [Klein, Moon & Picard · 2002](https://www.media.mit.edu/publications/this-computer-responds-to-user-frustration) | Empathic, active-listening agent vs ignore/vent controls: users kept using the frustrating system **significantly longer** | Empathic response and recovery after failure or correction |
+| [EmotionPrompt · Li et al. 2023](https://arxiv.org/abs/2307.11760) | Emotional stimuli added to prompts: Instruction Induction **+8.00% relative**, BIG-Bench **+115%**; 106-person evaluation **+10.9%** on generative tasks | Emotionally framed instructions shape model output quality |
 
 - Research-supported direction = **relevant skills + structured roles + executable verification and correction + consistent interaction**.
 - Task fit matters: [SWE-Skills-Bench v2](https://arxiv.org/abs/2603.15401v2) found no significant effect for 92 of 98 skills; average pass ratio 76.6% → 76.9%.
-- Figures belong to the cited experiments, not Deuk Agent Flow performance measurements. Persona effects on coding productivity remain unverified.
+- Persona evidence = trust and continued use with relational agents (Bickmore), continued use after frustration (Klein), output quality gains from emotional stimuli (EmotionPrompt).
+- Figures belong to the cited experiments, not Deuk Agent Flow measurements.
 <!-- DEUKI-FLOW:END -->
+
+</details>
 
 ## Components
 

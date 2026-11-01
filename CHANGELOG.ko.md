@@ -6,6 +6,14 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [5.2.661] - 2026-11-01
+
+### Changed
+
+- **readme:** 진입장벽은 설치뿐 — `init` 후 "티켓 만들어줘", 흐트러지면 `rule-reload`·`persona-maid` 호출
+- **readme:** "흐트러질 때" 절에 두 스킬 호출법 기록, 비교·연구 표는 "더 알아보기"로 접음
+- **readme:** 페르소나 효과를 "미검증" 대신 논문 근거로 제시 (Klein·Moon·Picard 2002, EmotionPrompt 2023)
+
 ## [5.2.660] - 2026-11-01
 
 ### Added
