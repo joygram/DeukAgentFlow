@@ -25,6 +25,7 @@
 ## 바로 시작
 
 - 요구 환경 = Node.js 20 이상·npm·지원 에이전트 클라이언트.
+- 검증 완료 = Claude Code·Codex에서 실제 사용 검증.
 
 ```bash
 npm install -g deuk-agent-flow

@@ -25,6 +25,7 @@ AI collaboration through tickets, skills, roles and persona
 ## Get started
 
 - Requirements = Node.js 20+, npm and a supported agent client.
+- Verified = tested in real use on Claude Code and Codex.
 
 ```bash
 npm install -g deuk-agent-flow
