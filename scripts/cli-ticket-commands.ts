@@ -3927,7 +3927,9 @@ export async function runTicketMove(opts) {
 
   const { absPath: abs, meta: parsedMeta, content: rawContent, docmeta: existingDocMeta } = readTicketDocument(opts.workspaceRoot, entry, { action: "ticket move", requireExists: true });
 
-  const targetStateForEvidence = Number.isFinite(Number(opts.phase))
+  const targetStateForEvidence = opts.toEnd
+    ? "end"
+    : Number.isFinite(Number(opts.phase))
     ? `phase${normalizeTicketPhaseNumber(opts.phase)}`
     : opts.next
       ? `phase${Math.min(normalizeTicketPhaseNumber(Number(parsedMeta.phase || 1)) + 1, 4)}`
@@ -3949,14 +3951,16 @@ export async function runTicketMove(opts) {
   }
   let transition;
   try {
-    transition = resolveTicketWorkflowCommandTransition(opts.workspaceRoot, entry, abs, parsedMeta, content, opts, {
-      action: "move",
-      phase: Number.isFinite(requestedPhase) ? requestedPhase : undefined,
-      next: opts.next || !Number.isFinite(requestedPhase)
-    });
+    transition = resolveTicketWorkflowCommandTransition(opts.workspaceRoot, entry, abs, parsedMeta, content, opts, opts.toEnd
+      ? { action: "move", toState: "end" }
+      : {
+          action: "move",
+          phase: Number.isFinite(requestedPhase) ? requestedPhase : undefined,
+          next: opts.next || !Number.isFinite(requestedPhase)
+        });
   } catch (err) {
     const reasonText = String(err.message || "");
-    if (currentPhase === 1 && (requestedPhase >= 2 || opts.next || !Number.isFinite(requestedPhase))) {
+    if (currentPhase === 1 && !opts.toEnd && (requestedPhase >= 2 || opts.next || !Number.isFinite(requestedPhase))) {
       const reasons = reasonText.split(":").pop().split(",").map(value => value.trim()).filter(Boolean);
       throw new Error(formatTicketWorkflowGateFailure(opts.workspaceRoot, abs, entry, parsedMeta, content, opts, "phase2", reasons));
     }

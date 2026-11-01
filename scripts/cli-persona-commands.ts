@@ -6,7 +6,6 @@ import { absorbJournalEntry,deleteAbsorbedJournalEntries,listJournalEntries,upse
 import { deleteVocabCategory,deleteVocabEntry,listVocabEntries,openVocabDb,updateVocabForms,upsertVocabEntry,type VocabForm,type VocabRow } from "./persona-vocab-db.js";
 import { matchNarrativeLabels } from "./integrity-narrative-source.js";
 import { locateProseSpans, type TextSpan } from "./markdown-prose-spans.js";
-import { readVerbosityAttempt, writeVerbosityAttempt } from "./persona-verbosity-attempts.js";
 import { syncExposedNativeSkills } from "./cli-skill-commands.js";
 
 
@@ -1265,7 +1264,7 @@ export function runPersonaLanguageGate(payloadText = "") {
   if (!judgeLanguageDrift(countLanguageScript(text))) return;
   process.stdout.write(JSON.stringify({
     decision: "block",
-    reason: `언어 이탈 검출 — 이 응답은 차단됐다. docsLanguage=ko — 응답 언어는 한국어로 확정돼 있다(추측이 아니라 설정값이다). 방금 응답에서 영문 산문이 한국어보다 많았다. 이 응답을 지금 한국어로 다시 쓰라. 고유명사·식별자·코드·로그 인용은 원문 그대로 둔다.`
+    reason: `언어 이탈 검출(docsLanguage=ko) — 영문 산문이 한국어보다 많았다. 한국어로 다시 쓰라. 고유명사·식별자·코드·로그 인용은 원문 유지.`
   }));
 }
 
@@ -1289,35 +1288,24 @@ export function runPersonaVerbosityGate(payloadText = "", opts: CliOpts = {}) {
     ...found.filter(p => p.label !== TOP_PRIORITY_LABEL)
   ];
   const labels = matched.map(p => p.label);
-  const prior = readVerbosityAttempt(shape.turnKey, opts);
-  const attempt = prior.count + 1;
-  writeVerbosityAttempt(
-    { turnKey: shape.turnKey, count: attempt, lastText: text.slice(-600), lastLabels: labels },
-    opts
-  );
 
   const remedies = matched.map(p => p.remedy).filter(Boolean);
   const orders = remedies.length > 0
     ? remedies.map((r, n) => `${n + 1}. ${r}`).join("\n")
     : "검출된 표현을 걷어내고, 그 자리에 관측값을 채우라.";
 
-  const repeated = prior.lastLabels.filter(l => labels.includes(l));
-  const retryBlock = attempt > 1
-    ? `\n\n직전 시도(${attempt - 1}회차)는 ${prior.lastLabels.join(", ")} 로 걸렸고, 그 텍스트 끝부분은 다음과 같다.\n---\n${prior.lastText.slice(-400)}\n---\n${repeated.length > 0 ? `${repeated.join(", ")} 가 연속으로 걸렸다 — 위 텍스트의 그 라벨에 걸린 문장을 다시 쓰지 마라. 같은 문장을 다시 쓰는 것이 반복의 원인이다.` : "직전과 다른 라벨에 걸렸다 — 앞서 고친 부분은 그대로 두고 새로 검출된 것만 고치라."}`
-    : "";
-
   const noTool = shape.transcriptRead && !shape.toolUsed;
   const pledged = hasUncommittedNextAction(text.slice(-300));
 
   const toolBlock = noTool && pledged
-    ? "\n\n이 응답은 다음에 할 일을 말해놓고 도구 호출 없이 끝났다 — 하겠다고 쓴 그것을 이 턴에서 실행하지 않았다. 예고는 이행이 아니다. 지금 그 행동을 도구로 실행하고, 실행한 결과를 쓰라."
+    ? "\n\n하겠다고 쓴 일이 이 턴에서 실행되지 않았다 — 지금 도구로 실행하고 결과를 쓰라."
     : noTool
-      ? "\n\n이 응답은 도구 호출 없이 끝났다. 결론만 있고 실행이 없으면 사용자가 다시 입력해야 일이 진행된다 — 그것이 되던짐이다. 지금 도구를 호출해 원 요구를 실행하라."
+      ? "\n\n도구 호출 없이 끝났다 — 원 요구를 도구로 실행하라."
       : "";
 
   process.stdout.write(JSON.stringify({
     decision: "block",
-    reason: `자기 서사 검출(${labels.join(", ")}) — 이 응답은 차단됐다. (${attempt}회차, 통과 임계 없음)\n\n검출된 표현은 회피의 옷이다. 표현만 지우고 같은 회피를 다른 말로 입는 것은 이행이 아니다. 아래를 실제로 수행하라 — 다음 턴으로 미루는 것이 아니다.\n\n${orders}${retryBlock}${toolBlock}\n\n방금 응답은 이미 사용자에게 보였다. 요약·분석을 처음부터 다시 쓰지 마라 — 같은 요약의 반복 출력이 된다. 도구를 실제로 호출하고, 그 뒤 새로 한 것·새로 나온 것과 고친 문장만 이어 쓰라.`
+    reason: `자기 서사 검출(${labels.join(", ")})\n\n${orders}${toolBlock}\n\n이미 보인 요약은 반복하지 말고, 새로 한 것과 고친 문장만 이어 쓰라.`
   }));
 }
 

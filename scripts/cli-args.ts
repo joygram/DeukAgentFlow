@@ -73,7 +73,12 @@ export function parseTicketArgs(argv) {
     else if (a === "--summary") out.summary = argv[++i];
     else if (a === "--type") out.ticketType = argv[++i];
     else if (a === "--tags") out.tags = argv[++i];
-    else if (a === "--phase" || a === "--to") { out.phase = parsePhaseToken(argv[++i]); out.phaseRequested = true; }
+    else if (a === "--phase" || a === "--to") {
+      const token = argv[++i];
+      out.phase = parsePhaseToken(token);
+      out.toEnd = String(token ?? "").trim().toLowerCase() === "end";
+      out.phaseRequested = true;
+    }
     else if (a === "--next") out.next = true;
     else if (a === "--handoff") out.handoff = true;
     else if (a === "--reason") out.reason = argv[++i];

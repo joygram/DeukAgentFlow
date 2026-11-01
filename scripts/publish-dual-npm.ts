@@ -4,6 +4,9 @@ import { readFileSync,writeFileSync } from "fs";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { makePath } from "./cli-utils.js";
+import { flattenPublicDocLinks } from "./public-doc-links.js";
+
+const PUBLISHED_READMES = ["README.md", "README.ko.md"];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = makePath(__dirname, "..", "..", "..");
@@ -54,7 +57,7 @@ function run(command, args, cwd) {
   console.log(`\n$ ${shown}`);
   const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: npmShell });
   if (result.status !== 0) {
-    process.exit(result.status || 1);
+    throw new Error(`${shown} failed with exit ${result.status ?? "signal"}`);
   }
 }
 
@@ -96,6 +99,16 @@ function parseArgs(argv) {
   return opts;
 }
 
+export function withPublicReadmes(publish: () => void, dir = rootDir) {
+  const originals = PUBLISHED_READMES.map(name => [makePath(dir, name), readFileSync(makePath(dir, name), "utf8")]);
+  try {
+    for (const [path, text] of originals) writeFileSync(path, flattenPublicDocLinks(text), "utf8");
+    publish();
+  } finally {
+    for (const [path, text] of originals) writeFileSync(path, text, "utf8");
+  }
+}
+
 function publishArgs(opts) {
   const args = ["publish", "--access", opts.access, "--ignore-scripts"];
   if (opts.tag) args.push("--tag", opts.tag);
@@ -128,7 +141,7 @@ export function main(argv = process.argv.slice(2)) {
 
   const args = publishArgs(opts);
   if (!opts.aliasOnly) {
-    run("npm", args, rootDir);
+    withPublicReadmes(() => run("npm", args, rootDir));
   }
   run("npm", args, aliasDir);
 }
