@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read package version
+        run: echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Skip when the version is already released
+        id: exists
+        run: |
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "v${VERSION} already tagged — nothing to release."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract release notes from CHANGELOG
+        if: steps.exists.outputs.released == 'false'
+        run: |
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "See [CHANGELOG.md](CHANGELOG.md)." > RELEASE_NOTES.md
+          fi
+
+      - name: Create tag and GitHub Release
+        if: steps.exists.outputs.released == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: v${{ env.VERSION }}
+          body_path: RELEASE_NOTES.md
+          files: bundled/deuk-agent-flow.vsix
+          fail_on_unmatched_files: false

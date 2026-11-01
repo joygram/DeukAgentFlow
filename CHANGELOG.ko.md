@@ -6,6 +6,23 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [5.2.660] - 2026-11-01
+
+### Added
+
+- **release:** 공개 저장소 푸시 시 `v<패키지 버전>` 태그가 없으면 GitHub Release 자동 생성
+- **checks:** `check:changelog` — 버전 절 중복 시 실패
+
+### Changed
+
+- **gate:** Stop 게이트 피드백에서 회차·임계·직전 응답 인용·비난 문구 제거, 검출·차단은 유지
+
+### Fixed
+
+- **ticket:** `ticket move --to end`가 phase4 대신 end로 전이하고 완료 증거 플래그 병합
+- **publish:** npm README를 공개 문서 링크로 배포 — npmjs.com 링크 깨짐 해소
+- **changelog:** 중복 버전 절 422개 제거, 영문판 한글 항목 영어화
+
 ## [5.2.659] - 2026-11-01
 
 ### Added

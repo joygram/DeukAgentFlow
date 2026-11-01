@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.660] - 2026-11-01
+
+### Added
+
+- **release:** pushing to the public repository creates a GitHub Release tagged `v<package version>` when that tag does not exist yet
+- **checks:** `check:changelog` fails on duplicate version sections
+
+### Changed
+
+- **gate:** Stop-gate feedback no longer carries retry counters, thresholds, quoted previous replies or accusatory wording; detection and blocking unchanged
+
+### Fixed
+
+- **ticket:** `ticket move --to end` now targets the end state and merges completion evidence flags instead of mapping to phase4
+- **publish:** npm README is published with public doc links so links resolve on npmjs.com
+- **changelog:** removed 422 duplicated version sections and translated remaining Korean entries in the English changelog
+
 ## [5.2.659] - 2026-11-01
 
 ### Added
