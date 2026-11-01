@@ -4,12 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.2.9] - 2026-07-18
+## [5.2.659] - 2026-11-01
 
+### Added
+
+- **marketplace:** Claude Code plugin and self-hosted marketplace (`.claude-plugin/`, `marketplace/claude/`); skill sources shared with the CLI
+- **doc-sync:** `doc-sync` system skill and `doc` CLI commands; doc changes surface at the qa/closer transitions
+- **integrity:** evasion-narrative gate on Stop — blocks instruction begging, drift self-blame, report-and-stop, ownership shifting, scope fencing and workload inflation
+- **persona:** configurable form of address (default `Master`) applied to skills and surfaces; language gate blocks responses drifting out of the session language
+- **hooks:** block git revert/reset bypasses (wrapped or interpreter-invoked git) and `Co-Authored-By` trailers via `commit-msg`
+- **design:** `design render` delivers canonical docs, rules and active skills as command output each turn
+- **checks:** rule-citation, dead-export, surface-wording and persona-coverage checks
+- **docs:** Deuki branding, bilingual product images, neutral VS Code panel theme
+
+### Changed
+
+- **cli:** workspace resolution uses only an explicit `--workspace`; session cookie, env key and mtime fallbacks removed
+- **init:** applies unconditionally (preview via `--dry-run`); refuses home or drive-root cwd
+- **project-rule:** single canonical `PROJECT_RULE.md` at the workspace root; `docs/` and home copies migrated
+- **ticket:** phase2 entry prints the modify-stage rules; approval gate only at phase1→2
+- **dev-install:** native per-OS global install of the built package only; WSL path, `~/.local` shims and alias bins removed
 
 ### Fixed
 
-- **init:** 루트 PROJECT_RULE.md를 무조건 docs로 덮어쓰기 이동 ([#971](https://github.com/joygram/DeukAgentFlow/issues/971))
+- **init:** stopped unconditionally moving the root `PROJECT_RULE.md` into `docs/` with overwrite ([#971](https://github.com/joygram/DeukAgentFlow/issues/971))
+- **ticket:** closed tickets no longer stay active; doc/investigation tickets can move phase2→3; pre-5.x tickets accepted as created
+- **migrate:** legacy registry workspaces moved and registered automatically; `~/.deuk-agent` merged into `~/.deuk` instead of deleted; Windows path separators recognized
+- **config:** `loadInitConfig` honours `opts.homeDir`
+- **publish:** public script collection follows the entry-point import chain (12 missing modules restored); bin paths normalized
+- **eol:** CRLF blocked at the source (git, tsc and editor settings)
+- **vscode:** removed the What's New notification on update
 
 ## [5.2.8] - 2026-07-17
 

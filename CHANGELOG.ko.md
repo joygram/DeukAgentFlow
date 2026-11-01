@@ -7,6 +7,85 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
 
+## [5.2.659] - 2026-11-01
+
+### Added
+
+- **marketplace:** Claude Code 플러그인·자체 마켓 추가 (`.claude-plugin/`, `marketplace/claude/`), 스킬 원본을 CLI와 공용화
+- **doc-sync:** `doc-sync` 시스템 스킬·`doc` CLI 명령 추가, qa/closer 전이에서 문서 변경 노출
+- **integrity:** Stop 시 회피 서사 게이트 — 지시 구걸·드리프트 자책·보고 후 정지·소유 전가·범위 선긋기·작업량 부풀리기 차단
+- **persona:** 호칭 설정(기본 `Master`)을 스킬·표면에 반영, 세션 언어 이탈 응답 차단
+- **hooks:** 래퍼·인터프리터 경유 git 되돌리기 우회 차단, `commit-msg`로 `Co-Authored-By` 트레일러 거부
+- **design:** `design render`가 정본 문서·룰·활성 스킬을 매 턴 명령 출력으로 전달
+- **checks:** 룰 인용·죽은 export·표면 어법·페르소나 커버리지 검사 추가
+- **docs:** Deuki 브랜딩, 이중 언어 제품 이미지, 중립 VS Code 패널 테마
+
+### Changed
+
+- **cli:** 워크스페이스 해소를 명시 `--workspace`로 단일화, 세션 쿠키·env 키·mtime 폴백 제거
+- **init:** 조건 없이 적용(미리보기는 `--dry-run`), 홈·드라이브 루트 cwd 거부
+- **project-rule:** `PROJECT_RULE.md` 정본을 워크스페이스 루트 하나로, `docs/`·홈 사본 이동
+- **ticket:** phase2 진입 시 modify 단계 룰 출력, 승인 게이트는 phase1→2에만
+- **dev-install:** 빌드한 패키지만 OS별 네이티브 전역 설치, WSL 경로·`~/.local` shim·별칭 bin 제거
+
+### Fixed
+
+- **init:** 루트 `PROJECT_RULE.md`를 무조건 `docs/`로 덮어쓰기 이동하던 결함 수정 ([#971](https://github.com/joygram/DeukAgentFlow/issues/971))
+- **ticket:** 닫힌 티켓이 활성으로 남던 문제, doc/investigation 티켓 phase2→3 전이 불능, 5.x 이전 티켓 생성 출처 미인정 수정
+- **migrate:** 레거시 레지스트리 워크스페이스 자동 이동·등록, `~/.deuk-agent`를 삭제 대신 `~/.deuk`로 병합, Windows 구분자 인식
+- **config:** `loadInitConfig`가 `opts.homeDir`을 따르도록 수정
+- **publish:** 공개 스크립트를 진입점 import 연쇄로 수집(누락 모듈 12개 복구), bin 경로 정규화
+- **eol:** CRLF를 git·tsc·에디터 설정에서 원천 차단
+- **vscode:** 업데이트 시 What's New 알림 제거
+
+## [5.2.8] - 2026-07-17
+
+### Changed
+
+- **persona:** 페르소나의 작업 효용·언어/감정 미러링을 설계 문서에 정본화 — 롤 레이어와 같은 급의 작업 경험 레이어 ([#978](https://github.com/joygram/DeukAgentFlow/issues/978))
+
+## [5.2.7] - 2026-07-17
+
+### Changed
+
+- **rules:** 대화 로그를 읽던 자기 감시 함수 3종 제거 — rules 훅이 로그 크기와 무관하게 상수 시간 ([#975](https://github.com/joygram/DeukAgentFlow/issues/975))
+
+## [5.2.6] - 2026-07-17
+
+### Fixed
+
+- **locale:** C/POSIX 로케일을 영어로 오판하던 문제 수정 — "미지정"으로 보고 OS 로케일(Intl)로 넘김 ([#974](https://github.com/joygram/DeukAgentFlow/issues/974))
+
+## [5.2.5] - 2026-07-17
+
+### Fixed
+
+- **persona:** 페르소나 언어를 발화 추측 대신 설정(`docsLanguage`)으로 결정 — 영어 명령줄이 한국어 세션을 영어로 바꾸지 않음 ([#972](https://github.com/joygram/DeukAgentFlow/issues/972))
+
+## [5.2.4] - 2026-07-17
+
+### Fixed
+
+- **init:** 폐기된 `architecture_docs` 필드와 안내를 init 시 자동 정리 ([#970](https://github.com/joygram/DeukAgentFlow/issues/970))
+- **init:** 정본 `docs/PROJECT_RULE.md`가 있으면 루트의 동일 사본 자동 제거(다르면 경고) ([#969](https://github.com/joygram/DeukAgentFlow/issues/969))
+
+## [5.2.3] - 2026-07-17
+
+### Added
+
+- **persona:** `persona cache clear` 명령 추가, 남은 영어 CLI 메시지 한국어화
+
+### Fixed
+
+- **persona:** 한/영 어휘 혼입 차단, 습니다체·3인칭 호칭 검출 추가
+
+## [5.2.2] - 2026-07-17
+
+### Fixed
+
+- **persona:** 축약 톤 렌더가 세션 언어와 무관하게 한/영 어휘를 섞던 문제 — 감지된 세션 언어로 후보 필터
+- **persona:** 준수 검사가 이모지만 세던 문제 — 습니다체 어미·"사용자가" 3인칭 호칭을 별도 검출
+
 ## [5.2.1] - 2026-07-16
 
 ### Changed
