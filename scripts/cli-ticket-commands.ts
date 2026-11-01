@@ -2,7 +2,9 @@ import { parseHeading,stripLeadingHashes } from "./markdown-headings.js";
 import { existsSync,mkdirSync,readdirSync,readFileSync,rmSync,statSync,unlinkSync,writeFileSync } from "fs";
 import { basename,dirname,join,relative,resolve,sep } from "path";
 import { summarizeDocHealth } from "./cli-doc-commands.js";
+import { buildCodingStep } from "./cli-coding-step.js";
 import { cliText } from "./cli-locales.js";
+import { projectRulePath as resolveProjectRulePath } from "./cli-rule-registry.js";
 import { buildRolePersonaSurfaceForRole,getActiveRoleSkillIds,getActiveSkillsSurface } from "./cli-skill-commands.js";
 import { appendInternalWorkflowEvent,buildTelemetrySummary,getTelemetryCompactSummary } from "./cli-telemetry-commands.js";
 import {
@@ -306,9 +308,6 @@ function renderCliSurfaceDocument(name, replacements: Record<string, any> = {}) 
   return content.trimEnd();
 }
 
-function resolveProjectRulePath(cwd) {
-  return makePath(cwd, "docs", "PROJECT_RULE.md");
-}
 
 const DESIGN_CANON_HEADING = "## 관련 설계 정본 (판단 전 Read 툴로 읽어라)";
 
@@ -1757,7 +1756,7 @@ function shouldRunWorkflowRulesAudit(changedFiles = []) {
     const normalized = String(relPath || "").replace(/\\/g, "/");
     if (!normalized) return false;
     return normalized === "core-rules/AGENTS.md"
-      || normalized === "docs/PROJECT_RULE.md"
+      || normalized === "PROJECT_RULE.md"
       || normalized === "AGENTS.md"
       || normalized === ".codex/AGENTS.md"
       || normalized.startsWith(".claude/rules/")
@@ -1900,7 +1899,8 @@ function getTicketWorkflowProvenanceReasons(entry, meta: Record<string, any> = {
   if (!entry || String(entry.status || "").toLowerCase() === "archived") return reasons;
   if (!isExecutionTicketStatus(entry.status || meta.status || "open")) return reasons;
 
-  const workflowSource = String(meta.workflowSource || meta.ticketWorkflowSource || "").trim();
+  // lifecycleSource is the provenance field written by pre-5.x ticket create.
+  const workflowSource = String(meta.workflowSource || meta.ticketWorkflowSource || meta.lifecycleSource || "").trim();
   if (workflowSource !== "ticket-create") {
     reasons.push("manual_ticket_workflow_provenance_missing");
   }
@@ -4057,13 +4057,16 @@ export async function runTicketMove(opts) {
         `이 전이가 스킬 호출의 시점이다. 호출하지 않은 채 이어가면 이 국면의 롤이 서지 않는다.`
       );
     }
+    if (nextPhase === 2 && existsSync(resolveProjectRulePath(opts.workspaceRoot))) {
+      console.log("\n" + buildCodingStep(opts.workspaceRoot, PACKAGE_ROOT, "modify", ""));
+    }
     try {
       await runTicketStatus({ ...opts, ticketId: entry.id, statusDetail: true, json: false });
     } catch {
       printTicketPhaseLine(entry.id, finalAbsPath, nextPhase, opts);
       printUsageReminder(opts.workspaceRoot, opts);
+      printPhaseAdvanceHint(entry.id, nextPhase, parsedMeta.status, opts, parsedMeta);
     }
-    printPhaseAdvanceHint(entry.id, nextPhase, parsedMeta.status, opts, parsedMeta);
   } catch (err) {
     if (reopenedFromArchive) {
       rmSync(finalAbsPath, { force: true });
@@ -4132,7 +4135,8 @@ function isTicketNextRunnableCandidate(cwd, entry) {
   if (!ticketDoc.exists) return true;
 
   const { meta } = ticketDoc;
-  const workflowSource = String(meta.workflowSource || meta.ticketWorkflowSource || "").trim();
+  // lifecycleSource is the provenance field written by pre-5.x ticket create.
+  const workflowSource = String(meta.workflowSource || meta.ticketWorkflowSource || meta.lifecycleSource || "").trim();
   return workflowSource === "ticket-create";
 }
 

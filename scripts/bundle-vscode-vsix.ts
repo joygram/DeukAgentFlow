@@ -3,7 +3,7 @@
  * Packs vscode-extension into bundled/deuk-agent-flow.vsix for the npm tarball.
  * Temporarily sets the extension package.json version to the root package version.
  */
-import { execSync } from "child_process";
+import { execFileSync,execSync } from "child_process";
 import fs from "fs";
 import { makePath,resolvePackageRoot } from "./cli-utils.js";
 
@@ -49,12 +49,7 @@ try {
   }
   console.log('[deuk-agent-flow] bundled VS Code extension:', vsixPath);
   if (installAfterBundle) {
-    if (process.platform === 'win32') {
-      const wslScript = execSync(`wsl.exe wslpath -u "${root.replace(/\\/g, '/')}/scripts/install-vsix-wsl.sh"`, { encoding: 'utf8', shell: true } as any).toString().trim();
-      execSync(`wsl.exe bash "${wslScript}"`, { stdio: 'inherit', shell: true } as any);
-    } else {
-      execSync('node scripts/out/scripts/install-vscode-vsix.js --all', { cwd: root, stdio: 'inherit', shell: true } as any);
-    }
+    execFileSync(process.execPath, ['scripts/out/scripts/install-vscode-vsix.js', '--all'], { cwd: root, stdio: 'inherit' });
   }
 } finally {
   extPkg.version = rootPkg.version;

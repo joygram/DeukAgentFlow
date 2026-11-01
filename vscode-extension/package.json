@@ -2,7 +2,7 @@
   "name": "deuk-agent-flow",
   "displayName": "Deuk Agent Flow",
   "description": "VS Code extension for the Deuk Agent Flow command center and ticket workspace controls.",
-  "version": "5.2.644",
+  "version": "5.2.659",
   "publisher": "deukpack",
   "engines": {
     "vscode": "^1.85.0"
@@ -12,7 +12,7 @@
     "url": "https://github.com/joygram/DeukAgentFlow"
   },
   "license": "Apache-2.0",
-  "icon": "media/agentflow-128.png",
+  "icon": "media/deuki-avatar.png",
   "categories": [
     "Other"
   ],

@@ -1,241 +1,68 @@
-# 스킬 시스템 & Flow UI 가이드 (v5.0)
+<!-- Generated from docs/assets/publication-docs.json -->
+# 스킬·역할·페르소나
 
-**English:** [skills-guide.md](skills-guide.md)
+## 스킬의 역할
 
-5.0의 스킬 시스템과 VS Code Flow UI 사용법을 다룹니다. 스킬은 에이전트의 행동 규약을 모듈로 얹는 장치이고, 페르소나(`persona-maid`)는 그중 응대 톤을 바꾸는 스킬입니다.
+- 스킬 = 반복 작업의 절차·확인 기준을 담은 `SKILL.md`.
+- 적용 = 관련 스킬 선택·본문 읽기·실행 기준 반영·실제 결과 검증.
+- 교정 대상 = 추측·과잉 설계·생성 파일 직접 편집·문서 불일치.
+- 효과 조건 = 작업·프로젝트 맥락과의 적합성; 스킬 수 증가와 성능 향상은 별개.
 
-> **v5.0 아키텍처 방향:** 이번 버전은 **Claude 중심**으로 스킬 기능을 대대적으로 개편했습니다. Codex·Copilot·Antigravity 등 다른 에이전트 플랫폼은 현재 보강 중이며, 지원 범위가 점진적으로 확대됩니다.
+## 대표 스킬
 
----
-
-## 스킬이란
-
-스킬은 `templates/skills/<id>/SKILL.md` 한 파일로 정의되는 행동 모듈입니다. frontmatter로 동작이 결정됩니다.
-
-| 필드 | 의미 |
+| 스킬 | 행동 기준 |
 |---|---|
-| `name` | 스킬 ID (kebab-case) |
-| `category` | 분류 (충돌 경고에 사용) |
-| `bind` | 활성화되는 노드 영역. `rules`면 rules 노드에서 적용, 비우면 영역 무관(항상) |
-| `system` | `true`면 init 시 자동 설치+노출(필수 시스템 스킬). 없으면 수동(opt-in) |
+| safe-refactor | 작은 범위·필요한 검증 |
+| generated-file-guard | 생성 파일 대신 원본 수정 |
+| doc-sync | 설계 기준 문서 정합 |
+| rule-reload | 현재 규칙·설계 다시 읽기 |
+| persona-maid | 선택형 대화 캐릭터 |
 
-**정본(SSOT)은 패키지 `templates/skills/`** 입니다. 사용자가 편집하려면 fork하며, 정본이 갱신되면 fork보다 우선해 전파됩니다.
+## 길을 잃었을 때
 
-### 배포는 세 층이고 출처는 레지스트리다
-
-스킬은 세 층을 거쳐 에이전트에 닿습니다. 층마다 담는 것이 다르고, 그중 하나만이 출처입니다.
-
-| 층 | 자리 | 담는 것 |
+| 증상 | 스킬·명령 | 요청 예 |
 |---|---|---|
-| **원본** | `templates/skills/<id>/SKILL.md` | 배포의 재료가 되는 정본 |
-| **레지스트리** | `~/.deuk/skills.json` | 무엇을 설치·노출할지의 **출처** |
-| **플랫폼** | `~/.claude/skills/` 등 | 레지스트리가 만들어낸 파생물 |
+| 규칙·설계를 잊고 추측으로 진행 | rule-reload | “룰 다시 읽고 이어서” |
+| 현재 티켓·단계를 모름 | ticket-status-surface · `ticket status` | “현재 티켓 상태 보여줘” |
+| 같은 실패 반복·이전 결정 기억 없음 | context-recall | “이전 티켓에서 어떻게 했는지 찾아봐” |
+| 말투가 딱딱해짐·다른 언어로 샘 | persona-maid | “페르소나 다시 불러” |
+| 컨텍스트 압축·세션 재개 직후 | `deuk-agent-flow rules` | “rules부터 다시 실행” |
 
-```
-원본        →  레지스트리      →  플랫폼 디렉터리
-(재료)         (출처: 등록)       (파생물: 배포된 사본)
-```
+## 핵심 스킬 사용법
 
-| 단계 | 의미 | Flow UI |
-|---|---|---|
-| **설치** | 레지스트리에 설치로 등록 | `[✓]` 체크 표시 |
-| **노출 ON** | 레지스트리에 노출로 등록하고 플랫폼에 배포 | `[ON]` 토글 |
-| **노출 OFF** | 등록을 내리고 배포본을 회수 | `[OFF]` 토글 |
+- 호출 = Claude Code는 `/rule-reload` 같은 슬래시; 그 밖의 클라이언트는 스킬 이름을 넣어 요청.
+- rule-reload = `PROJECT_RULE.md`·설계 정본·티켓 Scope 재독 → 걸리는 룰 3줄 요약 → 하던 일 계속.
+- persona-maid = 호출한 응답에만 유효; 도구 작업 뒤·역할 전환 때 다시 호출.
+- 호칭 변경 = `deuk-agent-flow persona config set honorific --lang ko --value "<호칭>"`.
+- context-recall = 로컬 소스·티켓을 먼저 읽고 이전 티켓·룰 기록 조회; 검색 결과는 근거로만 사용.
+- ticket-status-surface = 티켓 상태를 워크스페이스·상태·링크 한 줄로 보고.
 
-플랫폼은 `claude / codex / copilot / antigravity` 중 **개별로** 노출을 등록할 수 있어, 특정 에이전트에만 스킬을 적용하는 세밀한 제어가 가능합니다.
-
-**플랫폼 디렉터리의 파일은 파생물입니다.** 등록이 레지스트리에 남아 있는 한, 그 파일을 지워도 다음 노출 시점에 원본으로부터 다시 배포됩니다. 스킬이 사라지지 않는다면 지운 것이 파생물이었기 때문입니다.
-
-**제거는 등록부터 내립니다.** 순서는 `skill unexpose`로 노출 등록을 내리고, `skill remove`로 설치 등록을 지우는 것입니다. 이 두 명령이 정본 경로이며, 파일을 직접 지우는 것은 파생물만 건드립니다.
-
----
-
-### 룰 계열 디렉터리는 둘이고 쓰임이 다르다
-
-`templates/` 아래 룰 관련 자리가 둘이라 이름이 비슷합니다. 받는 쪽이 다릅니다.
-
-- `templates/rules.d/` — 룰 컴파일러가 읽어 워크스페이스 룰로 합치는 입력입니다.
-- `templates/rule-details.md` — `coding step`이 룰 제목 아래 얹는 세부 항목의 정본입니다. 룰 제목 자체는 `docs/PROJECT_RULE.md`가 정본입니다.
-
----
-
-## 스킬 사용 흐름
+## 설치와 노출
 
 ```bash
-# 설치 가능한 스킬 목록
 deuk-agent-flow skill list
-
-# 스킬 설치
-deuk-agent-flow skill add --skill <id>
-
-# 플랫폼에 노출 (Claude 등 native 플랫폼은 ~/.claude/skills 로 동기화)
-deuk-agent-flow skill expose --skill <id>
-
-# 노출 해제 / 제거 — 이 순서로 등록을 내린다
-deuk-agent-flow skill unexpose --skill <id>
-deuk-agent-flow skill remove --skill <id>
-
-# 사용자 편집용 fork (전역 사용자 디렉토리로 복사)
-deuk-agent-flow skill fork --skill <id>
-deuk-agent-flow skill edit --skill <id>   # fork 후 $EDITOR로 열기
+deuk-agent-flow skill add --skill safe-refactor
+deuk-agent-flow skill expose --platform codex --skill safe-refactor
+deuk-agent-flow skill lint
 ```
 
-**핵심 동작:**
-- 스킬 정본을 고친 뒤 native(`~/.claude/skills`)로 반영하려면, `dev:install`만으로는 부족하고 **다음 티켓 명령 한 번**이면 자동 동기화됩니다(티켓 명령 진입점의 auto-sync). 해시 비교라 내용이 같으면 건너뜁니다.
-- `bind: rules` 스킬은 rules 노드 출력에 함께 노출됩니다.
-- 스킬을 없앨 때는 위 두 명령으로 등록을 내립니다. 플랫폼 디렉터리의 파일만 지우면 다음 노출에서 다시 배포됩니다.
+- 플랫폼 = claude·codex·cursor·copilot·antigravity.
+- 설치 = 사용 가능 상태; 노출 = 특정 클라이언트에 전달하는 상태.
+- 해제 = `skill unexpose --platform codex --skill safe-refactor` 후 `skill remove --skill safe-refactor`.
+- 편집 = `skill fork`·`skill edit`; 패키지 정본과 사용자 소스 구분.
 
----
+## 소스와 배포
 
-## 페르소나 사용법 — `persona-maid`
-
-`persona-maid`는 응대 톤을 "서브컬처 메이드"로 바꾸는 페르소나 스킬입니다. **공식 배포에서는 기본 비활성(opt-in)** 이라 직접 설치해야 합니다.
-
-### 설치 & 활성화
-
-```bash
-deuk-agent-flow skill add --skill persona-maid
-deuk-agent-flow skill expose --skill persona-maid
-```
-
-설치 후 **다음 티켓 명령**이 실행되면 native 플랫폼(Claude 등)으로 자동 동기화되어 적용됩니다.
-
-### 동작 방식
-
-- **언어 자동 분기:** 사용자 메시지가 한국어면 KO 페르소나(호칭 "언니"), 영어면 EN 페르소나(호칭 "Onee-sama")가 적용됩니다.
-- **표현 다양성:** 하트·반짝·동물·카오모지 풀에서 매 답변마다 다른 항목을 골라 써 식상함을 막습니다.
-- **분석 모드 톤 유지:** 긴 기술 설명·표·코드 답변에서도 페르소나를 유지합니다. 단, **코드와 기술 분석의 정확성(파일:라인 근거)은 100% 유지**됩니다 — 톤만 바뀌고 품질은 그대로입니다.
-
-### 편집하기
-
-응대 톤·이모지 풀을 바꾸고 싶으면 정본 또는 fork를 편집합니다.
-
-```bash
-deuk-agent-flow skill fork --skill persona-maid   # 사용자 사본 생성
-deuk-agent-flow skill edit --skill persona-maid   # 편집기로 열기
-```
-
-> ⚠️ 정본(`templates/skills/persona-maid/SKILL.md`)이 갱신되면 다음 동기화 때 fork를 덮어쓸 수 있습니다(정본 우선). 영구 변경은 정본을 고쳐 배포하세요.
-
-### 해제
-
-```bash
-deuk-agent-flow skill unexpose --skill persona-maid   # 노출만 끄기
-deuk-agent-flow skill remove --skill persona-maid     # 완전 제거
-```
-
----
-
-## VS Code Flow UI
-
-> **v5.0 신규 (첫 배포)** — 사이드패널에서 티켓·스킬 워크플로를 제어합니다. 터미널 전환이 필요 없습니다.
-
-### 설치
-
-```bash
-cd /path/to/DeukAgentFlow
-npm run bundle:vscode
-npm run install:vscode
-```
-
-데스크톱 VS Code + VS Code Server에 번들 VSIX를 설치하고, 오래된 확장 폴더를 정리합니다.
-
-### 패널 구성
-
-패널 상단에 **워크스페이스** / **스킬** 탭이 있습니다.
-
----
-
-#### 워크스페이스 탭
-
-```
-┌─────────────────────────────────────────────┐
-│  DEUK AGENT FLOW                            │
-│  AgentFlow Panel           [⚙] [?]          │
-│  VSIX 5.0.2                                 │
-├──────────────┬──────────────────────────────┤
-│ 워크스페이스  │  스킬                         │
-├─────────────────────────────────────────────┤
-│  DeukPack · 7/528 tickets        [새로고침]  │
-│  ● DeukPack · ph2 · #915-idl-...           │
-│    IDLE    No command yet                   │
-├─────────────────────────────────────────────┤
-│  [● 열린 티켓]  [핸드오프]  [상태 변경]      │
-│  915-idl-idl-codegen-enum-import      ▾    │
-│  0개 선택    7 / 528 티켓                   │
-├─────────────────────────────────────────────┤
-│  ● 915-idl-...  ph2  p2  26/06/16 09:39   │
-│    906-csharp-emit-23          open  ...   │
-│    904-dppack-round-trip-pass  open  ...   │
-│    ...                                     │
-└─────────────────────────────────────────────┘
-```
-
-| 요소 | 설명 |
+| 계층 | 위치·역할 |
 |---|---|
-| `워크스페이스 · N/M tickets` | 현재 선택된 워크스페이스와 열린/전체 티켓 수 |
-| 활성 티켓 배지 (●) | 현재 `use` 중인 티켓 — phase·상태 한눈에 표시 |
-| `IDLE / No command yet` | 에이전트 명령 대기 상태 |
-| **열린 티켓** 버튼 | 상태 필터 토글 (열림/닫힘/전체) |
-| **핸드오프** 버튼 | 활성 티켓 컨텍스트를 클립보드로 복사해 AI 챗에 붙여넣기 |
-| **상태 변경** 버튼 | 티켓 phase·status 변경 다이얼로그 |
-| 티켓 카드 | `#id · ph · p · 날짜` 표시, 클릭 시 상세 미리보기 |
-| 하단 상태바 | `open · #id · ph2 · open · p2` — 현재 활성 티켓 요약 |
+| 패키지 소스 | `templates/skills/<id>/SKILL.md` |
+| 설치·노출 정본 | `~/.deuk/skills.json` |
+| 클라이언트 배포 | 클라이언트별 네이티브 스킬·포인터 |
 
----
+## 역할과 표현
 
-#### 스킬 탭
-
-```
-┌─────────────────────────────────────────────┐
-│  SKILLS  스킬 관리                    [↻]   │
-│  설치(+) 후 각 에이전트에 노출(ON/OFF)...    │
-├─────────┬────┬────────┬──────┬────────┬─────┤
-│  스킬   │설치│ claude │codex │copilot │anti │
-├─────────────────────────────────────────────┤
-│ ▼ maintenance                               │
-│  flow-ticket-clean  [✓] [ON] [OFF][OFF][OFF]│
-├─────────────────────────────────────────────┤
-│ ▼ persona (최대 1개)                        │
-│  persona-maid       [✓] [ON] [ON] [OFF][ON] │
-├─────────────────────────────────────────────┤
-│ ▼ memory                                    │
-│  context-recall     [✓] [ON] [ON] [OFF][ON] │
-├─────────────────────────────────────────────┤
-│ ▼ documentation                             │
-│  doc-sync           [✓] [ON] [ON] [OFF][ON] │
-├─────────────────────────────────────────────┤
-│ ▼ governance                                │
-│  rule-reload        [✓] [ON] [ON] [OFF][ON] │
-├─────────────────────────────────────────────┤
-│ ▼ guard                                     │
-│  ...                                        │
-└─────────────────────────────────────────────┘
-```
-
-| 열 | 설명 |
-|---|---|
-| **스킬** | 스킬 ID (클릭 시 미리보기, `edit=` 접두어로 편집 진입) |
-| **설치** | `[✓]` — 로컬 설치 여부 |
-| **claude / codex / copilot / antigravity** | 각 에이전트 플랫폼 노출 ON/OFF 토글 |
-
-**카테고리 규칙:**
-- `persona` 카테고리는 **최대 1개**만 동시 활성화 가능 (중복 경고)
-- `[✓]` 없이 ON 토글은 불가 — 먼저 `skill add`로 설치 필요
-- `[↻]` 버튼으로 목록 새로고침
-
----
-
-### 사용 팁
-
-- 워크스페이스를 바꾸면 패널이 해당 워크스페이스의 티켓만 보여줍니다.
-- 스킬 탭 ↔ 워크스페이스 탭 전환은 상태가 보존되며, 카운트는 active/total로 표기됩니다.
-- 스킬 ON/OFF는 UI에서 즉시 반영되지만, native 플랫폼(Claude 등) 동기화는 **다음 티켓 명령** 실행 시 자동 적용됩니다.
-
----
-
-## 참고
-
-- 스킬 아키텍처·우선순위: [architecture.ko.md](architecture.ko.md)
-- 전체 사용 가이드: [usage-guide.ko.md](usage-guide.ko.md)
-- 마이그레이션(홈 디렉토리 이동): [README.ko.md](../README.ko.md#-50-업그레이드--홈-디렉토리-마이그레이션)
+- Role = 현재 단계의 전문 관점·산출물 책임.
+- Persona = 대화의 어조·상황 반응·실수 후 회복 표현.
+- Persona를 코드·문서·검증 근거에 혼합하지 않음.
+- 득이 = 제품 캐릭터; persona-maid 설치·활성화와 독립.
+- [페르소나 설계](../architecture/persona-design.md) · [사용 가이드](usage-guide.ko.md).

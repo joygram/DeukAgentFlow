@@ -56,18 +56,6 @@ export const PHASE1_DESIGN_ENV_SECTIONS = [
   "Environment"
 ];
 
-export const REQUIRED_APC_MARKERS = [];
-
-const PHASE1_DATA_SECTIONS = [
-  "Plan",
-  "Analysis",
-  "Direction"
-];
-
-function dataSectionsForType(_type = "") {
-  return [...PHASE1_DATA_SECTIONS];
-}
-
 const FOLLOW_UP_DECISION_NO_FOLLOW_UP_PATTERNS = [
   /\bno[- ]follow[- ]up\b/i,
   /\bfollow[- ]up\s*:\s*none\b/i,
@@ -159,9 +147,6 @@ export function getPhase1PlanBodyReasons(body, _opts: CliOpts = {}) {
   });
 }
 
-export function phase1SectionsForType(_type = "") {
-  return [REQUIRED_PHASE1_SECTIONS[0], ...dataSectionsForType()];
-}
 
 export function getAnalysisDesignIncompleteReasons(meta, content) {
   const reasons = [];

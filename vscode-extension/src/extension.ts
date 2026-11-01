@@ -3,20 +3,6 @@ import { AgentFlowModel, AgentTarget } from './agentFlowModel';
 import { AgentFlowCommandCenter } from './agentFlowView';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const currentVersion: string = context.extension.packageJSON?.version ?? '';
-  const lastVersion = context.globalState.get<string>('lastVersion', '');
-  if (currentVersion && lastVersion && currentVersion !== lastVersion) {
-    void vscode.window.showInformationMessage(
-      `Deuk Agent Flow updated to v${currentVersion}`,
-      'What\'s New'
-    ).then((selection) => {
-      if (selection === 'What\'s New') {
-        void vscode.env.openExternal(vscode.Uri.parse('https://github.com/joygram/DeukAgentFlow/blob/master/CHANGELOG.md'));
-      }
-    });
-  }
-  void context.globalState.update('lastVersion', currentVersion);
-
   const agentFlowModel = new AgentFlowModel(context);
   const agentFlowView = new AgentFlowCommandCenter(context, agentFlowModel);
   void agentFlowModel.refresh().then(() => agentFlowView.broadcast());

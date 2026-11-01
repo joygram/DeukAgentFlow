@@ -1,5 +1,5 @@
 import { existsSync,readFileSync,writeFileSync } from "fs";
-import { localized,makePath,resolveWorkspaceTarget } from "./cli-utils.js";
+import { getProjectRulePath,localized,resolveWorkspaceTarget } from "./cli-utils.js";
 
 const RULE_TEXT = {
   stageRequired: { ko: "rule add: --stage 는 필수다 ({stages}, 쉼표로 여러 개).", en: "rule add: --stage is required ({stages}, comma-separated for multiple)." },
@@ -48,7 +48,7 @@ export function formatRuleLine(rule: RuleRecord): string {
 }
 
 export function projectRulePath(workspaceRoot: string): string {
-  return makePath(workspaceRoot, "docs", "PROJECT_RULE.md");
+  return getProjectRulePath(workspaceRoot);
 }
 
 export function readRules(workspaceRoot: string): RuleRecord[] {

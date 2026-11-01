@@ -49,7 +49,7 @@ docs/
 └── cli-surfaces/ ← CLI 출력 템플릿
 ```
 
-> `docs/PROJECT_RULE.md`의 `## Role-based Required Reading` 섹션이 있으면 역할별 필독 경로를 그대로 따른다.
+> `PROJECT_RULE.md`(루트)의 `## Role-based Required Reading` 섹션이 있으면 역할별 필독 경로를 그대로 따른다.
 
 #### 형식 사실 선수집 — Doc Oracle CLI
 실질 판단(어디로 통합할지·이게 진짜 오염인지)에 앞서, **기계가 결정적으로 뽑을 수 있는 형식 사실**은 CLI로 먼저 확보한다(CLI=형식, 스킬=실질). 이 스캔 결과는 네 판단의 **입력**이지 판정이 아니다 — CLI가 올린 후보 중 무엇이 진짜인지는 네가 문서를 실제로 읽고 판정한다(판정 주체 계약).

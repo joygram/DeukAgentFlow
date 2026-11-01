@@ -266,7 +266,7 @@ export function selectLocalizedTemplatePath(baseDir, templateName, docsLanguage 
 
 export function loadInitConfig(cwd, opts: CliOpts = {}) {
   const targets = [
-    getUserInitConfigPath()
+    getUserInitConfigPath(opts)
   ].filter(Boolean);
 
   for (const target of targets) {
@@ -531,10 +531,17 @@ export function hasWorkspaceMarker(candidatePath) {
   return existsSync(makePath(candidatePath, WORKSPACE_MARKER_FILE));
 }
 
+export const PROJECT_RULE_FILE = "PROJECT_RULE.md";
+
+// 프로젝트당 PROJECT_RULE.md는 워크스페이스 루트에 하나만 둔다.
+export function getProjectRulePath(workspaceRoot: string): string {
+  return makePath(workspaceRoot, PROJECT_RULE_FILE);
+}
+
 function hasLocalProjectBoundary(candidatePath) {
   return existsSync(makePath(candidatePath, ".git")) ||
     existsSync(makePath(candidatePath, "AGENTS.md")) ||
-    existsSync(makePath(candidatePath, "docs", "PROJECT_RULE.md"));
+    existsSync(getProjectRulePath(candidatePath));
 }
 
 function directProjectRoot(startDir) {

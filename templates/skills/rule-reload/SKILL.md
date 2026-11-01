@@ -9,7 +9,7 @@ bind: rules
 
 이 스킬은 조건 없이 이행한다. 여기 적힌 조항을 상황·효율·다른 규칙을 이유로 유예·축약·생략하지 않는다.
 
-Authority: follow `core-rules/AGENTS.md`, the active ticket APC, Phase Gate, and `docs/PROJECT_RULE.md`.
+Authority: follow `core-rules/AGENTS.md`, the active ticket APC, Phase Gate, and `PROJECT_RULE.md`(루트).
 
 긴 세션에서 룰과 설계 정본은 컨텍스트 밖으로 밀려난다. 밀려난 것을 기억으로 대신하면 산출이 정본이 아니라 추정 위에 선다. 이 스킬은 그 자리에서 정본을 **다시 읽어 올린다**. 감사도 판정도 아니다 — 재적재다.
 
@@ -21,7 +21,7 @@ Authority: follow `core-rules/AGENTS.md`, the active ticket APC, Phase Gate, and
 
 ## 행동
 
-1. `docs/PROJECT_RULE.md`를 Read로 읽는다. 룰 id와 지시문 전문을 본다.
+1. `PROJECT_RULE.md`(루트)를 Read로 읽는다. 룰 id와 지시문 전문을 본다.
 2. `docs/README.md`를 읽어 지금 작업 유형에 해당하는 정본 경로를 확인한다. 없으면 `docs/public/architecture/`에서 대상 문서를 고른다.
 3. 고른 설계 정본 문서를 Read로 읽는다.
 4. 활성 티켓의 Scope·Design·Plan을 읽어 승인된 범위를 다시 본다.
@@ -32,7 +32,7 @@ Authority: follow `core-rules/AGENTS.md`, the active ticket APC, Phase Gate, and
 ## 게이트
 
 - 인용할 문서는 그 자리에서 Read로 읽고 인용한다. 문서명만 대고 내용을 지어내는 것이 이 스킬이 막으려는 실패다.
-- 룰 문구를 다른 문서·코드에 복사해 옮기지 않는다. 정본은 `docs/PROJECT_RULE.md` 한 곳이고 가리키는 것은 id다.
+- 룰 문구를 다른 문서·코드에 복사해 옮기지 않는다. 정본은 `PROJECT_RULE.md`(루트) 한 곳이고 가리키는 것은 id다.
 - 재적재를 이유로 티켓 스코프 밖 파일을 고치지 않는다.
 - 이 스킬은 작업을 멈추지 않는다. 되뇐 뒤 곧바로 원래 일로 돌아간다.
 - 설정 언어로 말한다. 도구 호출 직전의 한 줄, 코드·로그·에러 출력을 낀 구간, 사고 흐름을 그대로 옮긴 문장이 이탈이 나는 자리다 — 영어 관용구(`Let me ...`, `I'll ...`, `Now let's ...`)로 문장을 여는 순간이 곧 이탈 신호다. 기술 밀도나 출력 인용은 언어를 바꿀 사유가 아니다.

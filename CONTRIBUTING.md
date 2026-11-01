@@ -44,38 +44,7 @@ npm publish --access public
 | Antigravity IDE | `~/.antigravity-ide/extensions` |
 | code-server | `~/.local/share/code-server/extensions` |
 
-### Custom targets
-
-To install to additional or different locations, create `~/.deuk/dev/install-targets.json`:
-
-```json
-{
-  "targets": [
-    {
-      "id": "my-vscode",
-      "label": "My VS Code",
-      "extensionsDir": "/path/to/my/extensions",
-      "condition": "always"
-    },
-    {
-      "id": "my-code-server",
-      "label": "My code-server",
-      "extensionsDir": "~/.local/share/my-code-server/extensions",
-      "condition": "dir-exists:~/.local/share/my-code-server"
-    }
-  ]
-}
-```
-
-**`condition` values:**
-
-| Value | Behavior |
-|-------|----------|
-| `always` | Always install to this target |
-| `windows-home` | Only on Windows (when `%USERPROFILE%` differs from `$HOME`) |
-| `dir-exists:<path>` | Only if the specified directory exists |
-
-> When `~/.deuk/dev/install-targets.json` exists, it **replaces** the default target list entirely.
+Target list lives in `scripts/install-vscode-vsix.ts` only. Edit it there to add a location.
 
 ---
 

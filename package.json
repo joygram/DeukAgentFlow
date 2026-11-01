@@ -1,6 +1,6 @@
 {
   "name": "deuk-agent-flow",
-  "version": "5.2.644",
+  "version": "5.2.659",
   "description": "Keep AI coding work from vanishing between chats: repo-owned tickets, scope, verification, and memory for AGENTS.md-powered agents.",
   "keywords": [
     "agents-md",
@@ -55,12 +55,10 @@
     "scripts/cli-init-instructions.ts",
     "scripts/cli-init-logic.ts",
     "scripts/cli-init-migrate.ts",
-    "scripts/cli-init-workspace.ts",
     "scripts/cli-integrity-commands.ts",
     "scripts/cli-locales.ts",
     "scripts/cli-persona-commands.ts",
     "scripts/cli-prompts.ts",
-    "scripts/cli-rule-compiler.ts",
     "scripts/cli-rule-registry.ts",
     "scripts/cli-skill-commands.ts",
     "scripts/cli-telemetry-commands.ts",
@@ -86,7 +84,6 @@
     "scripts/lint-rules.ts",
     "scripts/markdown-headings.ts",
     "scripts/markdown-prose-spans.ts",
-    "scripts/merge-logic.ts",
     "scripts/persona-journal-db.ts",
     "scripts/persona-verbosity-attempts.ts",
     "scripts/persona-vocab-db.ts",
@@ -143,10 +140,7 @@
     "node": ">=20"
   },
   "bin": {
-    "deuk-agent-flow": "bin/deuk-agent-flow.js",
-    "deukagentflow": "bin/deuk-agent-flow.js",
-    "deuk-agent-rule": "bin/deuk-agent-rule.js",
-    "deukagentrule": "bin/deuk-agent-rule.js"
+    "deuk-agent-flow": "bin/deuk-agent-flow.js"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

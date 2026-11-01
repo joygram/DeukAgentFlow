@@ -32,10 +32,6 @@ export function splitTicketDocMetaSection(content = "") {
   return { body, docmetaRaw, docmeta };
 }
 
-/** @deprecated #811 front-matter 미러 폐지. 항상 빈 객체를 반환한다(미러를 새로 쓰지 않음). */
-export function buildDocMetaFrontmatterSummary(_docmeta = null) {
-  return {};
-}
 
 /** 과거 티켓 front-matter에 남은 docmeta* 미러 잔재를 제거한다(정본=본문 DocMeta로 수렴). */
 export function clearDocMetaFrontmatterSummary(meta: Record<string, any> = {}) {

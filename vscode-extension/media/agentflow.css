@@ -1,27 +1,29 @@
 :root {
-  color-scheme: light dark;
   --bg: var(--vscode-sideBar-background);
-  --panel: color-mix(in srgb, var(--vscode-editor-background) 88%, transparent);
+  --panel: var(--vscode-sideBar-background);
   --muted: var(--vscode-descriptionForeground);
   --text: var(--vscode-foreground);
-  --border: color-mix(in srgb, var(--vscode-editorWidget-border) 72%, transparent);
-  --accent: var(--vscode-button-background);
-  --accentText: var(--vscode-button-foreground);
-  --good: color-mix(in srgb, var(--vscode-charts-green) 84%, var(--vscode-editor-background));
-  --warn: color-mix(in srgb, var(--vscode-charts-orange) 84%, var(--vscode-editor-background));
-  --bad: color-mix(in srgb, var(--vscode-charts-red) 84%, var(--vscode-editor-background));
-  --chip: color-mix(in srgb, var(--vscode-toolbar-hoverBackground) 85%, transparent);
-  --shadow: 0 18px 48px rgba(0, 0, 0, .18);
+  --border: var(--vscode-contrastBorder, var(--vscode-widget-border, var(--vscode-sideBarSectionHeader-border, transparent)));
+  --accent: var(--vscode-foreground);
+  --accentBg: var(--vscode-button-secondaryBackground);
+  --accentText: var(--vscode-button-secondaryForeground);
+  --good: var(--vscode-testing-iconPassed);
+  --warn: var(--vscode-editorWarning-foreground);
+  --bad: var(--vscode-errorForeground);
+  --chip: var(--vscode-button-secondaryBackground);
+  --shadow: 0 8px 24px var(--vscode-widget-shadow);
 }
+body.vscode-light, body.vscode-high-contrast-light { color-scheme: light; }
+body.vscode-dark, body.vscode-high-contrast { color-scheme: dark; }
+
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, #0f172a 4%), var(--bg)),
-    repeating-linear-gradient(135deg, transparent 0 22px, color-mix(in srgb, var(--border) 22%, transparent) 22px 23px);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
 }
 body {
   box-sizing: border-box;
@@ -45,6 +47,8 @@ body {
 .brand img {
   width: 24px;
   height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 .eyebrow {
   font-size: 11px;
@@ -127,9 +131,9 @@ h1 {
 .card {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  background: var(--panel);
   padding: 8px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .10);
+  box-shadow: none;
 }
 .card h2 {
   margin: 0 0 10px 0;
@@ -177,7 +181,7 @@ h1 {
   border: 1px solid var(--border);
   font-size: 12px;
 }
-.pill.ok { border-color: color-mix(in srgb, var(--good) 60%, var(--border)); }
+.pill.ok { border-color: var(--border); }
 .pill.warn { border-color: color-mix(in srgb, var(--warn) 60%, var(--border)); }
 .pill.bad { border-color: color-mix(in srgb, var(--bad) 60%, var(--border)); }
 /* #650: status 카드 상단 flowLine — 📦 워크스페이스 · 단계 · #티켓 */
@@ -245,19 +249,18 @@ h1 {
 .ticket-toolbar .active-chip {
   color: var(--accent);
   font-weight: 600;
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-color: var(--border);
 }
 .ticket-toolbar .lit-control {
   color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-  background: color-mix(in srgb, var(--accent) 16%, var(--chip));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+  border-color: var(--border);
+  background: var(--vscode-button-secondaryBackground);
 }
 .filter-control:has(.lit-control) .filter-icon {
-  color: var(--accentText);
-  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
-  background: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+  border-color: var(--border);
+  background: transparent;
+  box-shadow: none;
 }
 .ticket-toolbar .chip,
 .ticket-preview .meta .pill {
@@ -289,8 +292,8 @@ h1 {
 }
 .ticket-toolbar .selection-chip.active {
   color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-  background: color-mix(in srgb, var(--accent) 14%, var(--chip));
+  border-color: var(--border);
+  background: var(--chip);
 }
 .ticket-list {
   display: grid;
@@ -330,8 +333,8 @@ h1 {
   inline-size: 6px;
   block-size: 6px;
   border-radius: 999px;
-  background: var(--good);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 18%, transparent);
+  background: var(--text);
+  box-shadow: none;
   opacity: 0;
 }
 .ticket-item.active .ticket-active-dot {
@@ -562,7 +565,7 @@ body:not(.settings-open) .global-config {
   align-items: center;
   padding: 8px 10px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--vscode-editorWidget-background, var(--panel)) 88%, var(--chip));
+  background: var(--vscode-editorWidget-background);
   border: 1px solid var(--border);
 }
 .settings-row-name {
@@ -643,12 +646,12 @@ button {
   font: inherit;
   font-size: 11px;
   color: var(--accentText);
-  background: var(--accent);
+  background: var(--accentBg);
   cursor: pointer;
 }
 button.secondary {
-  color: var(--text);
-  background: color-mix(in srgb, var(--chip) 80%, transparent);
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
   border: 1px solid var(--border);
 }
 button.ghost {
@@ -666,8 +669,8 @@ select {
   box-sizing: border-box;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 90%, transparent);
-  color: var(--text);
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
   font: inherit;
   font-size: 12px;
   padding: 7px 9px;
@@ -684,8 +687,8 @@ textarea {
   box-sizing: border-box;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  color: var(--text);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
   padding: 8px 9px;
   font: inherit;
   font-size: 12px;
@@ -716,7 +719,7 @@ textarea {
   display: block;
   height: 100%;
   width: 72%;
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, white));
+  background: var(--muted);
 }
 @media (max-width: 900px) {
   .ticket, .actions, .chat, .session {
@@ -777,8 +780,8 @@ textarea {
   color: var(--accent);
   font-weight: 700;
   background: var(--panel);
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-  border-bottom: 1px solid var(--panel);
+  border-color: var(--border);
+  border-bottom: 2px solid var(--text);
 }
 body:not([data-tab="skill"]) .tab-panel[data-tab="skill"] { display: none; }
 body[data-tab="skill"] .tab-panel[data-tab="workspace"] { display: none; }
@@ -889,21 +892,21 @@ body[data-tab="skill"] .card.skills {
 .skills-table td.skill-name { text-align: left; white-space: nowrap; }
 .skills-empty, .tickets-empty { color: var(--muted); text-align: center; padding: 8px; }
 .tickets-empty-cta { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 12px; }
-.tickets-empty-cta .tickets-empty-title { color: var(--fg); font-weight: 600; }
+.tickets-empty-cta .tickets-empty-title { color: var(--text); font-weight: 600; }
 .tickets-empty-cta .tickets-empty-hint { color: var(--muted); font-size: 12px; line-height: 1.4; }
 .create-ticket-cta {
   cursor: pointer; border: 1px solid var(--border); border-radius: 6px;
   padding: 6px 14px; margin-top: 2px; font-weight: 600;
-  background: var(--accent, #4a8cff); color: #fff;
+  background: var(--accentBg); color: var(--accentText);
 }
-.create-ticket-cta:hover { filter: brightness(1.08); }
+.create-ticket-cta:hover { background: var(--vscode-button-secondaryHoverBackground); }
 .skill-toggle, .skill-install {
   cursor: pointer; border: 1px solid var(--border); border-radius: 5px;
   background: var(--chip); color: var(--text); font-size: 10px; padding: 1px 6px; min-inline-size: 30px;
 }
-.skill-toggle.on, .skill-install.on { background: var(--accent); color: var(--accentText); border-color: var(--accent); }
+.skill-toggle.on, .skill-install.on { background: var(--chip); color: var(--text); border-color: var(--muted); font-weight: 700; }
 .skill-toggle[disabled] { opacity: .4; cursor: not-allowed; }
-.skills-table td.skill-preview-trigger { cursor: pointer; color: var(--accent); font-weight: 600; }
+.skills-table td.skill-preview-trigger { cursor: pointer; color: var(--text); font-weight: 600; }
 .skills-table td.skill-preview-trigger:hover { text-decoration: underline; }
 .skills-table tr.skill-row-active td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .skill-preview-panel .skill-preview-summary {
@@ -912,4 +915,51 @@ body[data-tab="skill"] .card.skills {
   line-height: 1.5;
   font-weight: 600;
 }
-.skill-preview-panel .pill.ok { border-color: color-mix(in srgb, var(--good) 60%, var(--border)); }
+.skill-preview-panel .pill.ok { border-color: var(--border); }
+
+/* Native theme pairs keep interaction states consistent across themes. */
+button:not(.secondary):not(.ghost):not(.tab-button):not(.skill-toggle):not(.skill-install):hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+button.secondary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
+button.ghost:hover:not(:disabled), .tab-button:hover:not(.active), .ticket-item:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground);
+}
+.ticket-item.preview, .ticket-item.selected {
+  background: var(--chip);
+  color: var(--text);
+  border-color: var(--muted);
+  box-shadow: inset 2px 0 0 var(--text);
+}
+.ticket-item.preview [class^="ticket-"], .ticket-item.selected [class^="ticket-"] { color: inherit; }
+.skill-toggle.on, .skill-install.on { background: var(--accentBg); }
+button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible,
+summary:focus-visible, [tabindex]:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+input[type="text"], input[type="search"] {
+  box-sizing: border-box;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--border));
+  padding: 6px 8px;
+  font: inherit;
+}
+input[type="checkbox"] { accent-color: var(--vscode-checkbox-background); }
+button:disabled, select:disabled {
+  color: var(--vscode-disabledForeground);
+  opacity: 1;
+}
+body.vscode-high-contrast .card, body.vscode-high-contrast-light .card,
+body.vscode-high-contrast .ticket-item, body.vscode-high-contrast-light .ticket-item,
+body.vscode-high-contrast button, body.vscode-high-contrast-light button {
+  border: 1px solid var(--vscode-contrastBorder);
+}
+body.vscode-high-contrast .ticket-item.selected, body.vscode-high-contrast-light .ticket-item.selected {
+  border-color: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-loading-bar, .skills-loading-bar { animation: none; }
+}

@@ -1,8 +1,9 @@
 
 import { createHash,randomUUID } from "crypto";
 import { copyFileSync,existsSync,mkdirSync,readFileSync,readdirSync,renameSync,rmSync,statSync,writeFileSync } from "fs";
+import { dirname } from "path";
 import { collectTicketMarkdownFiles } from "./cli-ticket-scan.js";
-import { CliOpts,DEUK_ROOT_DIR,LEGACY_DEUK,TICKET_SUBDIR,WORKSPACE_MARKER_FILE,basenameAnyOS,hasWorkspaceMarker,isHomeDirectChild,makePath,normalizeRegistryPath,readJsonFile,registerTicketHomeModule,resolveUserHome } from "./cli-utils.js";
+import { CliOpts,DEUK_ROOT_DIR,LEGACY_DEUK,TICKET_SUBDIR,WORKSPACE_MARKER_FILE,PROJECT_RULE_FILE,basenameAnyOS,getProjectRulePath,getSiblingWorkspaceRegistryRoot,hasWorkspaceMarker,isHomeDirectChild,makePath,normalizeRegistryPath,readJsonFile,registerTicketHomeModule,resolveUserHome } from "./cli-utils.js";
 
 const WORKSPACE_ID_FILE = "workspace-id";
 
@@ -80,6 +81,8 @@ function moveFile(src, dest) {
   }
 }
 
+// Moves srcDir contents into destDir without overwriting. A conflicting file stays in srcDir,
+// and srcDir is removed only once empty, so nothing is ever deleted.
 function moveTreeInto(srcDir, destDir) {
   mkdirSync(destDir, { recursive: true });
   for (const ent of readdirSync(srcDir, { withFileTypes: true })) {
@@ -87,50 +90,48 @@ function moveTreeInto(srcDir, destDir) {
     const dest = makePath(destDir, ent.name);
     if (ent.isDirectory()) {
       moveTreeInto(src, dest);
-    } else {
-      if (!existsSync(dest)) moveFile(src, dest);
-      else rmSync(src, { force: true });
+    } else if (!existsSync(dest)) {
+      moveFile(src, dest);
     }
   }
-  rmSync(srcDir, { recursive: true, force: true });
+  if (readdirSync(srcDir).length === 0) rmSync(srcDir, { recursive: true, force: true });
+}
+
+// Moves only tickets/ into the home store. PROJECT_RULE.md stays in the repo at its root;
+// other entries (knowledge, docs, ...) are left in place. agentDir is removed only once empty.
+function absorbAgentDir(agentDir, homeDir, workspaceRoot) {
+  const ticketsDir = makePath(agentDir, TICKET_SUBDIR);
+  if (existsSync(ticketsDir) && statSync(ticketsDir).isDirectory()) {
+    moveTreeInto(ticketsDir, homeDir);
+  }
+  const legacyProjectRule = makePath(agentDir, PROJECT_RULE_FILE);
+  const repoProjectRule = getProjectRulePath(workspaceRoot);
+  if (existsSync(legacyProjectRule) && !existsSync(repoProjectRule)) {
+    moveFile(legacyProjectRule, repoProjectRule);
+  }
+  if (readdirSync(agentDir).length === 0) rmSync(agentDir, { recursive: true, force: true });
 }
 
 function absorbWorkspaceResidue(workspaceRoot, homeDir, opts: CliOpts = {}) {
   let absorbed = false;
-
-  const legacyDir = makePath(workspaceRoot, LEGACY_DEUK.rootDir);
-  try {
-    if (existsSync(legacyDir) && statSync(legacyDir).isDirectory()) {
-      absorbed = true;
-      if (!opts.dryRun) {
-        const legacyTickets = makePath(legacyDir, TICKET_SUBDIR);
-        try {
-          if (existsSync(legacyTickets) && statSync(legacyTickets).isDirectory()) {
-            moveTreeInto(legacyTickets, homeDir);
-          }
-        } catch { /* tolerate; dir removed next regardless */ }
-        rmSync(legacyDir, { recursive: true, force: true });
-      }
-    }
-  } catch { /* not a dir / inaccessible — skip */ }
-
-  const bugDir = makePath(workspaceRoot, DEUK_ROOT_DIR);
-  try {
-    if (existsSync(bugDir) && statSync(bugDir).isDirectory()) {
-      absorbed = true;
-      if (!opts.dryRun) rmSync(bugDir, { recursive: true, force: true });
-    }
-  } catch { /* not a dir / inaccessible — skip */ }
-
+  for (const agentDirName of [LEGACY_DEUK.rootDir, DEUK_ROOT_DIR]) {
+    const agentDir = makePath(workspaceRoot, agentDirName);
+    try {
+      if (!existsSync(agentDir) || !statSync(agentDir).isDirectory()) continue;
+    } catch { continue; } // inaccessible — skip
+    absorbed = true;
+    if (!opts.dryRun) absorbAgentDir(agentDir, homeDir, workspaceRoot);
+  }
   return absorbed;
 }
 
 export function isHomeStoreRoot(workspaceRoot, opts: CliOpts = {}) {
   const home = normalizeRegistryPath(resolveUserHome(opts));
   const root = normalizeRegistryPath(workspaceRoot);
-  if (root === home) return true;
+  if (root === home || dirname(root) === root) return true;
   const store = normalizeRegistryPath(makePath([resolveUserHome(opts), DEUK_ROOT_DIR], opts));
-  return root === store || store.startsWith(root + "/") || root.startsWith(store + "/");
+  const isUnder = (child, parent) => child.startsWith(parent + "/") || child.startsWith(parent + "\\");
+  return root === store || isUnder(store, root) || isUnder(root, store);
 }
 
 const WORKSPACE_META_FILE = "workspace.json";
@@ -214,6 +215,42 @@ export function ensureWorkspaceMigrated(workspaceRoot, opts: CliOpts = {}) {
   if (!workspaceRoot) return { skipped: true };
   if (isHomeStoreRoot(workspaceRoot, opts)) return { skipped: true };
   return reconcileWorkspace(workspaceRoot, opts);
+}
+
+function isWorkspaceInHomeStore(workspaceRoot, opts: CliOpts = {}) {
+  const id = readWorkspaceId(workspaceRoot);
+  return Boolean(id) && existsSync(makePath(resolveHomeTicketDir(id, opts), WORKSPACE_META_FILE));
+}
+
+// Moves every workspace known to the legacy sibling registry (~/.agent-flow/workspace)
+// into the home ticket store so registry-backed resolution can find it.
+export function migrateLegacyRegistryWorkspaces(opts: CliOpts = {}) {
+  const migratedRoots: string[] = [];
+  const legacyRegistryRoot = getSiblingWorkspaceRegistryRoot(resolveUserHome(opts));
+  if (!existsSync(legacyRegistryRoot)) return migratedRoots;
+  for (const groupEnt of readdirSync(legacyRegistryRoot, { withFileTypes: true })) {
+    if (!groupEnt.isDirectory()) continue;
+    const groupDir = makePath(legacyRegistryRoot, groupEnt.name);
+    for (const recordEnt of readdirSync(groupDir, { withFileTypes: true })) {
+      if (!recordEnt.isFile() || !recordEnt.name.endsWith(".json")) continue;
+      const record = readJsonFile(makePath(groupDir, recordEnt.name), null);
+      const workspaceRoot = normalizeRegistryPath(String(record?.path || ""));
+      if (!workspaceRoot || !existsSync(workspaceRoot)) continue;
+      const hasLegacyAgentDir = existsSync(makePath(workspaceRoot, LEGACY_DEUK.rootDir));
+      if (!hasLegacyAgentDir && !hasWorkspaceMarker(workspaceRoot)) continue;
+      if (isHomeStoreRoot(workspaceRoot, opts) || isHomeDirectChild(workspaceRoot, opts)) continue;
+      const hasLegacyTickets = existsSync(makePath(workspaceRoot, LEGACY_DEUK.rootDir, TICKET_SUBDIR));
+      if (isWorkspaceInHomeStore(workspaceRoot, opts) && !hasLegacyTickets) continue;
+      try {
+        // A legacy registry record is an explicit registration, so the id marker may be created.
+        const reconciled = reconcileWorkspace(workspaceRoot, { ...opts, allowCreate: true });
+        if (!reconciled.skipped) migratedRoots.push(workspaceRoot);
+      } catch (err) {
+        console.warn(`[migrate] ${workspaceRoot}: ${(err as Error).message}`);
+      }
+    }
+  }
+  return migratedRoots;
 }
 
 const GHOST_SUFFIX_RE = /-[0-9a-f]{8}$/;

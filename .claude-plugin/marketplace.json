@@ -1,0 +1,8 @@
+{
+  "name": "deuk-family",
+  "owner": { "name": "joygram" },
+  "description": "Deuk family plugins for guarded, verified AI coding workflows.",
+  "plugins": [
+    { "name": "deuk-agent-flow", "source": "./marketplace/claude" }
+  ]
+}

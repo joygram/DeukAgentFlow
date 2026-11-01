@@ -1,0 +1,11 @@
+{
+  "name": "deuk-agent-flow",
+  "displayName": "Deuk Agent Flow",
+  "version": "0.1.0",
+  "description": "Ticket-based guardrails for coding agents: approved scope, verification evidence and handoff shared across Claude Code, Codex, Cursor and Copilot.",
+  "author": { "name": "joygram" },
+  "homepage": "https://github.com/joygram/DeukAgentFlow",
+  "repository": "https://github.com/joygram/DeukAgentFlow",
+  "license": "Apache-2.0",
+  "keywords": ["guardrails", "workflow", "ticket", "verification", "coding-agent"]
+}

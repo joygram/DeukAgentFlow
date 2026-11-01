@@ -1,238 +1,68 @@
-# Skill System & Flow UI Guide (v5.0)
+<!-- Generated from docs/assets/publication-docs.json -->
+# Skills, roles and persona
 
-**한국어:** [skills-guide.ko.md](skills-guide.ko.md)
+## What skills do
 
-How to use the v5.0 skill system and the VS Code Flow UI. Skills layer modular behavior contracts onto the agent; the persona skill (`persona-maid`) is one such skill that changes the reply tone.
+- Skill = a `SKILL.md` playbook containing procedures and checks for recurring work.
+- Application = select relevant skills, read them, apply criteria and verify actual results.
+- Targets = guessing, overengineering, editing generated files and documentation drift.
+- Effectiveness depends on task and project fit; more skills do not imply better performance.
 
-> **v5.0 architecture direction:** This release is a major overhaul centered on **Claude**. Other agent platforms (Codex, Copilot, Antigravity) are being incrementally reinforced and their support will expand over time.
+## Representative skills
 
----
-
-## What a skill is
-
-A skill is a behavior module defined by a single file, `templates/skills/<id>/SKILL.md`. Its frontmatter drives the behavior.
-
-| Field | Meaning |
+| Skill | Behavioral criterion |
 |---|---|
-| `name` | Skill ID (kebab-case) |
-| `category` | Grouping (used for conflict warnings) |
-| `bind` | Node area where it activates. `rules` → applied at the rules node; empty → area-agnostic (always) |
-| `system` | `true` → auto-installed + exposed on init (required system skill). Absent → manual (opt-in) |
+| safe-refactor | Small scope and necessary checks |
+| generated-file-guard | Edit the source of generated files |
+| doc-sync | Reconcile documents with design |
+| rule-reload | Reread current rules and design |
+| persona-maid | Optional conversational character |
 
-**The SSOT is the package `templates/skills/`.** Users fork to edit, but when the source is updated it wins over the fork so package updates propagate.
+## When the agent gets lost
 
-### Deployment has three layers and the registry is the source
-
-A skill passes through three layers before it reaches an agent. Each layer holds something different, and only one of them is the source.
-
-| Layer | Location | What it holds |
+| Symptom | Skill or command | Ask |
 |---|---|---|
-| **Origin** | `templates/skills/<id>/SKILL.md` | The canonical material deployment is built from |
-| **Registry** | `~/.deuk/skills.json` | The **source** of what is installed and exposed |
-| **Platform** | `~/.claude/skills/` and friends | Derivatives the registry produced |
+| Forgets rules or design, starts guessing | rule-reload | “Reload the rules and continue” |
+| Unsure of current ticket or stage | ticket-status-surface · `ticket status` | “Show the current ticket status” |
+| Repeats a failure or forgets past decisions | context-recall | “Check how earlier tickets handled this” |
+| Tone turns stiff or language drifts | persona-maid | “Reload the persona” |
+| Right after context compaction or resume | `deuk-agent-flow rules` | “Run rules again first” |
 
-```
-origin       ->  registry          ->  platform directory
-(material)       (source: entries)     (derivative: deployed copy)
-```
+## Using the core skills
 
-| Step | Meaning | Flow UI |
-|---|---|---|
-| **Install** | Record an install entry in the registry | `[✓]` checkmark |
-| **Expose ON** | Record an expose entry and deploy to the platform | `[ON]` toggle |
-| **Expose OFF** | Drop the entry and reclaim the deployed copy | `[OFF]` toggle |
+- Invocation = slash command in Claude Code such as `/rule-reload`; elsewhere, name the skill in the request.
+- rule-reload = rereads `PROJECT_RULE.md`, design canon and ticket scope → three-line recap → resumes work.
+- persona-maid = valid for the response that invoked it; invoke again after tool work or a role change.
+- Honorific = `deuk-agent-flow persona config set honorific --lang en --value "<name>"`.
+- context-recall = read local sources and tickets first, then past tickets and rules; results are evidence only.
+- ticket-status-surface = reports ticket state as one line with workspace, status and link.
 
-Platforms (`claude / codex / copilot / antigravity`) are registered **individually**, so you can apply a skill to only specific agents for fine-grained control.
-
-**Files in a platform directory are derivatives.** While the entry remains in the registry, deleting those files only means they are deployed again from the origin at the next expose. A skill that keeps coming back is a sign that what you deleted was a derivative.
-
-**Removal starts from the entry.** Run `skill unexpose` to drop the expose entry, then `skill remove` to drop the install entry. These two commands are the canonical path; deleting files by hand reaches only the derivative.
-
----
-
-### The two rule directories serve different readers
-
-`templates/` holds two rule-related locations whose names look alike. They are read by different consumers.
-
-- `templates/rules.d/` — input the rule compiler reads and merges into workspace rules.
-- `templates/rule-details.md` — the canon for the detail items `coding step` places under a rule title. The rule titles themselves are canon in `docs/PROJECT_RULE.md`.
-
----
-
-## Skill usage flow
+## Install and expose
 
 ```bash
-# List installable skills
 deuk-agent-flow skill list
-
-# Install a skill
-deuk-agent-flow skill add --skill <id>
-
-# Expose to platforms (native platforms like Claude sync to ~/.claude/skills)
-deuk-agent-flow skill expose --skill <id>
-
-# Unexpose / remove — drop the entries in this order
-deuk-agent-flow skill unexpose --skill <id>
-deuk-agent-flow skill remove --skill <id>
-
-# Fork for user editing (copies into the global user dir)
-deuk-agent-flow skill fork --skill <id>
-deuk-agent-flow skill edit --skill <id>   # fork then open in $EDITOR
+deuk-agent-flow skill add --skill safe-refactor
+deuk-agent-flow skill expose --platform codex --skill safe-refactor
+deuk-agent-flow skill lint
 ```
 
-**Key behavior:**
-- After editing a skill source, `dev:install` alone does **not** propagate to native (`~/.claude/skills`); the **next ticket command** triggers the auto-sync at the ticket-command entry point. It hash-compares, so unchanged content is skipped.
-- A `bind: rules` skill is surfaced together with the rules-node output.
-- To drop a skill, run the two commands above so the entries come down. Deleting only the platform-directory files means the skill is deployed again at the next expose.
+- Platforms = claude, codex, cursor, copilot, antigravity.
+- Installation = availability; exposure = delivery to a particular client.
+- Removal = `skill unexpose --platform codex --skill safe-refactor`, then `skill remove --skill safe-refactor`.
+- Customization = `skill fork` and `skill edit`; distinguish package and user sources.
 
----
+## Source and deployment
 
-## Using the persona — `persona-maid`
-
-`persona-maid` switches the reply tone to a "subculture maid" persona. It is **disabled by default (opt-in)** in the official release, so you install it explicitly.
-
-### Install & activate
-
-```bash
-deuk-agent-flow skill add --skill persona-maid
-deuk-agent-flow skill expose --skill persona-maid
-```
-
-After install, the **next ticket command** auto-syncs it to native platforms (Claude, etc.) and it takes effect.
-
-### How it works
-
-- **Automatic language branching:** Korean user messages get the KO persona (addresses you as "언니"); English messages get the EN persona (addresses you as "Onee-sama").
-- **Expression variety:** it rotates through hearts / sparkles / animals / kaomoji pools, picking different items each reply to avoid staleness.
-- **Analysis-mode tone:** the persona is kept even through long technical explanations, tables, and code. Crucially, **code and technical accuracy (file:line evidence) stays 100% intact** — only the tone changes, not the quality.
-
-### Editing
-
-To change the tone or emoji pool, edit the source or your fork.
-
-```bash
-deuk-agent-flow skill fork --skill persona-maid   # create a user copy
-deuk-agent-flow skill edit --skill persona-maid   # open in editor
-```
-
-> ⚠️ When the source (`templates/skills/persona-maid/SKILL.md`) is updated, the next sync may overwrite your fork (source wins). For permanent changes, edit the source and redeploy.
-
-### Disable
-
-```bash
-deuk-agent-flow skill unexpose --skill persona-maid   # turn off exposure only
-deuk-agent-flow skill remove --skill persona-maid     # remove completely
-```
-
----
-
-## VS Code Flow UI
-
-> **New in v5.0 (first release)** — control the ticket and skill workflow from the sidebar. No terminal switching.
-
-### Install
-
-```bash
-cd /path/to/DeukAgentFlow
-npm run bundle:vscode
-npm run install:vscode
-```
-
-Installs the bundled VSIX to both desktop VS Code and VS Code Server, pruning older extension folders.
-
-### Panel layout
-
-The panel has **Workspace** and **Skill** tabs at the top.
-
----
-
-#### Workspace tab
-
-```
-┌─────────────────────────────────────────────┐
-│  DEUK AGENT FLOW                            │
-│  AgentFlow Panel           [⚙] [?]          │
-│  VSIX 5.0.2                                 │
-├──────────────┬──────────────────────────────┤
-│  Workspace   │  Skills                      │
-├─────────────────────────────────────────────┤
-│  DeukPack · 7/528 tickets        [Refresh]  │
-│  ● DeukPack · ph2 · #915-idl-...           │
-│    IDLE    No command yet                   │
-├─────────────────────────────────────────────┤
-│  [● Open tickets]  [Handoff]  [Change status]│
-│  915-idl-idl-codegen-enum-import      ▾    │
-│  0 selected    7 / 528 tickets              │
-├─────────────────────────────────────────────┤
-│  ● 915-idl-...  ph2  p2  26/06/16 09:39   │
-│    906-csharp-emit-23          open  ...   │
-│    904-dppack-round-trip-pass  open  ...   │
-│    ...                                     │
-└─────────────────────────────────────────────┘
-```
-
-| Element | Description |
+| Layer | Location and responsibility |
 |---|---|
-| `Workspace · N/M tickets` | Currently selected workspace and open/total ticket count |
-| Active ticket badge (●) | Ticket currently `use`d — phase and status at a glance |
-| `IDLE / No command yet` | Agent command waiting state |
-| **Open tickets** button | Status filter toggle (open / closed / all) |
-| **Handoff** button | Copy active ticket context to clipboard for AI chat |
-| **Change status** button | Dialog to change ticket phase/status |
-| Ticket card | Shows `#id · ph · p · date`; click for detailed preview |
-| Bottom status bar | `open · #id · ph2 · open · p2` — active ticket summary |
+| Package source | `templates/skills/<id>/SKILL.md` |
+| Installation/exposure authority | `~/.deuk/skills.json` |
+| Client deployment | Native skills or pointers for each client |
 
----
+## Roles and expression
 
-#### Skill tab
-
-```
-┌─────────────────────────────────────────────┐
-│  SKILLS  Skill Management             [↻]   │
-│  Install(+) then toggle ON/OFF per agent... │
-├─────────┬────┬────────┬──────┬────────┬─────┤
-│  Skill  │inst│ claude │codex │copilot │anti │
-├─────────────────────────────────────────────┤
-│ ▼ maintenance                               │
-│  flow-ticket-clean  [✓] [ON] [OFF][OFF][OFF]│
-├─────────────────────────────────────────────┤
-│ ▼ persona (max 1)                           │
-│  persona-maid       [✓] [ON] [ON] [OFF][ON] │
-├─────────────────────────────────────────────┤
-│ ▼ memory                                    │
-│  context-recall     [✓] [ON] [ON] [OFF][ON] │
-├─────────────────────────────────────────────┤
-│ ▼ documentation                             │
-│  doc-sync           [✓] [ON] [ON] [OFF][ON] │
-├─────────────────────────────────────────────┤
-│ ▼ governance                                │
-│  rule-reload        [✓] [ON] [ON] [OFF][ON] │
-└─────────────────────────────────────────────┘
-```
-
-| Column | Description |
-|---|---|
-| **Skill** | Skill ID (click to preview; prefix `edit=` to open for editing) |
-| **inst** | `[✓]` — installed locally |
-| **claude / codex / copilot / antigravity** | Per-platform expose ON/OFF toggle |
-
-**Category rules:**
-- The `persona` category allows **at most 1** active at a time (conflict warning if violated)
-- `[ON]` without `[✓]` is not allowed — run `skill add` first
-- `[↻]` button refreshes the list
-
----
-
-### Tips
-
-- Switching workspaces shows only that workspace's tickets.
-- Switching between the skill and workspace tabs preserves state; counts are shown as active/total.
-- Skill ON/OFF toggles take effect immediately in the UI, but native platform sync (Claude, etc.) happens automatically on the **next ticket command**.
-
----
-
-## See also
-
-- Skill architecture & precedence: [architecture.md](architecture.md)
-- Full usage guide: [usage-guide.ko.md](usage-guide.ko.md)
-- Migration (home directory move): [README.md](../README.md#-upgrading-to-50--home-directory-migration)
+- Role = expertise and artifact responsibility appropriate to the current stage.
+- Persona = conversational tone, situational response and recovery after mistakes.
+- Keep persona expression out of code, documents and verification evidence.
+- Deuki = product mascot; independent of persona-maid installation or activation.
+- [Persona design](../architecture/persona-design.md) · [Usage guide](usage-guide.md).

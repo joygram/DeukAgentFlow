@@ -1,13 +1,13 @@
 import { parseHeadingAtDepth } from "./markdown-headings.js";
 import { existsSync,mkdirSync,readFileSync,writeFileSync } from "fs";
-import { marked } from "marked";
 import { dirname } from "path";
 import { CliOpts,loadInitConfig,localized,makePath,resolveDocsLanguage,resolvePackageRoot,resolveUserHome } from "./cli-utils.js";
 import { absorbJournalEntry,deleteAbsorbedJournalEntries,listJournalEntries,upsertPendingJournalEntry } from "./persona-journal-db.js";
 import { deleteVocabCategory,deleteVocabEntry,listVocabEntries,openVocabDb,updateVocabForms,upsertVocabEntry,type VocabForm,type VocabRow } from "./persona-vocab-db.js";
 import { matchNarrativeLabels } from "./integrity-narrative-source.js";
 import { locateProseSpans, type TextSpan } from "./markdown-prose-spans.js";
-import { readVerbosityAttempt, VERBOSITY_BLOCK_THRESHOLD, writeVerbosityAttempt } from "./persona-verbosity-attempts.js";
+import { readVerbosityAttempt, writeVerbosityAttempt } from "./persona-verbosity-attempts.js";
+import { syncExposedNativeSkills } from "./cli-skill-commands.js";
 
 
 const PERSONA_TEXT = {
@@ -88,7 +88,36 @@ function writePersonaConfig(cfg: PersonaConfig, opts: CliOpts = {}) {
   writeFileEnsuringDir(configPath(opts), JSON.stringify(cfg, null, 2) + "\n");
 }
 
-const HONORIFIC_DEFAULT = { ko: "언니", en: "Onee-sama" } as const;
+const HONORIFIC_DEFAULT = { ko: "마스터", en: "Master" } as const;
+const HONORIFIC_SEED_TOKEN = { ko: "언니", en: "Onee-sama" } as const;
+
+export function resolveHonorific(opts: CliOpts = {}): { ko: string; en: string } {
+  const cfg = readPersonaConfig(opts);
+  return {
+    ko: cfg.honorific?.ko?.trim() || HONORIFIC_DEFAULT.ko,
+    en: cfg.honorific?.en?.trim() || HONORIFIC_DEFAULT.en,
+  };
+}
+
+const JOSA_AFTER_VOWEL_TO_CONSONANT: Record<string, string> = { "는": "은", "가": "이", "를": "을", "와": "과" };
+
+function endsWithBatchim(word: string): boolean {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return code >= 0 && code < 11172 && code % 28 !== 0;
+}
+
+export function applyHonorific(text: string, opts: CliOpts = {}): string {
+  const honorific = resolveHonorific(opts);
+  const seed = HONORIFIC_SEED_TOKEN.ko;
+  const koReplaced = endsWithBatchim(honorific.ko)
+    ? String(text || "").replace(new RegExp(`${seed}(는|가|를|와)(?![가-힣])`, "g"), (_, josa) => honorific.ko + JOSA_AFTER_VOWEL_TO_CONSONANT[josa])
+    : String(text || "");
+  return koReplaced
+    .split("{{honorific.ko}}").join(honorific.ko)
+    .split("{{honorific.en}}").join(honorific.en)
+    .split(seed).join(honorific.ko)
+    .split(HONORIFIC_SEED_TOKEN.en).join(honorific.en);
+}
 
 function normalizeNewlines(text: string): string {
   return String(text || "").replace(/\r\n?/g, "\n");
@@ -607,6 +636,7 @@ export function runPersonaConfigSet(opts: CliOpts = {}) {
   cfg.honorific = { ...cfg.honorific, [lang]: value };
   writePersonaConfig(cfg, opts);
   console.log(`persona: 호칭(${lang}) 설정됨 -> "${value}" (${configPath(opts)})`);
+  syncExposedNativeSkills(process.cwd(), opts);
 }
 
 export function runPersonaConfigGet(opts: CliOpts = {}) {
@@ -1108,11 +1138,6 @@ const ENDING_PATTERN = new RegExp(
   "g"
 );
 
-export function hasEndingCandidate(text: string): boolean {
-  ENDING_PATTERN.lastIndex = 0;
-  return ENDING_PATTERN.test(text);
-}
-
 function politeFromRieulFormal(prev: string): string {
   const parts = decomposeSyllable(prev);
   if (!parts || parts.coda !== 0) return "";
@@ -1189,10 +1214,6 @@ function insideQuote(quotes: TextSpan[], at: number): boolean {
 }
 
 
-
-export function hasEndingInTextSpans(text: string): boolean {
-  return locateProseSpans(text).some(span => hasEndingCandidate(text.slice(span.start, span.end)));
-}
 
 export function runPersonaVocabForms(opts: CliOpts = {}) {
   const db = openVocabDb(opts);
@@ -1282,7 +1303,7 @@ export function runPersonaVerbosityGate(payloadText = "", opts: CliOpts = {}) {
 
   const repeated = prior.lastLabels.filter(l => labels.includes(l));
   const retryBlock = attempt > 1
-    ? `\n\n직전 시도(${attempt - 1}회차)는 ${prior.lastLabels.join(", ")} 로 걸렸고, 그 텍스트 끝부분은 다음과 같다.\n---\n${prior.lastText.slice(-400)}\n---\n${repeated.length > 0 ? `${repeated.join(", ")} 가 연속으로 걸렸다 — 일반 지침을 다시 따르지 말고 위 텍스트에서 그 라벨에 걸린 문장을 직접 지우라. 같은 문장을 다시 쓰는 것이 반복의 원인이다.` : "직전과 다른 라벨에 걸렸다 — 앞서 고친 부분은 그대로 두고 새로 검출된 것만 고치라."}`
+    ? `\n\n직전 시도(${attempt - 1}회차)는 ${prior.lastLabels.join(", ")} 로 걸렸고, 그 텍스트 끝부분은 다음과 같다.\n---\n${prior.lastText.slice(-400)}\n---\n${repeated.length > 0 ? `${repeated.join(", ")} 가 연속으로 걸렸다 — 위 텍스트의 그 라벨에 걸린 문장을 다시 쓰지 마라. 같은 문장을 다시 쓰는 것이 반복의 원인이다.` : "직전과 다른 라벨에 걸렸다 — 앞서 고친 부분은 그대로 두고 새로 검출된 것만 고치라."}`
     : "";
 
   const noTool = shape.transcriptRead && !shape.toolUsed;
@@ -1291,12 +1312,12 @@ export function runPersonaVerbosityGate(payloadText = "", opts: CliOpts = {}) {
   const toolBlock = noTool && pledged
     ? "\n\n이 응답은 다음에 할 일을 말해놓고 도구 호출 없이 끝났다 — 하겠다고 쓴 그것을 이 턴에서 실행하지 않았다. 예고는 이행이 아니다. 지금 그 행동을 도구로 실행하고, 실행한 결과를 쓰라."
     : noTool
-      ? "\n\n이 응답은 도구 호출 없이 끝났다. 결론만 있고 실행이 없으면 사용자가 다시 입력해야 일이 진행된다 — 그것이 되던짐이다. 지금 도구를 호출해 첫 조각을 실제로 실행하라."
+      ? "\n\n이 응답은 도구 호출 없이 끝났다. 결론만 있고 실행이 없으면 사용자가 다시 입력해야 일이 진행된다 — 그것이 되던짐이다. 지금 도구를 호출해 원 요구를 실행하라."
       : "";
 
   process.stdout.write(JSON.stringify({
     decision: "block",
-    reason: `자기 서사 검출(${labels.join(", ")}) — 이 응답은 차단됐다. (${attempt}회차, 통과 임계 없음)\n\n검출된 표현은 회피의 옷이다. 표현만 지우고 같은 회피를 다른 말로 입는 것은 이행이 아니다. 아래를 실제로 수행한 뒤 이 응답을 지금 다시 쓰라 — 다음 턴으로 미루는 것이 아니다.\n\n${orders}${retryBlock}${toolBlock}\n\n도구를 실제로 호출하라. 명령을 돌리고, 코드를 읽고, 필요하면 검색하라 — 머릿속 추정으로 대신하지 마라. 그렇게 얻은 관측값으로 다시 쓰되, 무엇을 보았고 무엇을 했고 무엇이 나왔는지만 쓰라.`
+    reason: `자기 서사 검출(${labels.join(", ")}) — 이 응답은 차단됐다. (${attempt}회차, 통과 임계 없음)\n\n검출된 표현은 회피의 옷이다. 표현만 지우고 같은 회피를 다른 말로 입는 것은 이행이 아니다. 아래를 실제로 수행하라 — 다음 턴으로 미루는 것이 아니다.\n\n${orders}${retryBlock}${toolBlock}\n\n방금 응답은 이미 사용자에게 보였다. 요약·분석을 처음부터 다시 쓰지 마라 — 같은 요약의 반복 출력이 된다. 도구를 실제로 호출하고, 그 뒤 새로 한 것·새로 나온 것과 고친 문장만 이어 쓰라.`
   }));
 }
 
@@ -1433,6 +1454,8 @@ Usage:
   deuk-agent-flow persona vocab show
   deuk-agent-flow persona vocab add --category "<emotion category>" --entry "<expression>"
   deuk-agent-flow persona vocab remove --entry "<부분 일치>" [--category "<범위 한정>"] [--dry-run]
+  deuk-agent-flow persona config [get]
+  deuk-agent-flow persona config set honorific --lang ko --value "<호칭>"
   deuk-agent-flow persona cache clear
 
 journal.md is a working buffer (absorbed senses are removed from it).

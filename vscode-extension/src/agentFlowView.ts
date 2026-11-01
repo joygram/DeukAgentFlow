@@ -826,7 +826,7 @@ export class AgentFlowCommandCenter {
 
   private renderHtml(webview: vscode.Webview, mode: 'sidebar' | 'panel'): string {
     const nonce = String(Date.now());
-    const svgUri = webview.asWebviewUri(vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'agentflow.svg')));
+    const iconUri = webview.asWebviewUri(vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'deuki-avatar.png')));
     const cssUri = webview.asWebviewUri(vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'agentflow.css')));
     const version = String(this.context.extension.packageJSON?.version ?? 'unknown');
     const state = this.buildState();
@@ -853,9 +853,9 @@ export class AgentFlowCommandCenter {
       <article class="card ticket">
         <div class="row">
           <div class="brand">
-            <img src="${svgUri}" alt="AgentFlow" />
+            <img src="${iconUri}" alt="Deuki" />
             <div>
-              <div class="eyebrow">📦♒ Deuk Agent Flow</div>
+              <div class="eyebrow">Deuk Agent Flow</div>
               <h1>AgentFlow Panel</h1>
               <div class="version-line">VSIX <strong>${escapeHtml(version)}</strong></div>
             </div>

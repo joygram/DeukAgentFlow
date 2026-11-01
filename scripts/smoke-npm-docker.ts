@@ -78,7 +78,7 @@ try {
     "deuk-agent-rule --help >/tmp/deuk-agent-rule-help.txt",
     "cd /tmp/consumer",
     "mkdir -p .codex",
-    "deuk-agent-flow init --non-interactive --workflow execute --docs-language ko",
+    "deuk-agent-flow init --non-interactive --docs-language ko",
     "test ! -f .codex/AGENTS.md",
     "test -d .deuk",
     "test -f .deuk/PROJECT_RULE.md",

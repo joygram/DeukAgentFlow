@@ -21,18 +21,10 @@ export function parseHeadingAtDepth(line: string, depth: number, lenient = false
   return heading && heading.depth === depth ? heading : null;
 }
 
-export function isHeading(line: string, lenient = false): boolean {
-  return parseHeading(line, lenient) !== null;
-}
-
 export function stripLeadingHashes(text: string): string {
   return String(text ?? "").replace(LEADING_HASHES, "");
 }
 
 export function stripLeadingSectionNumber(text: string): string {
   return String(text ?? "").replace(LEADING_SECTION_NUMBER, "");
-}
-
-export function hasLeadingSectionNumber(text: string): boolean {
-  return LEADING_SECTION_NUMBER.test(String(text ?? ""));
 }

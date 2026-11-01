@@ -2,6 +2,7 @@ import { existsSync,mkdirSync,readFileSync,readdirSync,rmSync,writeFileSync } fr
 import { homedir } from "os";
 import { dirname,join } from "path";
 import { CliOpts,DEUK_ROOT_DIR,UTIL_TEXT,composeSurfaceWithinBudget,getUserSkillsConfigPath,getUserSkillsDir,localized,makePath,parseFrontMatter,resolvePackageRoot,toFileUri } from "./cli-utils.js";
+import { applyHonorific } from "./cli-persona-commands.js";
 import { listVocabEntries } from "./persona-vocab-db.js";
 
 const SKILL_TEXT = {
@@ -316,7 +317,7 @@ function buildPersonaVocabSection(opts: { identity?: string; includeOtherIdentit
   }
   if (situationLines.length > 0) out.push("- **상황별**", ...situationLines);
 
-  return out.length > 1 ? out.join("\n") : "";
+  return out.length > 1 ? applyHonorific(out.join("\n")) : "";
 }
 
 function buildActiveSkillAction(cwd, id, area) {
@@ -447,7 +448,7 @@ export function getActiveSkillsSurface(cwd = process.cwd(), area = null) {
     const meta = readSkillMeta(cwd, id);
     const fileUri = toFileUri(sourceSkillPath(cwd, id));
     return meta.summary
-      ? `- **${id}**: ${meta.summary} ([SKILL.md](${fileUri}))`
+      ? `- **${id}**: ${applyHonorific(meta.summary)} ([SKILL.md](${fileUri}))`
       : `- **${id}** ([SKILL.md](${fileUri}))`;
   });
   const budgeted = composeSurfaceWithinBudget([
@@ -478,6 +479,8 @@ function syncNativePlatforms(cwd, id, config, dryRun) {
 
 export function syncExposedNativeSkills(cwd = process.cwd(), opts: CliOpts = {}) {
   try {
+    // System skills must be exposed even when init never ran in this workspace.
+    ensureSystemSkills(cwd, opts);
     const config = loadSkillConfig(cwd);
     if (config.exposed.length === 0) return { changed: 0 };
     let changed = 0;
@@ -506,7 +509,7 @@ export function addSkill(opts: CliOpts = {}) {
 function upsertNativeDir(nativeDir, ids, cwd, dryRun) {
   let changed = 0;
   for (const id of ids) {
-    const content = ensureSkillDescription(loadSkillSource(cwd, id));
+    const content = applyHonorific(ensureSkillDescription(loadSkillSource(cwd, id)));
     const destDir = join(nativeDir, id);
     const dest = join(destDir, "SKILL.md");
     const current = existsSync(dest) ? readFileSync(dest, "utf8") : null;
@@ -611,6 +614,38 @@ export function ensureSystemSkills(cwd = process.cwd(), opts: CliOpts = {}) {
       exposeSkills({ cwd, skill: id, dryRun: opts.dryRun });
       ensured.push(id);
     } catch { /* best-effort: 한 스킬 실패가 init을 막지 않음 */ }
+  }
+  return [...ensured, ...ensureBundledSkillsOnce(cwd, opts)];
+}
+
+function autoExposedRecordPath() {
+  return makePath(dirname(getUserSkillsConfigPath()), "skills-auto-exposed.json");
+}
+
+// 번들 스킬은 처음 한 번만 자동 노출. 기록된 스킬은 다시 켜지 않음 → 사용자 unexpose 유지.
+function ensureBundledSkillsOnce(cwd, opts: CliOpts = {}) {
+  const recordPath = autoExposedRecordPath();
+  const record = readJsonIfExists(recordPath, { ids: [] });
+  const seenIds: string[] = Array.isArray(record.ids) ? record.ids.map(String) : [];
+  const exposedIds = loadSkillConfig(cwd).exposed;
+  const pendingIds = getAvailableSkills(cwd).filter(id => {
+    const meta = readSkillMeta(cwd, id);
+    return !meta.system && meta.source === "bundled" && !seenIds.includes(id);
+  });
+  if (pendingIds.length === 0) return [];
+  const ensured = [];
+  for (const id of pendingIds) {
+    if (!exposedIds.includes(id)) {
+      try {
+        exposeSkills({ cwd, skill: id, dryRun: opts.dryRun });
+        ensured.push(id);
+      } catch { continue; } // 제한 초과 등 → 기록하지 않고 다음 실행에 재시도
+    }
+    seenIds.push(id);
+  }
+  if (!opts.dryRun) {
+    mkdirSync(dirname(recordPath), { recursive: true });
+    writeFileSync(recordPath, JSON.stringify({ version: 1, ids: seenIds }, null, 2), "utf8");
   }
   return ensured;
 }

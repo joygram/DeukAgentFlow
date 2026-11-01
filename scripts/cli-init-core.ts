@@ -47,10 +47,6 @@ export const CANONICAL_INIT_CLEANUP_PATHS = {
   ],
 };
 
-export function wrapManagedBlock(content) {
-  return `${MANAGED_BLOCK_BEGIN}\n${String(content || "").trimEnd()}\n${MANAGED_BLOCK_END}`;
-}
-
 export function hashManagedContent(content) {
   return createHash("sha256").update(String(content || ""), "utf8").digest("hex");
 }
@@ -66,18 +62,4 @@ export function splitManagedBlock(content) {
     managed: current.slice(beginIdx + MANAGED_BLOCK_BEGIN.length, endIdx).trim(),
     after: current.slice(endIdx + MANAGED_BLOCK_END.length).trimStart(),
   };
-}
-
-export function mergeManagedBlock(existing, managedContent) {
-  const current = String(existing || "");
-  const nextBlock = wrapManagedBlock(managedContent);
-  if (!current.trim()) return `${nextBlock}\n`;
-  const currentBlock = splitManagedBlock(current);
-  if (currentBlock) {
-    return [currentBlock.before, nextBlock, currentBlock.after].filter(Boolean).join("\n\n").trimEnd() + "\n";
-  }
-  const cleaned = current.trimEnd();
-  const managedBody = String(managedContent || "").trim();
-  if (managedBody && cleaned.includes(managedBody)) return cleaned + "\n";
-  return `${cleaned}\n\n${nextBlock}\n`;
 }

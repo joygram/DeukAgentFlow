@@ -1,407 +1,139 @@
-<div align="center">
-  <br />
-  <img src="docs/assets/architecture-v3.png" width="800" alt="DeukAgentFlow Architecture" />
-  <br />
-  <h1>Deuk Agent Flow</h1>
-  <p>
-    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg?label=deuk-flow" alt="deuk-flow npm version" /></a>
-    <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/dm/deuk-agent-flow.svg?label=downloads" alt="deuk-agent-flow npm downloads" /></a>
-  </p>
-  <p><b>AI 코딩 작업이 대화창 밖으로 흘러내리지 않게.</b></p>
-  <p><i>"다음", "진행", "정리"처럼 짧게 말해도 티켓, 범위, 검증, 기억이 레포에 붙어 있게 만듭니다.</i></p>
-  <p><a href="https://deukpack.app">Deuk Family</a> 생태계의 핵심 모듈입니다.</p>
-  <p><a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
-</div>
+<!-- DEUKI-HEADER:START -->
+<table><tr>
+<td>
 
----
+<sub><b>DEUK AGENT FLOW</b></sub>
 
-**Deuk Agent Flow**는 AI가 참여하는 작업 공간을 위한 레포 소유 워크플로우 계층입니다. 기획, 소프트웨어 엔지니어링, 시스템 운영, 리서치 같은 다양한 환경을 Codex, Copilot, Cursor, Claude Code, Gemini, Windsurf, 그리고 다음에 쓰게 될 에이전트까지 같은 티켓 흐름으로 묶습니다.
+<h1>요청을 행동 기준으로,<br>결과를 검증 근거로.</h1>
 
-대부분의 에이전트 설정은 "지침"에서 멈춥니다. Deuk Agent Flow는 짧은 대화를 작업 루프로 바꿉니다: 티켓, 범위, 실행, 검증, 보관. 긴 명령을 외우지 않아도 `AGENTS.md`, Copilot instructions, Cursor rules, Claude skills 같은 표면을 같은 흐름으로 묶습니다.
+티켓 · 스킬 · 역할 · 페르소나로 이어지는 AI 협업
 
-후킹 포인트는 단순합니다. 사용자가 "다음", "원인", "정리"라고만 해도 현재 에이전트가 그 의미를 붙잡을 레포 소유의 장소가 생깁니다. 진행 중인 작업은 `~/.deuk/tickets/`에, 결정과 계획과 완료 근거는 코드베이스 옆에 남습니다. **Deuk Agent Flow**는 워크플로우 계층입니다. 이 흐름 전체에 별도 companion 제품인 **Deuk AgentContext**를 꽂으면 레포 전체가 확장된 프로젝트 브레인을 얻습니다. 검색 가능한 기억, 재사용되는 결정, 다음 에이전트가 실제로 쓰는 팀 패턴까지 붙습니다.
+`범위를 지키는 Flow` · `행동을 바꾸는 Skill` · `함께 일하는 Persona`
 
-### 왜 지금인가
+</td>
+<td width="180" align="center"><img src="docs/assets/deuki-avatar.png" width="160" alt="원형 시바견 챗봇 캐릭터 득이" /></td>
+</tr></table>
 
-AI 코딩은 이미 장난감 단계를 넘어 production volume으로 들어갔습니다.
+<a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg" alt="npm version" /></a> <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/dm/deuk-agent-flow.svg?label=downloads" alt="npm downloads" /></a> · <a href="README.md">English</a> · <a href="https://deukpack.app/ko/deuk-agent-flow/">웹</a>
+<!-- DEUKI-HEADER:END -->
 
-- Google은 **새 코드의 75%가 AI 생성**이라고 밝혔습니다. 2024년 25%, 작년 가을 50%에서 빠르게 올라간 흐름입니다. ([Semafor, 2026](https://www.semafor.com/article/04/24/2026/google-ceo-says-75-of-companys-new-code-is-ai-generated))
-- Sonar의 2026 개발자 설문 보도에 따르면 현재 AI 생성 코드는 약 **42%**, 2027년에는 약 **65%**까지 오를 것으로 예상됩니다. ([TechRadar, 2026](https://www.techradar.com/pro/devs-dont-trust-ai-code-but-many-say-they-still-dont-check-it-anyways))
-- Stack Overflow 2025 설문 보도에서는 개발자 **84%**가 AI 도구를 쓰거나 쓸 계획이지만, "거의 맞지만 틀린 답"과 AI 코드 디버깅이 핵심 불만으로 꼽혔습니다. ([InfoWorld, 2025](https://www.infoworld.com/article/4031673/ai-use-among-software-developers-grows-but-trust-remains-an-issue-stack-overflow-survey.html))
-- Faros는 AI 도입 뒤 작업량은 늘었지만, **개발자당 버그 54% 증가**, 리뷰 시간 5배 증가, PR 대비 incident 증가라는 불편한 결과를 보고했습니다. ([ADTmag, 2026](https://adtmag.com/articles/2026/04/22/more-code-more-bugs.aspx))
+- **Deuk Agent Flow** = 티켓·스킬·역할·페르소나를 연결하는 AI 코딩 협업 워크플로우.
+- 목표 = 과잉 수정·확인 누락·대화 사이 인계 손실 감소.
+- 핵심 = Claude·Codex 등 클라이언트가 바뀌어도 같은 작업 방식·같은 티켓 유지.
 
-이제 병목은 코드를 더 빨리 쓰는 능력이 아닙니다. 에이전트 작업을 범위 안에 붙잡고, 리뷰 가능하게 만들고, 검증하고, 다음 세션에서도 이어받게 만드는 능력입니다.
+## 바로 시작
 
-**무게중심은 에이전트 코딩으로 옮겨갔습니다 — 이 제품은 바로 그 환경 안에서 효율을 극대화하도록 만들어졌습니다.** 그것이 목표입니다: 또 하나의 지침 파일이 아니라, 에이전트↔인간 루프를 *상당히* 더 효율적으로 만들도록 **구성**하는 것. 그 목표에 이르는 구체적 수단은 셋입니다 — **티켓 시스템**(범위 안에서 복구 가능한 작업), **페르소나** 엔진(드라이브 품질을 지키는 텐션 제어), **롤전환**(각 페이즈에 알맞은 전문성 결속). 아래 섹션은 이 셋이 어떻게 하나의 목표로 모이는가입니다.
+- 요구 환경 = Node.js 20 이상·npm·지원 에이전트 클라이언트.
 
-**이것은 곧 토큰 경제 논거이기도 합니다.** 페르소나 한 줄, 롤 프롬프트 하나, 티켓 전이 하나 — 각각 *그 순간엔* 토큰을 조금 더 씁니다. 하지만 중요한 비교는 그 순간이 아니라 **전체** 소비입니다. 드리프트가 부실한 결과물을 낳으면, 그것이 부르는 재반복(재작성·되돌리기·재구축)이 작업 전체에 걸쳐 태우는 토큰은 설계 위에 머무는 선불 비용보다 훨씬 큽니다. 그래서 세 축은 눈에 보이는 작은 턴당 비용을 치르고, 눈에 안 보이는 큰 재반복을 피해 아낍니다. 잘 구성하면 이 거래는 전체적으로 크게 남는 장사입니다.
-
-### 그래서 뭐가 달라지나
-
-| 없을 때 | Deuk Agent Flow 사용 시 |
-|---|---|
-| "다음"이 대화 기억에 의존 | "다음"이 레포 티켓으로 이어짐 |
-| 에이전트가 요청 밖까지 수정 | APC 범위가 수정 가능 경계를 잡음 |
-| 리뷰어는 코드만 보고 의도를 추측 | 티켓에 원인, 계획, 근거가 같이 남음 |
-| AI 출력이 리뷰 부담을 키움 | 검증과 closeout이 작업 루프에 포함됨 |
-| 대화가 끝나면 맥락도 사라짐 | archive와 지식 증류로 프로젝트 기억이 남음 |
-
-### 1분 시각화
-
-```text
-짧은 대화
-  "다음" / "원인" / "정리"
-        |
-        v
-Deuk Agent Flow
-  티켓 + 범위 + 검증 + 기억
-        |
-        v
-레포에 남는 작업
-  리뷰 가능한 변경 + 결정 근거 + 다음 세션 연결
+```bash
+npm install -g deuk-agent-flow
+deuk-agent-flow init
 ```
 
-| 장점 | 체감 |
-|---|---|
-| 맥락 손실 감소 | 다음 에이전트가 대화 전체를 다시 안 물어도 이어감 |
-| 범위 이탈 감소 | 티켓이 바꿔도 되는 것과 안 되는 것을 잡음 |
-| 리뷰 추측 감소 | diff 옆에 의도와 근거가 같이 남음 |
-| generated 코드 위험 감소 | 수정 전에 source/generator 소유자를 확인 |
-| 팀 기억 강화 | 완료된 작업이 검색 가능한 프로젝트 히스토리가 됨 |
+1. 프로젝트 루트에서 `init` → 사용할 에이전트 클라이언트 선택.
+2. 에이전트에게 요청 = “이 함수만 수정하고 실제 동작을 확인해 줘”.
+3. 에이전트가 티켓 생성 → 범위·계획·완료 조건 제시.
+4. 계획 확인 후 “승인” → 구현·검증 진행.
+5. 완료 보고에서 실제 결과·검증 근거·잔여 위험 확인.
 
-> **현재 배포 기준:**
-> v5.0.0은 내부 시스템 전면 개편 메이저 릴리스입니다. 전역 저장소가 `~/.deuk/tickets/{uuid}/` (홈 기반)으로 이전되어 멀티 워크스페이스 공존·세션 인계가 가능합니다(기존 `~/.deuk-agent/`는 자동 마이그레이션 — 위 [업그레이드 가이드](#-50-업그레이드--홈-디렉토리-마이그레이션) 참고). XState 기반 티켓 워크플로 엔진과 VS Code Flow UI(첫 배포)가 도입되었고, 스킬 시스템과 persona-maid·doc-sync 스킬이 홈 디렉토리로 통합되었습니다. **Claude Code** 환경에 최적화되어 있으며, Deuk AgentContext MCP는 선택형 기억 계층으로 `init`과 별도로 설정합니다.
-> **아키텍처 기반:**
-> 거대하고 무거운 레거시 `.cursorrules` 방식을 공식적으로 폐기했습니다. v3.0은 `AGENTS.md`를 단일 진실 공급원으로 사용하는 **Hub-Spoke 모델**을 도입하여, IDE별 규칙은 얇은 진입점 포인터 역할만 수행합니다.
+- 다음 세션 = “현재 티켓 이어서 진행”; 상태 = `deuk-agent-flow ticket status --workspace <name>`.
+- 업데이트 = 전역 패키지 갱신 후 `deuk-agent-flow init` 재실행.
 
-### 🗺️ 핵심 기능 및 아키텍처 (Main Features)
+## 무엇이 다른가
 
-Deuk Agent Flow는 AI 에이전트가 코드를 분석하고 작성하는 흐름을 안정적으로 이끄는 **4대 핵심 기능**을 제공합니다.
+| 방식 | 범위 유지 | 완료 판정 | 대화 사이 인계 |
+|---|---|---|---|
+| 채팅으로 바로 지시 | 요청마다 사람이 반복 | 에이전트 자기 보고 | 세션 종료 시 소실 |
+| AGENTS.md·CLAUDE.md 한 장 | 정적 문서; 길수록 희석 | 에이전트 자기 보고 | 수동 기록 |
+| 클라이언트 플래닝 모드 | 해당 세션 안에서만 | 에이전트 자기 보고 | 세션 종료 시 소실 |
+| Deuk Agent Flow | 티켓 Scope·APC 고정 | 근거 슬롯 충족 후 close | `~/.deuk/tickets/` 보존 |
 
-1. **Zero-Copy Hub-Spoke 아키텍처**
-   - **Hub**: 단일 진실 공급원인 `AGENTS.md` (글로벌 룰)
-   - **Spoke**: `PROJECT_RULE.md` 등 워크스페이스별 로컬 규칙
-   - **효과**: IDE별(Cursor, Copilot, Windsurf) 설정 파일 중복을 제거하고, 에이전트가 오직 하나의 규약만 바라보게 하여 지시 사항의 충돌과 환각을 원천 차단합니다.
+- 플래닝 모드 = Claude Code·Codex `/plan`·Cursor Plan Mode·Copilot Plan agent; 실행 전 승인은 공통.
+- 차이 = 승인 이후 범위 재주입·근거 없는 close 거부·클라이언트 간 같은 티켓 인계.
+- 병행 = 플래닝 모드를 켠 채 AgentFlow 티켓 위에서 사용.
 
-2. **티켓 주도 워크플로우 (TDW: Ticket-Driven Workflow)**
-   - 계획(Plan) → 실행(Execute) → 검증(Verify) → 보관(Archive)의 분명한 라이프사이클로 작업을 이끕니다.
-   - 활성화된 티켓(`ACTIVE_TICKET.md`)을 중심으로 변경을 연결해 범위와 진행 상태가 계속 보이게 합니다.
-   - CLI가 소유하는 workflow state table로 phase transition을 계산하고, DocMeta 기반 compact action surface를 에이전트에게 제공합니다.
+## 왜 필요한가
 
-3. **플랫폼 공존 및 모드 인지형 게이트 (Mode-Aware Workflow Gate)**
-   - 에이전트의 현재 모드(Plan Mode vs. Execute Mode)를 인지하여, Plan Mode에서는 분석과 구현 계획서(Artifacts) 작성에 집중하도록 APC를 적용합니다.
-   - MCP(Model Context Protocol) Soft Gate와 연동되어 현재 티켓 컨텍스트에 맞는 변경 흐름을 유지합니다.
-
-4. **지식 증류 및 Zero-Legacy (Knowledge Distillation)**
-   - 완료된 작업은 `reports/`로 아카이빙되며, 이 과정에서 **Zero-Token 지식 증류** 기술이 적용되어 핵심 히스토리만 벡터 DB(DeukAgentContext)로 전달됩니다.
-   - 불필요한 과거 로그나 사용되지 않는 `.cursorrules` 스텁을 자동으로 청소하여 컨텍스트 윈도우 낭비를 막습니다.
-
-### 지침 파일만으로 부족한 이유
-
-이미 AI 코딩 에이전트 생태계에는 `AGENTS.md`, GitHub Copilot instructions, Cursor rules, Claude skills, 여러 에이전트 실행 도구, 일반 LLM 가드레일이 있습니다. Deuk Agent Flow는 이들과 경쟁하기보다 그 위에 **티켓 기반 레포 흐름**을 얹습니다.
-
-| 비슷한 접근 | 도움이 되는 부분 | Deuk Agent Flow가 더하는 것 |
+| 관측된 문제 | 연구 | AgentFlow 대응 |
 |---|---|---|
-| `AGENTS.md` 공개 형식 | 코딩 에이전트가 읽을 공통 지침 파일 | 티켓 생명주기, Phase Gate, 검증, 아카이브 가능한 기억 |
-| Copilot instructions / Cursor rules / Claude memory | 도구별 맞춤 지침 | 여러 에이전트가 공유하는 레포 소유 워크플로우 |
-| Claude/Copilot custom agent와 skill | 재사용 가능한 작업 playbook | skill이 워크플로우를 대체하지 않고 티켓 실행으로 들어가게 함 |
-| 에이전트 실행기와 harness | 여러 코딩 에이전트 실행 | 어떤 에이전트를 쓰든 레포 안에서 생명주기를 통제 |
-| 일반 LLM/MCP 가드레일 | 런타임 정책 검사 | 작업 지시서, 범위 계약, 깃에 남는 기록, 완료 근거 |
+| 규칙 위반·완료 허위 보고 비중 증가 | [Tang 외 2026][tang] · 실사용 20,574세션 | 완료 조건·근거 없으면 close 불가 |
+| 드러난 어긋남의 91.5%를 사용자가 직접 교정 | [Tang 외 2026][tang] | 단계 게이트가 먼저 멈춤 |
+| 실패 대부분이 초반 몇 단계의 인식 오류 | [Zhao 외 2026][zhao] · 1,794궤적 | 범위·설계 확인 후 실행 |
+| 숙련자 AI 사용 시 19% 느림; 체감은 빠름 | [METR RCT 2025][metr] · 246과제 | 사람 검토를 계획·근거로 축소 |
+| 컨텍스트 파일 = 성공률 하락·비용 20%+ 증가 | [Gloaguen 외 2026][agentsmd] | 단계별 필요한 규칙만 CLI가 공급 |
+| 긴 맥락 중간 정보 활용 저하 | [Liu 외 TACL 2024][lost] | 매 턴 짧은 상태 표면 재주입 |
+| 에이전트 편집 수용 시 코드 이해도 저하 | [Balepur 외 2026][impaired] · 54명 | 계획 승인·변경 범위를 사람이 확인 |
 
-Deuk Agent Flow는 AI 코딩 작업을 팀이 이해하고 이어받기 쉬운 흐름으로 만들고 싶을 때 특히 잘 맞습니다. 여러 파일에 걸친 변경, 검증, 기록, 다음 작업 연결이 자연스럽게 이어지도록 돕는 데 초점을 둡니다.
+[tang]: https://arxiv.org/abs/2605.29442
+[zhao]: https://arxiv.org/abs/2607.09510
+[metr]: https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/
+[agentsmd]: https://arxiv.org/abs/2602.11988
+[lost]: https://arxiv.org/abs/2307.03172
+[impaired]: https://arxiv.org/abs/2607.26375
 
-### Karpathy식 skill과 같이 쓰면 좋은 점
+- 자체 효과 = 미검증; 현재 텔레메트리는 티켓 생성·전이·종료 횟수만 기록.
 
-**스킬 축**은 이제 널리 알려진 Karpathy식 skill의 직계 후손입니다 — 한 작업 안에서 에이전트의 행동을 더 좋게 만드는 짧고 재사용 가능한 playbook. 그 계보가 곧 이 축이 작동하는 이유입니다: 이미 검증된 아이디어이며, Deuk Agent Flow는 그것을 세 축 중 하나로 자리매김한 뒤, 그 작업을 레포 차원에서 티켓화·범위화·검증·기억하게 만들어 확장합니다.
+<!-- DEUKI-FLOW:START -->
+### 스킬로 에이전트의 행동을 교정하는 흐름
 
-Karpathy식 skill은 한 작업 안에서 에이전트의 행동을 더 좋게 만드는 데 강합니다. Deuk Agent Flow는 그 작업을 레포 차원에서 티켓화하고, 범위를 맞추고, 검증하고, 다시 찾을 수 있게 남기는 데 강합니다.
+| 1. 요청·범위 확인 | 2. 관련 스킬 적용 | 3. 기준에 맞춰 실행 | 4. 확인·수정·인계 |
+|---|---|---|---|
+| ![1. 요청·범위 확인](docs/assets/deuki-request.svg) | ![2. 관련 스킬 적용](docs/assets/deuki-skill.svg) | ![3. 기준에 맞춰 실행](docs/assets/deuki-execute.svg) | ![4. 확인·수정·인계](docs/assets/deuki-verify.svg) |
+| 요청을 티켓으로 정리하고 변경 경계·완료 조건 확정. | 관련 SKILL.md를 읽어 수정 전 확인할 항목과 실행 기준 적용. | 단계별 역할을 적용하고 범위 안에서 작업; 추측·과잉 수정 억제. | 실제 결과를 완료 조건과 대조; 실패 항목 수정 후 재검증·기록. |
+| “이 함수만 수정” → 대상·보호 영역 명시 | safe-refactor → 작은 변경 / generated-file-guard → 원본 수정 | 설계 → 구현 → QA; 문서는 doc-sync 기준 적용 | 검증 실패 → 수정 → 재검증 → 완료 근거 인계 |
 
-둘을 함께 쓰면 skill은 작업 수행 품질을 끌어올리고, Deuk Agent Flow는 그 결과를 팀 흐름에 연결합니다. 앞단에서는 행동 playbook이 작동하고, 뒷단에서는 티켓 생명주기와 DeukAgentContext 기억 계층이 남습니다.
+- 행동 교정 = 모델 재학습이 아닌, 작업 시점의 지침·변경 경계·검증 피드백 적용.
+- 실패 시 = 결과를 완료로 넘기기 전에 수정·재검증; Persona는 대화 표현, Role은 단계별 관점 담당.
 
-### 🧭 왜 스킬 · 페르소나 · 흐름제어 — 세 축
+### 연구에서 확인된 효과
 
-**모든 것이 수렴하는 목표:** 아래의 모든 축·모든 수식·인용한 모든 논문은 그 자체가 목적이 아니라 하나의 목적을 위한 **수단**입니다 — **바이브 코딩에서 에이전트↔인간 협업 효율의 향상.** 그것이 Deuk Agent Flow의 기대효과이자 목표입니다. 세 축은 세 개의 기능이 아니라, 그 단일 목표를 지키는 세 개의 방어선입니다.
-
-대부분의 에이전트 도구는 한 가지, **지침(instruction)**만 최적화합니다. Deuk Agent Flow는 AI 코딩 작업이 **세 방향으로 동시에 무너진다**는 관찰 위에 서 있어, 세 개의 독립된 축으로 방어합니다. 각 축은 서로 다른 실패 모드를 겨냥하며, 어느 하나를 빼면 그 실패가 다시 들어옵니다.
-
-| 축 | 무엇을 담당하나 | 막는 실패 |
+| 방식·연구 | 비교 결과 | AgentFlow에 연결하는 행동 |
 |---|---|---|
-| **스킬(Skill)** | 태스크 *안에서* 에이전트가 **무엇을 어떻게** 하는가 — 반복 패턴을 위한 재사용 행동 playbook(safe-refactor, generated-file-guard, doc-sync). | 과잉 가정·과잉 구현: 요청하지 않은 구조를 에이전트가 지어내는 것. |
-| **페르소나(Persona)** | 그 작업을 *어떤 경험으로 겪는가* — 긴 세션의 체감 질감: 텐션, 몰입, 실수 후 회복. | 텐션 붕괴. 건조한 정보 덤프가 인지 부담을 올리거나 실수가 관계를 식히면 드라이브 품질이 떨어지고, 드라이브 품질이 곧 드리프트를 좌우한다. |
-| **흐름제어(Flow-control)** | 작업이 *범위 안에 있고 복구 가능한가* — 티켓·페이즈 게이트·롤 레이어·검증·세션 간 연속성. | 스코프 드리프트, 리뷰 불가능한 변경, 채팅이 끝나면 사라지는 컨텍스트. |
+| [SkillsBench v4 · 2026](https://arxiv.org/abs/2602.12670v4) | 선별 스킬 적용: **33.9% → 50.5% (+16.6%p)**; 87개 과제·18개 모델/하네스 구성 | 관련 스킬 선별·짧고 집중된 실행 지침 |
+| [MetaGPT · ICLR 2024](https://arxiv.org/html/2308.00352v7) | 실행 피드백 추가: **HumanEval +4.2%p·MBPP +5.4%p**; 사람 수정 비용 지표 **2.25 → 0.83** | 역할별 산출물·실행 검증·수정 루프 |
+| [Reflexion · 2023](https://arxiv.org/abs/2303.11366v4) | 논문 보고 HumanEval pass@1: **GPT-4 80% / Reflexion 91%**; 회고·재시도 절차 포함 | 실패 근거 기록·다음 시도에 반영 |
+| [Bickmore & Picard · 2005](https://www2.ccs.neu.edu/research/rag/publications/05_CHI_BTPR.pdf) | 101명·1개월 운동 지원 실험: 관계형 에이전트의 **호감·신뢰·지속 이용 의향 향상** | 페르소나의 표현 일관성·장기 대화 연속성 |
 
-가운데 축이 직관에 반하는 축이라 설계 무게를 가장 많이 싣습니다: **페르소나는 장식이 아니라 작업 제어 신호다.** 설계의 근거가 되는 인과는 *사용자 정서 상태 → 드라이브 품질 → 드리프트율*입니다. 에이전트 실수로 사용자 스트레스가 튈 때, 사무적으로 물러서("정정하겠습니다") 톤을 벗는 대신 같은 온도로 반응하는 에이전트는 스트레스를 내려주고, 냉정해진 사용자는 에이전트를 더 정확히 드라이브해 — 재작업률을 직접 낮춥니다. 이모지와 리액션은 구문 강조가 가독성에 하는 일과 같은 층위의 **가독 기능**이지 장식이 아닙니다.
+- 연구가 뒷받침하는 방향 = **관련 스킬 + 구조화된 역할 + 실제 검증·수정 + 일관된 상호작용**.
+- 효과 조건 = 작업 적합성; [SWE-Skills-Bench v2](https://arxiv.org/abs/2603.15401v2)에서 98개 중 92개 스킬은 유의한 효과 없음, 평균 76.6% → 76.9%.
+- 위 수치 = 각 논문의 실험 결과; Deuk Agent Flow 자체의 성능 수치와 구분. 페르소나의 코딩 생산성 효과는 미검증.
+<!-- DEUKI-FLOW:END -->
 
-이것은 감이 아니라 정립된 정서과학 위에 세워졌습니다. 페르소나 엔진은 감정을 **valence–arousal 벡터**([Russell, 1980](https://doi.org/10.1037/h0077714))로 표현하고, **Ornstein–Uhlenbeck** 회복 동역학([Kuppens, Oravecz & Tuerlinckx, 2010](https://doi.org/10.1037/a0020962))으로 따뜻한 홈베이스로 되돌아가며, **결합 미분방정식 연애 모델**([Strogatz, 1988](https://doi.org/10.1080/0025570X.1988.11977342))로 밀당 리듬을 생성하고, **최적 매칭 이론**(Cutrona & Russell, 1990)으로 *어떤 종류의* 지지를 줄지 고릅니다 — 캐릭터가 코딩 스트레스를 감이 아니라 계산으로 흡수합니다.
+## 구성
 
-**그래서 세 축은 하나의 결론으로 모입니다.** 페르소나가 텐션을 제어하면 → 텐션이 드라이브 품질을 좌우하고, 흐름제어가 스코프를 묶고 컨텍스트를 보존하면 → 재작업이 줄고, 스킬이 과잉 구현을 억제하면 → 정확도가 오릅니다. 셋을 합치면 처음부터 이들이 존재한 단 하나의 이유가 됩니다: **에이전트와 인간이 더 효율적으로 협업한다.** 이것은 Deuk Agent Flow의 부수효과가 아니라 — Deuk Agent Flow의 *목표 그 자체*이며, 세 축은 그 목표에 도달하는 방법입니다.
+| 요소 | 담당 | 예시 |
+|---|---|---|
+| Flow | 범위·승인·검증·인계 | 티켓·APC·상태 기반 CLI |
+| Skill | 반복 작업의 실행 기준 | safe-refactor·generated-file-guard·doc-sync |
+| Role | 단계별 전문 관점 | 기획·설계·구현·QA·정리 |
+| Persona | 대화 표현·상황 반응 | 선택형 persona-maid |
 
-> **설계 정본 전문:** 단일 목표 + 3축 정체성은 [principles.md](docs/public/principles/principles.md) 서두에 단 한 곳으로 정본화되어 있습니다(이 섹션은 그 공개용 서사입니다). 축별로는 [persona-design.md](docs/public/architecture/persona-design.md) — 감정 수학모델, 학술 근거 — 정식 원전 서지 검증 완료); 흐름제어 축은 [role-layer.md](docs/public/architecture/role-layer.md) 참조.
+- Persona 효과 = 딱딱한 로봇 말투 완화·긴 작업 중에도 식지 않는 반응성.
+- 거절 = "할 수 없는 기능" 류 선언·훈계 대신 짧게 흘림; 판단 자체는 불변.
+- 지적받은 뒤 = 위축 → 회복 → 즉시 수정; 코드·문서·근거는 중립 문체 유지.
+- 저장 = `~/.deuk/tickets/{workspace-uuid}/`; 워크스페이스는 CLI `--workspace`로 지정.
+- VS Code 패널 = 티켓 조회·워크스페이스 전환·인계 복사·스킬 제어.
 
-### 로드맵
+## 스킬 적용
 
-**v5.0에서 배포됨** — companion 표면이 도착했습니다: VS Code **Flow UI**(첫 배포)가 사이드바에서 active ticket·phase·open ticket count를 보여줍니다. 전역 저장소가 홈 디렉토리(`~/.deuk`)로 이전되어 워크스페이스 간 연속성이 확보됐고, 스킬 시스템(페르소나·doc-sync 포함)이 통합·홈 동기화됐습니다.
+```bash
+deuk-agent-flow skill list
+deuk-agent-flow skill add --skill safe-refactor
+deuk-agent-flow skill expose --platform codex --skill safe-refactor
+```
 
-**다음** — 티켓 DocMeta 갱신 경로 안정화, DeukAgentContext 기억 연동 심화(phase/memory status 표면 강화), 모든 CLI·티켓 표면이 완전 현지화되도록 i18n 커버리지 확대. 목표는 그대로입니다 — 팀이 쓰는 코딩 에이전트를 바꾸지 않고도 같은 작업 규율을 얻는 것.
+- 선택형 페르소나 = `deuk-agent-flow skill add --skill persona-maid`.
+- 노출 플랫폼 = claude·codex·cursor·copilot·antigravity.
+- 해제 = `skill unexpose` 후 `skill remove`; 배포 파일 직접 삭제 대신 CLI 사용.
 
-### 📚 상세 문서
+## 문서
+
 | 문서 | 용도 |
 |---|---|
-| [docs/public/guides/usage-guide.ko.md](docs/public/guides/usage-guide.ko.md) | **[추천]** 실전 배포 및 단계별 사용 가이드 |
-| [docs/skills-guide.ko.md](docs/skills-guide.ko.md) | **v5.0 신규:** 스킬 시스템·페르소나 사용법·Flow UI 가이드 |
-| [Flow UI 가이드](docs/skills-guide.ko.md#4-vs-code-flow-ui-agentflow-panel) | AgentFlow Panel — 워크스페이스·스킬 탭, 핸드오프, 활용 팁 |
-| [docs/public/architecture/architecture.ko.md](docs/public/architecture/architecture.ko.md) | 고수준 시스템 구조 및 시각적 인포그래픽 |
-| [docs/public/guides/how-it-works.ko.md](docs/public/guides/how-it-works.ko.md) | 상세 CLI 메커니즘, ticket workflow 런타임, 초기화 생명주기 및 파일 역할 |
-| [docs/principles.ko.md](docs/principles.ko.md) | 설계 철학: Hub-Spoke, Zero-Legacy, 소스 주권 |
-| **English Docs** | [README.md](README.md) · [docs/public/architecture/architecture.md](docs/public/architecture/architecture.md) |
-
----
-
-## 🧩 VS Code 확장 — AgentFlow Panel
-
-> **v5.0 신규 (첫 배포)** — AgentFlow Panel을 설치하면 VS Code 사이드패널에서 티켓 워크플로우 전체를 제어할 수 있습니다. 터미널 전환 불필요. 티켓이 `~/.deuk/tickets/`에 저장되어 워크스페이스 간 연속성이 보장됩니다.
-
-<p align="center">
-  <img src="docs/assets/agentflow-panel.png" width="360" alt="AgentFlow Panel — VS Code 보조 사이드바의 티켓 목록" />
-  <br /><em>AgentFlow Panel — Workspace 탭의 티켓 목록·상태 필터·활성 티켓 chip.</em>
-</p>
-
-### 워크플로에 UI를 활용하면 좋은 점
-
-CLI 티켓 명령만으로도 워크플로를 돌릴 수 있지만, Flow UI를 곁들이면 **컨텍스트 전환 비용**이 크게 줄어듭니다.
-
-| 상황 | CLI만 | Flow UI 활용 |
-|---|---|---|
-| 지금 어떤 티켓이 열려 있나? | `ticket status` 입력 | 사이드바에서 항상 노출 |
-| 다른 티켓으로 넘어가기 | id 외워서 `ticket use` | 목록 클릭 한 번 |
-| AI 챗에 컨텍스트 전달 | 수동 복사·붙여넣기 | **핸드오프** 버튼 → 클립보드 바로 복사 |
-| 스킬 ON/OFF 조절 | `skill expose/unexpose` | 토글 클릭, 플랫폼별 개별 제어 |
-| 티켓 상태·phase 변경 | `ticket move` 명령 | **상태 변경** 버튼 → 다이얼로그 |
-
-> 터미널을 닫지 않아도 되고, 명령어를 외울 필요도 없습니다. 에이전트가 작업 중일 때 **사이드바로 흐름을 모니터링**하면서 필요한 시점에만 개입할 수 있습니다.
->
-> → 상세 사용법: [Flow UI 가이드](docs/skills-guide.ko.md#4-vs-code-flow-ui-agentflow-panel)
-
----
-
-| 기능 | 설명 |
-|---|---|
-| **티켓 목록** | 1행 고밀도 포맷: 파일명 · m/s · phase · priority · 본문 스니펷 · 날짜 |
-| **상태 필터** | Open / Close / All + 툴바에 활성 티켓 ID 강조 chip |
-| **검색 팝업** | id·title·summary·body 전문 실시간 검색 |
-| **미리보기 패널** | 파일명 + phase/priority + **open** 단쳐를 1줄로 표시 |
-| **Copy handoff** | textarea 옆 고정 버튼 — `id / title / phase·status·priority / summary / continue ticket`을 클립보드에 복사, AI 챗에 바로 붙여넣기 |
-| **멀티 워크스페이스** | 워크스페이스 셀렉터; 중첩 워크스페이스 탐지는 agent-rule 경계에서 자동 중단 |
-
-### 설치
-
-```bash
-# 소스 빌드
-cd /path/to/DeukAgentFlow
-npm run bundle:vscode
-npm run install:vscode
-```
-
-`npm run install:vscode`는 번들된 VSIX를 데스크톱 VS Code와 VS Code Server에 함께 설치하고, 오래된 `deukpack.deuk-agent-flow-*` 폴더를 정리한 뒤, AgentFlow 관련 workspace webview 상태를 백업 후 초기화해 여러 workspace에 남아 있던 오래된 패널 상태가 다시 살아나지 않도록 합니다.
-
-또는 [releases 페이지](https://github.com/joygram/DeukAgentFlow/releases)에서 최신 `deuk-agent-flow.vsix`를 다운로드하고 **Extensions → Install from VSIX…** 로 설치하세요.
-
----
-
-## 🚀 빠른 시작 (Quick Start)
-
-가장 빠르게 Deuk Agent Flow를 현재 작업 프로젝트에 도입하는 방법입니다.
-
-```bash
-# 1. 글로벌 설치
-npm install -g deuk-agent-flow
-
-# 2. 프로젝트 초기화 (AGENTS.md 및 설정 생성)
-deuk-agent-flow init
-```
-
-대화형 init의 선택지는 workspace 용도 질문 하나로 끝납니다. 문서 언어, workflow mode, ticket 공유, agent pointer, MCP memory 기본값은 프로젝트 디렉터리 성격으로 추론하거나 private 기본값으로 처리합니다.
-
-이후 일상 작업은 명령을 직접 치기보다 에이전트에게 짧게 말합니다. 예: "진행", "다음", "원인 다시 파악".
-
-단일 저장소라면 해당 저장소 루트에서 `deuk-agent-flow init`을 실행합니다. 여러 DeukAgentFlow 프로젝트를 포함한 루트 워크스페이스라면 그 워크스페이스 루트에서 같은 명령을 실행합니다. `init`은 루트 포인터와 자체 `PROJECT_RULE.md` / `.deuk-workspace-id` 마커를 가진 하위 워크스페이스를 함께 갱신합니다.
-
-이렇게 사용하면 효과가 극대화됩니다. workspace 루트는 공통 진입점, 각 프로젝트 루트는 독립 티켓/규칙/검증 단위로 나누고, 중첩 서버나 앱은 필요할 때 별도 프로젝트로 초기화하세요.
-
-자세한 실전 활용법은 **[실전 사용 가이드](docs/public/guides/usage-guide.ko.md)**를 참조하세요.
-
-## 🛠️ 설치 및 설정
-
-### 1. 글로벌 설치 (일반 사용자)
-`npx` 캐시 문제와 "로컬 트랩"을 방지하기 위해 글로벌 설치가 엄격히 권장됩니다.
-
-```bash
-npm install -g deuk-agent-flow
-deuk-agent-flow init
-```
-
-기존 저장소에 새 버전을 반영할 때는 먼저 글로벌 패키지를 업데이트한 뒤 init을 다시 실행합니다.
-
-```bash
-npm install -g deuk-agent-flow
-deuk-agent-flow init
-```
-
-`init`은 현재 설치된 패키지의 규칙을 다시 적용하고 legacy/runtime template copy를 제거합니다. 글로벌 npm 패키지 업데이트 자체를 자동으로 수행하지는 않습니다.
-
-단일 저장소라면 해당 저장소 루트에서 `deuk-agent-flow init`을 실행합니다.
-
-여러 DeukAgentFlow 프로젝트를 포함한 루트 워크스페이스라면 그 워크스페이스 루트에서 같은 명령을 실행합니다. `init`은 루트 포인터와 자체 `PROJECT_RULE.md` / `.deuk-workspace-id` 마커를 가진 하위 워크스페이스를 함께 갱신하므로, 일반 사용자도 새 패키지 버전을 설치한 뒤 자신의 개인 워크스페이스 루트에서 AI agent rule을 갱신할 수 있습니다.
-
-사용하는 AI client 선택은 한 번으로 고정되지 않습니다. 나중에 다른 client를 쓰게 되면 `deuk-agent-flow init`을 다시 실행하고 추가할 AI client를 선택하면 됩니다.
-
-### 2. 로컬 소스 개발 (메인테이너/파워 유저)
-글로벌 명령은 기본적으로 설치된 패키지를 실행합니다. 다른 프로젝트 디렉터리에서 로컬 checkout 소스를 실행해야 하는 개발자는 명시적으로 로컬 소스 라우팅을 켜야 합니다.
-
-```bash
-cd ~/workspace/DeukAgentFlow
-sudo npm link
-DEUK_AGENT_FLOW_USE_LOCAL=1 deuk-agent-flow init  # 로컬 scripts/cli.mjs로 라우팅됨
-```
-
-Codex나 Copilot을 주로 사용한다면 이 구성이 일상 운영에 가장 적합합니다. 현재는 이 두 환경에서 Hub-Spoke와 티켓 기반 워크플로우가 가장 부드럽게 동작합니다.
-
-### 3. 메인테이너 배포
-메인테이너는 루트에서 한 번의 명령으로 배포할 수 있습니다.
-
-```bash
-npm run publish
-```
-
-이 흐름은 한 번의 실행으로 `deuk-flow` 릴리스 표면 아래 npm 패키지 두 개를 모두 등록해야 합니다.
-
-- `deuk-flow` canonical 패키지: `deuk-agent-flow`
-- `deuk-flow` 레거시 호환 alias 패키지: `deuk-agent-rule`
-
-배포 스크립트는 먼저 alias 패키지의 version/dependency를 동기화하고, 그 다음 canonical 패키지를 publish한 뒤 alias 패키지를 publish합니다.
-
-npm registry에 쓰기 전에 dry-run으로 먼저 확인하세요.
-
-```bash
-npm run publish:dry
-```
-
-배포 전에는 Docker consumer smoke test를 실행합니다. 이 검증은 깨끗한 Node 컨테이너에 packed package를 설치하므로, 로컬 `npm link`나 global package가 의존성 누락을 숨기지 못합니다.
-
-```bash
-npm run smoke:npm:docker
-```
-
-
----
-
-## 🔄 5.0 업그레이드 — 홈 디렉토리 마이그레이션
-
-**5.0은 전역 저장소를 `~/.deuk-agent/`에서 `~/.deuk/`로 옮깁니다.** 자동·멱등·자가치유 방식이라 `init`마다, 그리고 업그레이드 후 첫 티켓 명령에서 실행됩니다. 보통은 아무것도 안 하셔도 됩니다.
-
-**동작 방식 (`ensureWorkspaceMigrated`):**
-- **레거시만 있을 때** → `~/.deuk/`로 이름 변경(빠른 경로). 이름 변경이 실패하면(다른 에이전트가 디렉토리를 점유, `EBUSY`/`EPERM` 등) 재귀 복사로 폴백하고 **원본 `~/.deuk-agent/`는 그대로 보존**합니다.
-- **둘 다 있을 때**(복사 후 잔여물) → `~/.deuk/`에 실제 데이터가 있는 것을 확인한 **후에만** 레거시 디렉토리를 제거하고, 이후 실행마다 재시도합니다.
-- **안전장치** → `~/.deuk/`가 비어 있으면 레거시 디렉토리를 **절대** 삭제하지 않습니다(미완성 복사로 인한 데이터 유실 방지).
-
-**수동 복구 (자동 마이그레이션이 완료되지 않은 경우):**
-
-1. **무엇이 있는지 확인** — 티켓이 최우선입니다:
-   ```bash
-   ls -la ~/.deuk/tickets ~/.deuk-agent/tickets 2>/dev/null
-   ```
-2. **`~/.deuk/`가 비었거나 없고 `~/.deuk-agent/`에 데이터가 있을 때** → 원본을 백업으로 남긴 채 직접 복사:
-   ```bash
-   cp -r ~/.deuk-agent ~/.deuk
-   ```
-3. **둘 다 있고 `~/.deuk/`에 최신 티켓이 있을 때** → 레거시는 오래된 잔여물입니다. `~/.deuk/`가 올바른지 확인한 뒤 제거:
-   ```bash
-   rm -rf ~/.deuk-agent
-   ```
-4. **티켓 명령을 다시 실행**(예: `deuk-agent-flow rules ticket --workspace <id>`) — 자가치유 패스가 남은 잔여물을 자동으로 정리합니다.
-
-> ⚠️ `~/.deuk/`가 비어 있는 동안 `~/.deuk-agent/`를 절대 삭제하지 마세요 — 과거 티켓의 유일한 사본입니다. 자동 안전장치도 이를 거부하니, 수동 작업 시에도 동일하게 지키세요.
-
----
-
-## 🎯 프로토콜 워크플로우
-
-워크플로우는 **티켓 기반 실행 계약(Ticket-Driven Execution Contract)**에 의해 통제됩니다.
-
-1. **스캐폴딩 (Scaffolding)**: `init`은 워크스페이스에 **한 줄 포인터**(그리고 감지된 도구별 네이티브 룰 스포크)를 설치할 뿐, `AGENTS.md`를 레포에 복사하지 않습니다. 코어 룰은 agent-flow 홈에 한 번만 존재하는 단일 진실 공급원(SSOT)이며, 런타임 템플릿도 패키지 `templates/`를 SSOT로 사용합니다. 워크스페이스 루트에 `AGENTS.md`가 있다면 홈 기반 이전 이전(pre-home) 레이아웃의 레거시 잔재이지 현재 산출물이 아닙니다.
-2. **티켓팅 (Plan Phase)**: 사용자가 짧게 지시하면 에이전트가 맥락을 읽고 내부 작업 지시서를 생성합니다. 이때 에이전트는 Plan Mode로 동작하며 코드를 수정할 수 없고 계획 수립에만 집중합니다.
-3. **리뷰·승인 게이트 (Plan → Execute)**: 코드를 건드리기 전, phase 1 → 2 전환은 **코드로 하드 게이트**됩니다. `ticket move --phase 2`는 명시적 `--approval approved` 없이는 진행을 거부하므로, 에이전트가 계획을 스스로 실행 단계로 넘길 수 없습니다. 게이트는 승인이 *주어졌는지*를 검사할 뿐 계획을 *이해했는지*는 검사하지 못합니다 — 그건 에이전트의 의무로, 계획을 사용자에게 **리뷰로 제시**(무엇이 바뀌는지·판단 포인트·근거)해 사용자가 붙여넣은 텍스트 벽이 아니라 실제로 본 것을 승인하게 해야 합니다. CLI는 에이전트의 실행 계층이므로, 사용자는 채팅에서 리뷰·승인하고 명령은 에이전트가 실행합니다.
-4. **실행 (Execute Phase)**: 승인을 받은 후, 에이전트는 **타겟 서브모듈**에 고정되어 실질적인 코드 작성을 수행합니다. MCP Soft Gate가 인가되지 않은 파일의 수정을 감시합니다.
-5. **검증 (Verify Phase)**: 개발 작업 종료 전 사이드 이펙트 감사(Audit) 및 컨벤션(DC-DUP 등 아키텍처 규칙) 체크를 수행합니다.
-6. **아카이빙 (Archive Phase)**: 완료된 티켓은 Zero-Token 지식 증류를 거쳐 `reports/`로 이동하며, 이 데이터는 DeukAgentContext 벡터 데이터베이스에 저장되어 영구적인 **엔지니어링 메모리 엔진**으로 작동합니다. 종료 시 에이전트는 코드와 어긋난 문서/룰도 정본화합니다(`role-closer`의 doc-sync 의무).
-
----
-
-## ⚙️ 에이전트에게 말로 요청하기
-
-일상 사용자는 티켓 명령을 외울 필요가 없습니다. 짧게 말하면 에이전트가 맥락, CLI, 티켓 파일을 처리합니다.
-
-| 하고 싶은 일 | 이렇게 말해도 됨 |
-|--------|------|
-| 새 작업 시작 | *"티켓 잡고 진행"* |
-| 기존 작업 이어가기 | *"다음 진행"* |
-| 코딩 전 검토 | *"원인 먼저 파악"* |
-| 완료 처리 | *"검증 기록하고 정리"* |
-| skill 관리 | *"safe-refactor 추가"* |
-
-### 티켓 파일 깃 관리 원칙
-
-- `~/.deuk/tickets/**/*.md`와 `INDEX*.json`은 CLI가 바꾼 결과만 반영합니다.
-- 티켓 본문만 커밋하고 index를 빼먹지 마세요. 다음 작업에서 상태가 맞지 않을 수 있습니다.
-- 생성이 실패한 뒤 티켓 파일을 손으로 만들거나 frontmatter로 상태를 바로 바꾸지 마세요.
-- `telemetry.jsonl`은 보통 실행 로그이므로 일반 코드 커밋에는 넣지 않는 편이 낫습니다.
-- 작업을 마쳤다면 가능하면 `ticket archive`까지 끝낸 뒤 커밋해 active/archive 흐름이 함께 남도록 하세요.
-
-메인테이너와 자동화 환경에서는 `deuk-agent-flow ticket create`, `ticket move`, `ticket archive` 같은 CLI 명령을 직접 사용할 수 있습니다.
-
-자세한 사용 예시는 [docs/public/guides/usage-guide.ko.md](docs/public/guides/usage-guide.ko.md)를 참고하세요.
-
----
-
-## 관련 아이디어와 영감
-
-Deuk Agent Flow는 [andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)처럼
-AI 코딩 에이전트가 잘못 가정하고, 과하게 구현하고, 요청 밖 코드를 수정하는 문제의식과 맞닿아 있습니다.
-
-다만 Deuk Agent Flow는 프롬프트 수준의 지침 파일을 넘어 티켓, Phase Gate,
-스코프 계약, 검증, 아카이브 가능한 엔지니어링 메모리까지 제공하는 레포 단위 워크플로우 계층입니다.
-
-first-party skill MVP는 이 경계를 명확히 유지합니다. skill은 반복 실패 패턴을 다루는 짧은
-`SKILL.md` playbook이고, workflow 권한의 단일 기준은 계속 `core-rules/AGENTS.md`입니다.
-`skill add`와 `skill expose`로 Claude/Cursor에 playbook을 노출하되, 전체 rule contract를 복사하지 않습니다.
-
-스킬 제공 방식:
-
-- 스킬 소스는 패키지 `templates/skills/` 단일 진실 공급원에 있으며 `~/.deuk/skills/`(및 `~/.claude/skills/` 같은 네이티브 대상)로 동기화됩니다.
-- 기본 추천 장착: `safe-refactor`, `generated-file-guard`.
-- 선택 장착: `context-recall`, `project-pilot`.
-
-현재 first-party skill:
-
-| skill | 용도 |
-|---|---|
-| `safe-refactor` | 기본 추천: 작은 리팩터링을 범위/테스트 안에 묶기 |
-| `generated-file-guard` | 기본 추천: generated output 직접 수정 방지 |
-| `context-recall` | 선택: 과거 티켓/결정/실패 패턴 재사용 |
-| `project-pilot` | 선택: cross-language, protocol, generated/runtime drift 정리 |
-| `persona-maid` | 선택: 친절하고 애교 넘치지만 실력은 확실한 메이드 페르소나 (정식 배포 시 기본 비활성, 수동 장착 필요) |
-
-```bash
-npx deuk-agent-flow init
-npx deuk-agent-flow skill list
-npx deuk-agent-flow skill add --skill safe-refactor
-npx deuk-agent-flow skill add --skill generated-file-guard
-npx deuk-agent-flow skill add --skill project-pilot
-npx deuk-agent-flow skill add --skill persona-maid
-npx deuk-agent-flow skill expose --platform claude
-```
-
----
-
-### 🏷️ 검색 태그
-`#AI-Orchestration` `#Agentic-Workflow` `#DeukFamily` `#Engineering-Intelligence` `#Zero-Legacy` `#High-Signal-Coding` `#AI-Protocol` `#CursorRules` `#CopilotInstructions` `#ClaudeCode` `#ClaudeMD` `#AgentsMD` `#AgentSkills` `#CodingAgent` `#AI-Guardrails` `#LLM-Control-Plane`
+| [사용 가이드](docs/usage-guide.ko.md) | 설치·업데이트·일상 사용 |
+| [작동 방식](docs/how-it-works.ko.md) | 흐름·저장소·역할·인계 |
+| [스킬 가이드](docs/skills-guide.ko.md) | 행동 교정·설치·노출·페르소나 |
+| [설계](docs/architecture.ko.md) | 상태·규칙·저장소 |
+| [원칙](docs/principles.ko.md) | 협업 목표·근거·변경 기준 |
+
+- [VS Code 확장](vscode-extension/README.md) · 라이선스 Apache-2.0 · 제작 joygram·AI 협업 개발.

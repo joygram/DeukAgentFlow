@@ -9,12 +9,12 @@ import { formatInitCompletionMessage,runWorkspaceMaintenance } from "./cli-init-
 import { syncProjectRuleIdLines } from "./cli-init-instructions.js";
 import { runTelemetry } from "./cli-telemetry-commands.js";
 import { buildTicketCreateGuide,buildTicketRulesGuide,runTicketArchive,runTicketClose,runTicketConnect,runTicketCreate,runTicketDiscard,runTicketDoctor,runTicketEdit,runTicketEvidenceCheck,runTicketEvidenceReport,runTicketGuard,runTicketHandoff,runTicketHotfix,runTicketList,runTicketMeta,runTicketMigrateHome,runTicketMove,runTicketNext,runTicketRebuild,runTicketRules,runTicketSanitize,runTicketShow,runTicketStatus,runTicketUse } from "./cli-ticket-commands.js";
-import { pruneGhostWorkspaces,readWorkspaceMeta,resolveHomeTicketDirForWorkspace } from "./cli-ticket-home.js";
+import { isHomeStoreRoot,pruneGhostWorkspaces,readWorkspaceMeta,resolveHomeTicketDirForWorkspace } from "./cli-ticket-home.js";
 import { readTicketIndexJson } from "./cli-ticket-index.js";
 import { performUpgradeMigration } from "./cli-ticket-migration.js";
 import { collectTicketMarkdownFiles } from "./cli-ticket-scan.js";
 import { runUsage } from "./cli-usage-commands.js";
-import { CliOpts,DEUK_ROOT_DIR,INIT_CONFIG_VERSION,LEGACY_DEUK,WORKFLOW_MODE_EXECUTE,findWorkspaceRoot,getUserInitConfigPath,loadInitConfig,loadWorkspaceCandidates,localized,makePath,parseFrontMatter,readJsonFile,resolveDocsLanguage,resolvePackageRoot,resolveUserHome,resolveWorkflowMode,resolveWorkspaceTarget,setSurfaceLocale } from "./cli-utils.js";
+import { CliOpts,DEUK_ROOT_DIR,INIT_CONFIG_VERSION,LEGACY_DEUK,findWorkspaceRoot,getUserInitConfigPath,loadInitConfig,loadWorkspaceCandidates,localized,makePath,parseFrontMatter,readJsonFile,resolveDocsLanguage,resolvePackageRoot,resolveUserHome,resolveWorkspaceTarget,setSurfaceLocale } from "./cli-utils.js";
 
 const CLI_TEXT = {
   approvalSurfaceRemoved: {
@@ -37,6 +37,10 @@ const CLI_TEXT = {
   codingUsage: {
     ko: "coding: `coding step --stage <start|create|modify>` 만 지원한다.",
     en: "coding: only `coding step --stage <start|create|modify>` is supported.",
+  },
+  initRefusedOutsideProject: {
+    ko: "[FAILED] init 은 프로젝트 폴더에서만 실행한다. 홈 디렉터리·파일시스템 루트는 워크스페이스가 아니다: {path}",
+    en: "[FAILED] init runs only inside a project folder. The home directory and filesystem root are not workspaces: {path}",
   },
   savedConfig: {
     ko: "저장된 {scope} 설정을 {path} 에서 사용한다 (CLI 옵션이 우선 적용됨)",
@@ -218,7 +222,7 @@ async function main() {
     }
     if (noun === "config") {
       if (verb === "set") runPersonaConfigSet(personaOpts);
-      else if (verb === "get") runPersonaConfigGet(personaOpts);
+      else if (!verb || verb === "get" || verb === "show") runPersonaConfigGet(personaOpts);
       else { console.error(`Unknown persona config action: ${verb}`); printPersonaGuide(); }
       return;
     }
@@ -256,6 +260,10 @@ async function main() {
   const rest = argv.slice(1);
   const entryOpts = parseEntryOptions(sub, rest);
   if (entryOpts.docsLanguage) setSurfaceLocale(entryOpts.docsLanguage);
+  if ((sub === "ticket" || sub === "rules" || sub === "workspace") && !entryOpts.dryRun) {
+    const home = await import("./cli-ticket-home.js") as any;
+    home.migrateLegacyRegistryWorkspaces(entryOpts);
+  }
   const shouldRunAutoMigration = shouldRunEntryAutoMigration(sub, rest);
   const entryAutoMigrationCwd = shouldRunAutoMigration ? resolveEntryAutoMigrationCwd(sub, entryOpts) : entryOpts.workspaceRoot;
   const shouldSkipAutoMaintenance = shouldRunAutoMigration && !hasManagedAgentWorkspace(entryAutoMigrationCwd);
@@ -456,6 +464,11 @@ async function main() {
       return;
     }
     opts.workspaceRoot = process.cwd();
+    if (isHomeStoreRoot(opts.workspaceRoot, opts)) {
+      console.error(localized(CLI_TEXT.initRefusedOutsideProject, { path: opts.workspaceRoot }));
+      process.exitCode = 1;
+      return;
+    }
 
     const saved = loadInitConfig(opts.workspaceRoot, opts);
     if (saved && !opts.interactive) {
@@ -465,7 +478,7 @@ async function main() {
       console.log(localized(CLI_TEXT.savedConfig, { scope: saved.configScope || "workspace", path: saved.configPath || `${DEUK_ROOT_DIR}/config.json` }));
     }
 
-    await handleInit(opts, saved, sub);
+    await handleInit(opts, sub);
     return;
   }
 
@@ -660,7 +673,7 @@ function findWorkspaceQuery(argv = []) {
   return "";
 }
 
-async function handleInit(opts, saved, sub = "init") {
+async function handleInit(opts, sub = "init") {
   if (opts.clean && !opts.dryRun) {
     console.log(`[CLEAN] Removing runtime template copies, legacy templates, and config...`);
     const templatesDir = makePath(opts.workspaceRoot, LEGACY_DEUK.templateDir);
@@ -669,12 +682,6 @@ async function handleInit(opts, saved, sub = "init") {
     if (existsSync(templatesDir)) rmSync(templatesDir, { recursive: true, force: true });
     if (existsSync(runtimeTemplatesDir)) rmSync(runtimeTemplatesDir, { recursive: true, force: true });
     if (existsSync(configFile)) rmSync(configFile, { force: true });
-  }
-
-  const workflowMode = resolveWorkflowMode(opts, saved);
-  if (!opts.dryRun && workflowMode !== WORKFLOW_MODE_EXECUTE) {
-    console.log(`[WORKFLOW] Plan mode active. Re-run with --workflow execute or --approval approved to apply file mutations.`);
-    return;
   }
 
   const maintenanceResult = runWorkspaceMaintenance(opts.workspaceRoot, opts.dryRun, pkgRoot, opts);
@@ -782,7 +789,7 @@ async function runRulesShow(opts: CliOpts = {}) {
     return;
   }
   if (!opts.section && hasManagedAgentWorkspace(effectiveCwd)) {
-    const ticketOpts = { ...opts, cwd: effectiveCwd, workspace: effectiveWorkspaceName, ruleSurface: "ticket" };
+    const ticketOpts = { ...opts, cwd: effectiveCwd, workspaceRoot: effectiveCwd, workspace: effectiveWorkspaceName, ruleSurface: "ticket" };
     const ticketRules = buildTicketRulesGuide(ticketOpts);
     if (ticketRules && ticketRules.trim()) {
       console.log("\n" + ticketRules.trimEnd());

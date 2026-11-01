@@ -1,7 +1,7 @@
-No workspace selected. The workspace is resolved ONLY from the registry via --workspace. {{WORKSPACE_COUNT}} workspace(s) registered — pick one:
+워크스페이스 미지정. 워크스페이스는 레지스트리에서 --workspace 로만 해소된다. 등록된 워크스페이스 {{WORKSPACE_COUNT}}개 — 하나를 고른다:
 {{WORKSPACE_LIST}}
 
-Then run ticket commands with --workspace <id>, e.g.:
+이후 티켓 명령에 --workspace <id> 를 넘긴다. 예:
 ```bash
 deuk-agent-flow rules ticket --workspace {{FIRST_WORKSPACE}}
 ```

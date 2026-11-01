@@ -1,5 +1,5 @@
 import { parseHeading,stripLeadingHashes,stripLeadingSectionNumber } from "./markdown-headings.js";
-import { copyFileSync,existsSync,mkdirSync,readFileSync,readdirSync,unlinkSync,writeFileSync } from "fs";
+import { copyFileSync,existsSync,mkdirSync,readFileSync,readdirSync,renameSync,unlinkSync,writeFileSync } from "fs";
 import { basename,dirname } from "path";
 import { CANONICAL_INIT_CLEANUP_PATHS,GLOBAL_POINTER_BEGIN_PREFIX,GLOBAL_POINTER_END,hashManagedContent,readTextIfExists,splitManagedBlock } from "./cli-init-core.js";
 import { ensureTicketDirAndGitignore } from "./cli-init-logic.js";
@@ -9,7 +9,7 @@ import { resolveHomeTicketDirForWorkspace } from "./cli-ticket-home.js";
 import { syncActiveTicketId,writeTicketIndexJson } from "./cli-ticket-index.js";
 import { normalizeTicketPaths } from "./cli-ticket-migration.js";
 import { rebuildTicketIndexFromTopicFilesIfNeeded } from "./cli-ticket-parser.js";
-import { CliOpts,DEFAULT_IGNORE_DIRS,DEUK_ROOT_DIR,localized,makePath,resolvePackageRoot,resolveUserHome,toFileUri,toRepoRelativePath } from "./cli-utils.js";
+import { CliOpts,DEFAULT_IGNORE_DIRS,DEUK_ROOT_DIR,getProjectRulePath,localized,makePath,resolvePackageRoot,resolveUserHome,toFileUri,toRepoRelativePath } from "./cli-utils.js";
 
 const INIT_TEXT = {
   surfaceDocNotFound: { ko: "CLI 표면 문서를 찾을 수 없다: {path}", en: "CLI surface document not found: {path}" },
@@ -118,7 +118,7 @@ export function isGeneratedDeukPointer(content) {
 export function canonicalizeGeneratedCommandReferences(cwd, bundleRoot, dryRun) {
   const targets = [
     makePath(cwd, "AGENTS.md"),
-    makePath(cwd, "docs", "PROJECT_RULE.md"),
+    getProjectRulePath(cwd),
     makePath(cwd, "PROJECT_RULE.md"),
     makePath(cwd, DEUK_ROOT_DIR, "PROJECT_RULE.md"),
     makePath(cwd, "docs", "project", "AGENTS.md"),
@@ -306,55 +306,34 @@ export function runGlobalAgentInstructionSync(dryRun = false, bundleRoot = resol
   syncGlobalAgentInstructions(dryRun, bundleRoot, homeDir, targetIds);
 }
 
-export function generateSpokeContent(spoke, bundleRoot) {
-  if (!spoke?.id) throw new Error(localized(INIT_TEXT.spokeIdRequired));
-  const content = renderCliSurfaceDocument(bundleRoot, `spoke-pointer-${spoke.id}`);
-
-  if (spoke.format === "mdc") {
-    return `---
-description: "Deuk Agent Flow - Project conventions and ticket workflow"
-globs: ["**/*"]
-alwaysApply: true
----
-${content}`;
-  }
-  return `---\n\n## DeukAgentFlow\n\n> Managed by DeukAgentFlow. Remove this section if not installed.\n\n${content}\n`;
-}
-
 export function removeDuplicateRuleCopies(cwd, dryRun) {
   removeLegacyPaths(cwd, dryRun, CANONICAL_INIT_CLEANUP_PATHS.duplicateRuleCopies, "legacy/duplicate");
 }
 
+// 정본 = 루트 PROJECT_RULE.md. 루트가 없을 때만 docs/ → 홈 저장소 순으로 옮겨 온다.
+// 루트가 이미 있으면 docs/ 사본은 removeStrayProjectRuleCopies가 정리한다.
 function migrateProjectRuleToAgentRoot(cwd, dryRun, opts: CliOpts = {}) {
-  const docsPath = makePath(cwd, "docs", "PROJECT_RULE.md");
-  const legacyRootPath = makePath(cwd, "PROJECT_RULE.md");
+  const canonicalPath = getProjectRulePath(cwd);
+  if (existsSync(canonicalPath)) return false;
 
-  if (existsSync(legacyRootPath)) {
-    if (!dryRun) {
-      mkdirSync(dirname(docsPath), { recursive: true });
-      copyFileSync(legacyRootPath, docsPath); // 루트가 정본 — docs를 덮어쓴다.
-      unlinkSync(legacyRootPath);
-    }
-    console.log(`[MIGRATE] ${dryRun ? "Would move" : "Moved"} PROJECT_RULE.md from workspace root -> ${toRepoRelativePath(cwd, docsPath)}`);
+  const legacyDocsPath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  if (existsSync(legacyDocsPath)) {
+    if (!dryRun) renameSync(legacyDocsPath, canonicalPath);
+    console.log(`[MIGRATE] ${dryRun ? "Would move" : "Moved"} ${toRepoRelativePath(cwd, legacyDocsPath)} -> ${toRepoRelativePath(cwd, canonicalPath)}`);
     return true;
   }
-
-  if (existsSync(docsPath)) return false;
 
   const homeDir = resolveHomeTicketDirForWorkspace(cwd, opts);
   const legacyHomePath = makePath(homeDir, "PROJECT_RULE.md");
   if (!existsSync(legacyHomePath)) return false; // 복원할 사본 없음
 
-  if (!dryRun) {
-    mkdirSync(dirname(docsPath), { recursive: true });
-    copyFileSync(legacyHomePath, docsPath);
-  }
-  console.log(`[MIGRATE] ${dryRun ? "Would restore" : "Restored"} PROJECT_RULE.md from home store -> ${toRepoRelativePath(cwd, docsPath)}`);
+  if (!dryRun) copyFileSync(legacyHomePath, canonicalPath);
+  console.log(`[MIGRATE] ${dryRun ? "Would restore" : "Restored"} PROJECT_RULE.md from home store -> ${toRepoRelativePath(cwd, canonicalPath)}`);
   return true;
 }
 
 function removeStrayProjectRuleCopies(cwd, dryRun) {
-  const canonicalPath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  const canonicalPath = getProjectRulePath(cwd);
   const removed = [];
 
   function walk(dir) {
@@ -386,7 +365,7 @@ function removeStrayProjectRuleCopies(cwd, dryRun) {
 }
 
 function purgeDeadArchitectureDocsField(cwd, dryRun) {
-  const rulePath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  const rulePath = getProjectRulePath(cwd);
   if (!existsSync(rulePath)) return false;
 
   const original = readFileSync(rulePath, "utf8");
@@ -411,7 +390,7 @@ function purgeDeadArchitectureDocsField(cwd, dryRun) {
 }
 
 function ensureProjectRule(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
-  const projectRulePath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  const projectRulePath = getProjectRulePath(cwd);
   if (existsSync(projectRulePath)) return false;
 
   const templatePath = makePath(bundleRoot, "templates", "PROJECT_RULE.md");
@@ -421,7 +400,7 @@ function ensureProjectRule(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
     mkdirSync(dirname(projectRulePath), { recursive: true });
     copyFileSync(templatePath, projectRulePath);
   }
-  console.log(`PROJECT_RULE.md: created from template in docs/`);
+  console.log(`PROJECT_RULE.md: created from template at workspace root`);
   return true;
 }
 
@@ -437,7 +416,7 @@ function parseProjectRuleIdLines(content) {
 }
 
 export function syncProjectRuleIdLines(cwd, bundleRoot, dryRun, opts: CliOpts = {}) {
-  const projectRulePath = makePath(cwd, "docs", "PROJECT_RULE.md");
+  const projectRulePath = getProjectRulePath(cwd);
   if (!existsSync(projectRulePath)) return false;
 
   const templatePath = makePath(bundleRoot, "templates", "PROJECT_RULE.md");

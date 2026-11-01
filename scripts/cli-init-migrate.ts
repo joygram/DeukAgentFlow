@@ -19,6 +19,30 @@ function dirHasEntries(dirAbs: string): boolean {
   }
 }
 
+// Moves entries from srcDir into destDir without overwriting; a conflicting file stays in srcDir.
+// srcDir is removed only once it is empty. Returns the conflicting paths left behind.
+function mergeMoveTree(srcDir: string, destDir: string): string[] {
+  const keptConflicts: string[] = [];
+  for (const ent of readdirSync(srcDir, { withFileTypes: true })) {
+    const srcPath = makePath(srcDir, ent.name);
+    const destPath = makePath(destDir, ent.name);
+    if (!existsSync(destPath)) {
+      try {
+        renameSync(srcPath, destPath);
+      } catch {
+        cpSync(srcPath, destPath, { recursive: true });
+        rmSync(srcPath, { recursive: true, force: true });
+      }
+    } else if (ent.isDirectory() && statSync(destPath).isDirectory()) {
+      keptConflicts.push(...mergeMoveTree(srcPath, destPath));
+    } else {
+      keptConflicts.push(srcPath);
+    }
+  }
+  if (!dirHasEntries(srcDir)) rmSync(srcDir, { recursive: true, force: true });
+  return keptConflicts;
+}
+
 export function migrateDeukRootDir(opts: CliOpts = {}) {
   const home = resolveUserHome(opts);
   const dryRun = Boolean(opts.dryRun);
@@ -45,20 +69,17 @@ export function migrateDeukRootDir(opts: CliOpts = {}) {
   }
 
   if (legacyExists && nextExists) {
-    if (!dirHasEntries(nextAbs)) {
-      return { migrated: false, mode: "guard-new-empty" };
-    }
     if (dryRun) {
-      console.log(`[MIGRATE] Would remove leftover ${legacyAbs} (new ${DEUK_ROOT_DIR} populated)`);
+      console.log(`[MIGRATE] Would move ${legacyAbs} entries into ${nextAbs} (conflicting files kept in legacy)`);
       return { migrated: false, mode: "dry-run" };
     }
-    try {
-      rmSync(legacyAbs, { recursive: true, force: true });
-      console.log(`[MIGRATE] Removed leftover ${LEGACY_DEUK.rootDir} (migration complete)`);
-      return { migrated: true, mode: "cleanup" };
-    } catch {
-      return { migrated: false, mode: "cleanup-deferred" };
+    const keptConflicts = mergeMoveTree(legacyAbs, nextAbs);
+    if (keptConflicts.length > 0) {
+      console.log(`[MIGRATE] Moved ${LEGACY_DEUK.rootDir} -> ${DEUK_ROOT_DIR}; ${keptConflicts.length} conflicting file(s) kept in ${legacyAbs}`);
+      return { migrated: true, mode: "merge-partial", keptConflicts };
     }
+    console.log(`[MIGRATE] Moved ${LEGACY_DEUK.rootDir} -> ${DEUK_ROOT_DIR} (merge)`);
+    return { migrated: true, mode: "merge" };
   }
 
   return { migrated: false, mode: "noop" };
@@ -74,32 +95,6 @@ export function removeLegacyPaths(cwd, dryRun, paths, label) {
     removed += 1;
   }
   return removed;
-}
-
-export function ensureWritableDirectory(dirAbs, cwd, dryRun, label) {
-  if (!existsSync(dirAbs)) return;
-
-  try {
-    if (statSync(dirAbs).isDirectory()) return;
-  } catch (err) {
-    if (process.env.DEBUG) console.warn(`[DEBUG] Failed to inspect ${dirAbs}:`, err);
-    return;
-  }
-
-  const backupBase = `${dirAbs}.bak`;
-  let backupAbs = backupBase;
-  let index = 1;
-  while (existsSync(backupAbs)) {
-    backupAbs = `${backupBase}.${index}`;
-    index += 1;
-  }
-
-  const relDir = toRepoRelativePath(cwd, dirAbs);
-  const relBackup = toRepoRelativePath(cwd, backupAbs);
-  if (!dryRun) {
-    renameSync(dirAbs, backupAbs);
-  }
-  console.log(`[MIGRATE] ${label}: ${relDir} -> ${relBackup}`);
 }
 
 function removeEmptyDirsBottomUp(dir, cwd, dryRun) {
@@ -135,15 +130,22 @@ export function migrateLegacyStructure(cwd, dryRun) {
   migrateWorkspaceMarker(cwd, dryRun);
 }
 
+// Legacy dir content (tickets, knowledge, ...) is moved elsewhere, never deleted here;
+// only the id file goes, and the dir itself only once empty.
+function removeLegacyIdFile(legacyDir: string, legacyIdFile: string) {
+  rmSync(legacyIdFile, { force: true });
+  if (!dirHasEntries(legacyDir)) rmSync(legacyDir, { recursive: true, force: true });
+}
+
 export function migrateWorkspaceMarker(cwd, dryRun) {
   const newMarker = makePath(cwd, WORKSPACE_MARKER_FILE);
   const legacyDir = makePath(cwd, LEGACY_DEUK.rootDir);
   const legacyIdFile = makePath(legacyDir, "workspace-id");
 
   if (existsSync(newMarker)) {
-    if (existsSync(legacyDir)) {
-      if (!dryRun) rmSync(legacyDir, { recursive: true, force: true });
-      console.log(`[MIGRATE] ${dryRun ? "Would remove" : "Removed"} leftover ${LEGACY_DEUK.rootDir}/ directory`);
+    if (existsSync(legacyIdFile)) {
+      if (!dryRun) removeLegacyIdFile(legacyDir, legacyIdFile);
+      console.log(`[MIGRATE] ${dryRun ? "Would remove" : "Removed"} leftover ${LEGACY_DEUK.rootDir}/workspace-id`);
     }
     return;
   }
@@ -160,7 +162,7 @@ export function migrateWorkspaceMarker(cwd, dryRun) {
 
   if (!dryRun) {
     writeFileSync(newMarker, uuid + "\n", "utf8");
-    rmSync(legacyDir, { recursive: true, force: true });
+    removeLegacyIdFile(legacyDir, legacyIdFile);
   }
   console.log(`[MIGRATE] ${dryRun ? "Would migrate" : "Migrated"} workspace marker → ${WORKSPACE_MARKER_FILE} (uuid: ${uuid})`);
 }
