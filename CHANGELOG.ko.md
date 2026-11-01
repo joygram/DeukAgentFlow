@@ -6,6 +6,13 @@
 
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 기반으로 하며, 이 프로젝트는 [유의적 버전(Semantic Versioning)](https://semver.org/spec/v2.0.0.html)을 준수합니다.
 
+## [5.2.662] - 2026-11-01
+
+### Changed
+
+- **readme:** Claude Code·Codex 실사용 검증 기록, Antigravity는 지시 이행이 불안정한 경우가 있음을 기록
+- **readme:** 흐트러질 때 표에서 Claude 전용 슬래시 표기 제거 — 어느 클라이언트에서든 스킬 이름으로 호출
+
 ## [5.2.661] - 2026-11-01
 
 ### Changed

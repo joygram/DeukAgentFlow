@@ -26,6 +26,7 @@ AI collaboration through tickets, skills, roles and persona
 
 - Requirements = Node.js 20+, npm and a supported agent client.
 - Verified = tested in real use on Claude Code and Codex.
+- Caution = Antigravity sometimes does not follow through on instructions.
 
 ```bash
 npm install -g deuk-agent-flow
@@ -44,8 +45,8 @@ deuk-agent-flow init
 
 | Symptom | Invoke | What it does |
 |---|---|---|
-| Forgets rules or scope, wanders off | “Run rule-reload” · Claude Code `/rule-reload` | Rereads project rules and design docs, then resumes the task |
-| Tone or persona slips | “Call persona-maid again” · Claude Code `/persona-maid` | Rereads persona guidance and restores the tone |
+| Forgets rules or scope, wanders off | “Run rule-reload” | Rereads project rules and design docs, then resumes the task |
+| Tone or persona slips | “Call persona-maid again” | Rereads persona guidance and restores the tone |
 
 - Both drifting = invoke both in a row.
 

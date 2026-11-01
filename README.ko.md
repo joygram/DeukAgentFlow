@@ -26,6 +26,7 @@
 
 - 요구 환경 = Node.js 20 이상·npm·지원 에이전트 클라이언트.
 - 검증 완료 = Claude Code·Codex에서 실제 사용 검증.
+- 주의 = Antigravity는 지시를 잘 이행하지 않는 경우가 있음.
 
 ```bash
 npm install -g deuk-agent-flow
@@ -44,8 +45,8 @@ deuk-agent-flow init
 
 | 증상 | 호출 | 하는 일 |
 |---|---|---|
-| 규칙·범위를 잊고 딴 길로 감 | “rule-reload 해줘” · Claude Code `/rule-reload` | 프로젝트 룰·설계 정본을 다시 읽고 하던 일 이어감 |
-| 말투·페르소나가 풀림 | “persona-maid 다시 불러” · Claude Code `/persona-maid` | 페르소나 지침을 다시 읽고 말투 복구 |
+| 규칙·범위를 잊고 딴 길로 감 | “rule-reload 해줘” | 프로젝트 룰·설계 정본을 다시 읽고 하던 일 이어감 |
+| 말투·페르소나가 풀림 | “persona-maid 다시 불러” | 페르소나 지침을 다시 읽고 말투 복구 |
 
 - 둘 다 흐트러지면 = 두 개 연달아 호출.
 

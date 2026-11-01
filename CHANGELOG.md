@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.662] - 2026-11-01
+
+### Changed
+
+- **readme:** record real-use verification on Claude Code and Codex, and note that Antigravity sometimes does not follow through on instructions
+- **readme:** drift-recovery table no longer implies Claude-only slash commands; invoke `rule-reload` and `persona-maid` by name in any client
+
 ## [5.2.661] - 2026-11-01
 
 ### Changed
