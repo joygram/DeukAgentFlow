@@ -17,6 +17,7 @@ AI collaboration through tickets, skills, roles and persona
 <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg" alt="npm version" /></a> <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/dm/deuk-agent-flow.svg?label=downloads" alt="npm downloads" /></a> · <a href="README.ko.md">한국어</a> · <a href="https://deukpack.app/deuk-agent-flow/">Website</a>
 <!-- DEUKI-HEADER:END -->
 
+- **Installing is the only barrier** = nothing to memorize; the installed agent runs tickets, checks and handoffs on its own.
 - **Deuk Agent Flow** = an AI coding workflow connecting tickets, skills, roles and persona.
 - Goal = fewer unnecessary edits, missed checks and lost handoffs between conversations.
 - Core = the same way of working and the same ticket, whether you use Claude, Codex or another client.
@@ -31,10 +32,9 @@ deuk-agent-flow init
 ```
 
 1. Run `init` from the project root → choose your agent clients.
-2. Ask your agent = “Change only this function and check its behavior”.
-3. The agent creates a ticket → scope, plan and completion criteria.
-4. Review the plan, reply “approved” → implementation and checks run.
-5. Inspect actual results, evidence and remaining risks in the completion report.
+2. Tell your agent “Create a ticket” → the agent writes scope, plan and completion criteria.
+3. Review the plan, reply “approved” → the agent implements, verifies and reports.
+4. When things drift = just invoke the `rule-reload` and `persona-maid` skills.
 
 - Next session = “Continue the current ticket”; status = `deuk-agent-flow ticket status --workspace <name>`.
 - Update = upgrade the global package, then rerun `deuk-agent-flow init`.

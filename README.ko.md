@@ -17,6 +17,7 @@
 <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/v/deuk-agent-flow.svg" alt="npm version" /></a> <a href="https://www.npmjs.com/package/deuk-agent-flow"><img src="https://img.shields.io/npm/dm/deuk-agent-flow.svg?label=downloads" alt="npm downloads" /></a> · <a href="README.md">English</a> · <a href="https://deukpack.app/ko/deuk-agent-flow/">웹</a>
 <!-- DEUKI-HEADER:END -->
 
+- **진입장벽은 설치뿐** = 규칙·절차를 기억할 필요 없음; 설치된 에이전트가 티켓·검증·인계를 알아서 진행.
 - **Deuk Agent Flow** = 티켓·스킬·역할·페르소나를 연결하는 AI 코딩 협업 워크플로우.
 - 목표 = 과잉 수정·확인 누락·대화 사이 인계 손실 감소.
 - 핵심 = Claude·Codex 등 클라이언트가 바뀌어도 같은 작업 방식·같은 티켓 유지.
@@ -31,10 +32,9 @@ deuk-agent-flow init
 ```
 
 1. 프로젝트 루트에서 `init` → 사용할 에이전트 클라이언트 선택.
-2. 에이전트에게 요청 = “이 함수만 수정하고 실제 동작을 확인해 줘”.
-3. 에이전트가 티켓 생성 → 범위·계획·완료 조건 제시.
-4. 계획 확인 후 “승인” → 구현·검증 진행.
-5. 완료 보고에서 실제 결과·검증 근거·잔여 위험 확인.
+2. 에이전트에게 “티켓 만들어줘” → 범위·계획·완료 조건을 에이전트가 작성.
+3. 계획 확인 후 “승인” → 구현·검증·완료 보고까지 에이전트가 진행.
+4. 흐트러질 때 = `rule-reload`·`persona-maid` 스킬 호출만 하면 됨.
 
 - 다음 세션 = “현재 티켓 이어서 진행”; 상태 = `deuk-agent-flow ticket status --workspace <name>`.
 - 업데이트 = 전역 패키지 갱신 후 `deuk-agent-flow init` 재실행.
